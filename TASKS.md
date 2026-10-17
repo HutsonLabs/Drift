@@ -1,0 +1,99 @@
+# Drift — iOS client, Mac host and App Store
+
+Tasks for ADR `docs/adr/IOS-0-ios-client-mac-host-app-store.md`. Same rules as the rest of
+Drift: one branch per task (`task/<ID>-<slug>`), Red tests first, `cargo xtask ci` green before
+merge, and an ADR for any decision the IOS-0 ADR does not already fix.
+
+Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
+
+## IOS-0 — Decision
+
+- [~] **IOS-0 ADR.** Write and accept `IOS-0-ios-client-mac-host-app-store`; add it to the ADR
+  table in `docs/team-conventions.md`.
+
+## IOS — Drift for iPhone and iPad (client)
+
+- [ ] **IOS-1 Tauri mobile spike.** `tauri ios init` on a throwaway branch. Answer the ADR's open
+  questions 1–2: can a plugin set `prefersPointerLocked` on the root view controller, and does
+  Tauri mobile support more than one window or scene? Write the answers into the ADR.
+- [ ] **IOS-2 Platform gating.** `cfg(target_os)` gates on every AppKit use. `drift-core`,
+  `drift-rdp`, `drift-gfx`, `drift-codec`, `drift-input`, `drift-video` and `drift-render` build
+  for `aarch64-apple-ios` and `aarch64-apple-ios-sim`. Add both targets to `cargo xtask ci`.
+- [ ] **IOS-3 Split `drift-macos`.** New `drift-apple` (Keychain, `NWPathMonitor`, Local Network
+  detection) shared by `drift-macos` (AppKit) and a new `drift-ios` (UIKit). No behaviour change
+  on macOS.
+- [ ] **IOS-4 Remote view on iOS.** `drift-ios` hosts the `CAMetalLayer` in a `UIView` under the
+  `WKWebView` (M7-3 layering). Drawable size tracks the view and the screen scale; ProMotion
+  pacing at up to 120 Hz.
+- [ ] **IOS-5 First light on iPad.** The iOS app connects to the GNOME test host (headless
+  mode), shows a live desktop, and reconnects after backgrounding.
+- [ ] **IOS-6 Input plugin.** Swift Tauri plugin: `GCKeyboard` raw key codes, `GCMouse` deltas
+  with pointer lock, `UIPointerInteraction`, and Apple Pencil hover as pointer movement, all fed to
+  `drift-input`. Document which system shortcuts iPadOS keeps for itself.
+- [ ] **IOS-7 Touch modes.** Trackpad mode (relative pointer, two-finger scroll, tap to click,
+  two-finger tap for right click) and direct mode (tap where you touch). Pinch zooms the viewport
+  on iPhone.
+- [ ] **IOS-8 iPhone layout.** Portrait: picture on top, trackpad and key row below. Landscape:
+  full screen with auto-hiding controls.
+- [ ] **IOS-9 Pairing UI.** Bonjour list of Drift Hosts, QR scan or typed code, pinned host key
+  stored in the Keychain (pairs with HOST-8).
+- [ ] **IOS-10 Clipboard on iOS.** UIPasteboard backend for `drift-clipboard`; paste only on an
+  explicit user action, so iOS never shows its paste prompt unasked.
+- [ ] **IOS-11 Session switcher.** On iOS, the UI-windows "one window per connection" becomes an
+  in-app switcher (or scenes, if IOS-1 says Tauri allows them).
+
+## HOST — Drift Host (Mac)
+
+- [ ] **HOST-1 Server spike.** `ironrdp-server` with `egfx` streams a static AVC420 frame to
+  Drift's own client on loopback. Record what the server lacks for AVC444, DISP and CLIPRDR
+  (ADR open question 4).
+- [ ] **HOST-2 Host skeleton.** New `drift-host` crate and binary: TLS listener, one session,
+  fast-path input logged only. Menu-bar shell later (HOST-9).
+- [ ] **HOST-3 Capture.** New `drift-capture` crate: ScreenCaptureKit `SCStream` per display,
+  IOSurface frames, dirty rects, cursor shape and position reported separately.
+- [ ] **HOST-4 Real-time encoder.** Extend `drift-video::encode` with a real-time profile (no
+  reordering, low-latency rate control, bounded keyframe interval) and an AVC444 mode. Measure
+  60 fps at 4K on M1 (ADR open question 5).
+- [ ] **HOST-5 Frame mailbox.** One-slot newest-frame mailbox between capture and encode, and
+  between encode and the socket. Stats for dropped frames.
+- [ ] **HOST-6 Input injection.** Inverse of `drift-input::keymap` (set-1 scancodes → `kVK_*`),
+  mouse and wheel through `CGEventPost`. One shared table and round-trip tests.
+- [ ] **HOST-7 Link hygiene.** Interactive-video service class on the socket; idle heartbeat to
+  keep a phone's Wi-Fi radio awake; backlog detection feeding EXT-4.
+- [ ] **HOST-8 Pairing and pins.** Code shown on the Mac, device key stored, host certificate
+  pinned on the device. Pairing on by default; listener refuses unpaired devices.
+- [ ] **HOST-9 Menu-bar app.** Status, paired devices, permissions check (Screen Recording,
+  Accessibility, Local Network) with plain-language first-run guidance.
+- [ ] **HOST-10 Virtual display.** `CGVirtualDisplay` created and resized from Display Control
+  layouts; launch self-test; fallback to the physical display.
+- [ ] **HOST-11 Clipboard and audio.** CLIPRDR server role reusing `drift-clipboard`'s mapping;
+  `ironrdp-rdpsnd` fed from ScreenCaptureKit audio.
+- [ ] **HOST-12 RDP-UDP.** Evaluate `ironrdp-rdpeudp` for GFX (ADR open question 6); ship it if
+  its lossy mode holds up on Wi-Fi.
+- [ ] **HOST-13 Login window.** LaunchDaemon + per-session LaunchAgent + LoginWindow agent, so a
+  paired device reaches the Mac after a restart.
+- [ ] **HOST-14 Extra paths.** USB cable link and peer-to-peer Wi-Fi alongside the LAN; remote
+  access over the user's own VPN.
+
+## EXT — `Drift::Mac::v1` channel
+
+- [ ] **EXT-1 Channel framing.** Versioned, length-delimited DVC messages with a fuzz target
+  (M9-2 style). Client and host negotiate and fall back to plain RDP when absent.
+- [ ] **EXT-2 Precise scroll and gestures.** Scroll with phase and momentum; swipe and pinch
+  mapped on the host to Mission Control, App Exposé and Spaces shortcuts.
+- [ ] **EXT-3 Menu mirroring.** Host reads the frontmost app's menu bar through Accessibility;
+  iPad shows it in the iPadOS 26 menu bar and chooses items remotely.
+- [ ] **EXT-4 Quality hints.** Host reports backlog and suggests a quality; a separate default
+  quality for devices away from the local network.
+
+## STORE — Distribution
+
+- [ ] **STORE-1 Mac App Store packaging.** Provisioning profile, application/team identifier
+  entitlements, universal build, `ITSAppUsesNonExemptEncryption` and export-compliance answers.
+  Update `bundle.shortDescription` for GNOME and Mac hosts.
+- [ ] **STORE-2 Review-risk check.** Upload a build to App Store Connect and validate it,
+  including the transparent webview (ADR open question 7). Plan native overlays if it fails.
+- [ ] **STORE-3 iOS App Store packaging.** `NSLocalNetworkUsageDescription`,
+  `NSBonjourServices`, privacy manifest, TestFlight build.
+- [ ] **STORE-4 Drift Host release.** Developer ID signing, notarization and DMG through the
+  M9-5 release path; Hardened Runtime without the App Sandbox.
