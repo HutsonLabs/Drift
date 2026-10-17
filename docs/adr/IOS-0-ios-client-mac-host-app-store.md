@@ -2,6 +2,9 @@
 
 - Status: accepted
 - Date: 2026-10-17
+- Amended: 2026-10-17. Decision 6 now treats UDP as a first-class transport, with QUIC as the
+  fallback for Drift-to-Drift sessions; decision 2 plans HEVC and HDR (EXT-5). The goal is parity
+  with Screen Sharing's High Performance mode, not only a working host.
 - Tasks: `TASKS.md` (IOS-*, HOST-*, EXT-*, STORE-*)
 - Code today: `crates/*`, `src-tauri/`, `third_party/ironrdp/crates/{ironrdp-server,ironrdp-egfx,ironrdp-rdpeudp,ironrdp-rdpsnd,ironrdp-cliprdr,ironrdp-displaycontrol}`
 - Prior art reviewed: macOS Screen Sharing (High Performance mode); Sill
@@ -67,8 +70,10 @@ Drift Host speaks RDP, built on the vendored `ironrdp-server` + `ironrdp-egfx`. 
 - Any RDP client (Microsoft's Windows App on iPad, `mstsc`) can test the host before Drift's iOS
   client exists, and remains a fallback for users.
 
-HEVC is not part of RDP GFX; we do not add it in this ADR. It can come later as an `EXT` codec
-once AVC444 is measured.
+HEVC and HDR are not part of RDP GFX, but Screen Sharing has both, so they are planned rather than
+left out: a Drift extension codec (HEVC Main 10, 4:4:4 where VideoToolbox allows it, HDR
+metadata) negotiated over the `Drift::Mac::v1` DVC between Drift ends (EXT-5). AVC444 stays the
+default and the fallback for every other client. EXT-5 starts once AVC444 is measured (HOST-4).
 
 ### 3. Mac-specific features ride a Drift dynamic virtual channel
 
@@ -111,13 +116,30 @@ private CoreGraphics API, accessed through the Objective-C runtime and isolated 
 a self-test at launch; when it is unavailable the host falls back to capturing the physical
 display and the client letterboxes (today's `ScaleMode::Fit`).
 
-### 6. Transport: TCP first, RDP-UDP next
+### 6. Transport: UDP is first-class, TCP is the baseline
 
-The first host ships TLS over TCP, the path the client already has. The `Network.framework`
-service class is set to interactive video (WMM video queue on Wi-Fi), and the host sends a small
-heartbeat when idle so a phone's Wi-Fi radio does not enter power save between frames (both ideas
-from Sill). `ironrdp-rdpeudp` is the follow-up transport to remove TCP head-of-line blocking on
-lossy Wi-Fi; whether its lossy mode is complete enough is an open question (HOST-12).
+Screen Sharing's High Performance mode runs over UDP, and on lossy Wi-Fi a TCP stream stalls
+every frame behind one lost packet (head-of-line blocking). Drift Host therefore treats UDP as a
+first-class transport from its first release, not a later follow-up:
+
+- **Baseline: TLS over TCP.** This is the path the client already has. It stays the only
+  transport for GNOME hosts and for third-party RDP clients, and the fallback whenever UDP fails.
+- **First choice for UDP: `ironrdp-rdpeudp`** (MS-RDPEUDP2, lossy mode for GFX). It is standard
+  RDP, so any RDP client with UDP support can use it.
+- **Fallback for UDP: QUIC, between Drift ends only.** If HOST-12 finds `ironrdp-rdpeudp`'s lossy
+  mode unusable, a paired Drift client and Drift Host carry the same RDP PDUs over QUIC instead.
+  Input, clipboard and DVC traffic use reliable streams; each GFX frame goes on its own stream
+  (or in datagrams), so a lost packet delays only its own frame. QUIC's TLS 1.3 uses rustls, and
+  the pins from decision 7 apply unchanged. The client tries QUIC first with a paired Drift Host
+  and falls back to TCP. The QUIC library is chosen in its own ADR under the dependency policy
+  (`M0-6-dependency-policy`).
+- **Ordering:** HOST-12 runs straight after the server spike (HOST-1), before the encoder is
+  tuned. Loss and latency behaviour shape real-time rate control (HOST-4) and quality hints
+  (EXT-4).
+
+On every transport, the `Network.framework` service class is set to interactive video (WMM video
+queue on Wi-Fi), and the host sends a small heartbeat when idle so a phone's Wi-Fi radio does not
+enter power save between frames (both ideas from Sill).
 
 ### 7. Devices pair once and pin keys
 
@@ -180,7 +202,7 @@ scope.
 | Host notices backlog and suggests a lower quality; a separate default quality when away | decision 3, EXT-4 |
 | Mac menus in the iPadOS 26 menu bar | decision 3, EXT-3 |
 | iPhone portrait: picture above a trackpad and keys | decision 8, IOS-8 |
-| USB cable and peer-to-peer Wi-Fi as extra paths besides the LAN | later; HOST-13 |
+| USB cable and peer-to-peer Wi-Fi as extra paths besides the LAN | later; HOST-14 |
 
 ## Consequences
 
@@ -191,6 +213,9 @@ scope.
 - The host introduces a server role, a listener and a private API. It gets its own threat model:
   pairing is mandatory by default, the listener binds only after pairing is configured, and the
   daemon drops privileges for everything but session brokering.
+- Drift-to-Drift sessions may run over QUIC, which no other RDP client speaks. Third-party RDP
+  clients always get TCP (or RDP-UDP), so the host stays testable with them. The host listens on
+  UDP as well as TCP, and its threat model and first-run firewall guidance cover both.
 - `CGVirtualDisplay` can break with any macOS release; the launch self-test and the
   physical-display fallback keep the host usable when it does.
 - Screen Recording and Accessibility must be granted at the Mac in person (or by MDM for
@@ -204,5 +229,6 @@ scope.
    unchanged? (IOS-2)
 4. How complete is `ironrdp-server` with `egfx` for AVC420/AVC444 streaming? (HOST-1)
 5. Can VideoToolbox's real-time H.264 encoder produce AVC444's two streams at 60 fps on M1? (HOST-4)
-6. Is `ironrdp-rdpeudp`'s lossy mode usable for GFX? (HOST-12)
+6. Is `ironrdp-rdpeudp`'s lossy mode usable for GFX, or do Drift-to-Drift sessions need the
+   QUIC fallback? (HOST-12)
 7. Does App Store review accept wry's transparent webview? (STORE-2)

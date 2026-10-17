@@ -47,6 +47,11 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 - [ ] **HOST-1 Server spike.** `ironrdp-server` with `egfx` streams a static AVC420 frame to
   Drift's own client on loopback. Record what the server lacks for AVC444, DISP and CLIPRDR
   (ADR open question 4).
+- [ ] **HOST-12 UDP transport.** Runs straight after HOST-1 (ADR decision 6). Measure
+  `ironrdp-rdpeudp`'s lossy mode for GFX on lossy Wi-Fi (ADR open question 6). If it holds up,
+  ship it. If not, write an ADR choosing a QUIC library and carry RDP PDUs over QUIC between
+  Drift ends: reliable streams for input, clipboard and DVC, and one stream (or datagrams) per
+  GFX frame. The client tries UDP first with a paired Drift Host and falls back to TCP.
 - [ ] **HOST-2 Host skeleton.** New `drift-host` crate and binary: TLS listener, one session,
   fast-path input logged only. Menu-bar shell later (HOST-9).
 - [ ] **HOST-3 Capture.** New `drift-capture` crate: ScreenCaptureKit `SCStream` per display,
@@ -68,8 +73,6 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   layouts; launch self-test; fallback to the physical display.
 - [ ] **HOST-11 Clipboard and audio.** CLIPRDR server role reusing `drift-clipboard`'s mapping;
   `ironrdp-rdpsnd` fed from ScreenCaptureKit audio.
-- [ ] **HOST-12 RDP-UDP.** Evaluate `ironrdp-rdpeudp` for GFX (ADR open question 6); ship it if
-  its lossy mode holds up on Wi-Fi.
 - [ ] **HOST-13 Login window.** LaunchDaemon + per-session LaunchAgent + LoginWindow agent, so a
   paired device reaches the Mac after a restart.
 - [ ] **HOST-14 Extra paths.** USB cable link and peer-to-peer Wi-Fi alongside the LAN; remote
@@ -85,6 +88,9 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   iPad shows it in the iPadOS 26 menu bar and chooses items remotely.
 - [ ] **EXT-4 Quality hints.** Host reports backlog and suggests a quality; a separate default
   quality for devices away from the local network.
+- [ ] **EXT-5 HEVC and HDR.** After HOST-4 measures AVC444: a Drift extension codec (HEVC Main 10,
+  4:4:4 where VideoToolbox allows it, HDR metadata) negotiated over the channel, encoded by
+  VideoToolbox on the host and decoded on the client, with AVC444 as the fallback (ADR decision 2).
 
 ## STORE — Distribution
 
