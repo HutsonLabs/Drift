@@ -42,7 +42,7 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `M4-2-session-actor-channels` | resize debounce, CLIPRDR glue, suppress/ack policy, reconnect resume, greeter typing, FakeServer channels, real-host e2e findings |
 | `UI-tabs-connection-manager` | Connection Manager / Session tabs: hidden AppKit tab bar, HTML strip webview per window, full screen, focus, main-queue dispatch (superseded in most part by `UI-windows-gallery`) |
 | `UI-windows-gallery` | Connections gallery window + one window per session: no tabbing, title-bar webview, frames, thumbnails, Dock menu, menus, IPC contract |
-| `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility (proposed) |
+| `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility |
 
 ## Commands
 

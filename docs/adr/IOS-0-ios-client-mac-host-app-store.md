@@ -1,6 +1,6 @@
 # IOS-0 — Drift on iPhone and iPad, a Mac host, and App Store distribution
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-17
 - Tasks: `TASKS.md` (IOS-*, HOST-*, EXT-*, STORE-*)
 - Code today: `crates/*`, `src-tauri/`, `third_party/ironrdp/crates/{ironrdp-server,ironrdp-egfx,ironrdp-rdpeudp,ironrdp-rdpsnd,ironrdp-cliprdr,ironrdp-displaycontrol}`

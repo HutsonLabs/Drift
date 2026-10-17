@@ -8,7 +8,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 
 ## IOS-0 — Decision
 
-- [~] **IOS-0 ADR.** Write and accept `IOS-0-ios-client-mac-host-app-store`; add it to the ADR
+- [✓] **IOS-0 ADR.** Write and accept `IOS-0-ios-client-mac-host-app-store`; add it to the ADR
   table in `docs/team-conventions.md`.
 
 ## IOS — Drift for iPhone and iPad (client)
