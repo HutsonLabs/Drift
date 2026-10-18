@@ -110,8 +110,14 @@ mod tests {
         insert_below(&page, &view).expect("page has a superview");
         let subviews = root.subviews();
         assert_eq!(subviews.len(), 2);
-        assert!(std::ptr::eq(Retained::as_ptr(&subviews.objectAtIndex(0)).cast::<u8>(), Retained::as_ptr(&view).cast()));
-        assert!(std::ptr::eq(Retained::as_ptr(&subviews.objectAtIndex(1)).cast::<u8>(), Retained::as_ptr(&page).cast()));
+        assert!(std::ptr::eq(
+            Retained::as_ptr(&subviews.objectAtIndex(0)).cast::<u8>(),
+            Retained::as_ptr(&view).cast()
+        ));
+        assert!(std::ptr::eq(
+            Retained::as_ptr(&subviews.objectAtIndex(1)).cast::<u8>(),
+            Retained::as_ptr(&page).cast()
+        ));
         let frame = view.frame();
         assert_eq!((frame.size.width, frame.size.height), (400.0, 300.0), "fills the page's frame");
         assert!(!page.isOpaque(), "the page must let the picture show through");

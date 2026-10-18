@@ -7,7 +7,7 @@
 //! | [`view`] | `RemoteView`: layer-hosting NSView + CAMetalLayer, input capture, IME | M1-6, M2-2, M2-4 |
 //! | [`input`] | pure per-view input state behind `RemoteView` (keys, pointer, scroll, key equivalents) | M2-2, M2-4 |
 //! | [`webview`] | insert the RemoteView below the WKWebView; focus switching | M1-6 |
-//! | [`cursor`] | pure fast-path pointer decode + cache; [`cursor_ns`]: `NSCursor` | M2-5 |
+//! | [`cursor`] | pure fast-path pointer decode + cache (re-exported from `drift-apple`); [`cursor_ns`]: `NSCursor` | M2-5, IOS-5 |
 //! | [`keychain`] | Keychain password adapter (re-exported from `drift-apple`) | M3-2, IOS-3 |
 //! | [`window`] | occlusion / key-window observer, main-queue dispatch, no tabbing | M6-3, UI-tabs, UI-windows |
 //! | [`dock`] | the Dock menu (`applicationDockMenu:` on the app delegate) | UI-windows |
@@ -24,7 +24,7 @@
 #![cfg(target_os = "macos")]
 
 pub mod alert;
-pub mod cursor;
+pub use drift_apple::cursor;
 pub mod cursor_ns;
 pub mod dock;
 pub mod input;

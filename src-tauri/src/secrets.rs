@@ -74,21 +74,21 @@ impl SecretStore for MemorySecretStore {
     }
 }
 
-/// The production [`SecretStore`]: generic passwords in the Keychain (drift-macos, M3-2).
+/// The production [`SecretStore`]: generic passwords in the Keychain (drift-apple, M3-2).
 #[derive(Debug, Clone, Default)]
 pub struct KeychainSecretStore {
-    keychain: drift_macos::Keychain,
+    keychain: drift_apple::Keychain,
 }
 
 impl KeychainSecretStore {
-    /// Wraps a Keychain adapter (`drift_macos::Keychain::new()` in the app).
-    pub fn new(keychain: drift_macos::Keychain) -> Self {
+    /// Wraps a Keychain adapter (`drift_apple::Keychain::new()` in the app).
+    pub fn new(keychain: drift_apple::Keychain) -> Self {
         Self { keychain }
     }
 }
 
-impl From<drift_macos::KeychainError> for SecretError {
-    fn from(e: drift_macos::KeychainError) -> Self {
+impl From<drift_apple::KeychainError> for SecretError {
+    fn from(e: drift_apple::KeychainError) -> Self {
         SecretError(e.to_string())
     }
 }

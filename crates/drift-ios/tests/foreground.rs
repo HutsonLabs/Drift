@@ -9,13 +9,13 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use drift_ios::lifecycle::{ForegroundObserver, post_will_enter_foreground_for_tests};
+use drift_ios::lifecycle::{AppObserver, post_will_enter_foreground_for_tests};
 
 #[test]
 fn foreground_observer_fires_until_dropped() {
     let count = Arc::new(AtomicUsize::new(0));
     let c = count.clone();
-    let observer = ForegroundObserver::start(move || {
+    let observer = AppObserver::foreground(move || {
         c.fetch_add(1, Ordering::SeqCst);
     });
     post_will_enter_foreground_for_tests();

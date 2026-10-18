@@ -7,9 +7,9 @@
 
 use std::sync::Arc;
 
+use drift_apple::CursorShape;
+use drift_apple::cursor::CursorImage;
 use drift_core::{ConnectionProfile, SessionState, Size};
-use drift_macos::CursorShape;
-use drift_macos::cursor::CursorImage;
 use drift_rdp::CursorUpdate;
 
 use crate::connections::{CONNECTIONS_WINDOW, ConnectionStatus, WindowIdentity};
@@ -342,13 +342,18 @@ pub fn greeter_hint(view: Option<&SessionView>) -> Option<String> {
     })
 }
 
+#[cfg(target_os = "ios")]
+use drift_ios::view::DEFAULT_ACCESSIBILITY_LABEL;
+#[cfg(target_os = "macos")]
+use drift_macos::view::DEFAULT_ACCESSIBILITY_LABEL;
+
 /// What VoiceOver announces for the live picture (task M9-4).
 ///
 /// The `RemoteView` has an image role and this label; naming the connection and the desktop
 /// size is the only way a VoiceOver user can tell two session windows apart, because the picture
 /// itself is pixels from another computer.
 pub fn accessibility_label(view: Option<&SessionView>) -> String {
-    let Some(view) = view else { return drift_macos::view::DEFAULT_ACCESSIBILITY_LABEL.to_owned() };
+    let Some(view) = view else { return DEFAULT_ACCESSIBILITY_LABEL.to_owned() };
     match view.state {
         SessionState::Connected { desktop, .. } => {
             format!("{} — remote desktop, {} by {} pixels", view.profile_name, desktop.width, desktop.height)

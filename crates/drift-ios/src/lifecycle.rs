@@ -14,42 +14,59 @@ use drift_apple::network::{PathMonitor, TriggerFeed};
 use drift_core::{Clock, Trigger, TriggerAction};
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
+use objc2_foundation::NSNotificationName;
 use objc2_foundation::{NSNotification, NSNotificationCenter, NSObjectProtocol};
-use objc2_ui_kit::UIApplicationWillEnterForegroundNotification;
+use objc2_ui_kit::{
+    UIApplicationDidEnterBackgroundNotification, UIApplicationWillEnterForegroundNotification,
+};
 
-/// A `UIApplicationWillEnterForegroundNotification` observer. Removed on drop.
+/// An observer of one `UIApplication` notification on the default center. Removed on drop.
 #[derive(Debug)]
-pub struct ForegroundObserver {
+pub struct AppObserver {
     center: Retained<NSNotificationCenter>,
     token: Retained<ProtocolObject<dyn NSObjectProtocol>>,
 }
 
 // SAFETY: NSNotificationCenter is thread-safe; the token is only used to remove the observer.
-unsafe impl Send for ForegroundObserver {}
+unsafe impl Send for AppObserver {}
 // SAFETY: as above.
-unsafe impl Sync for ForegroundObserver {}
+unsafe impl Sync for AppObserver {}
 
-impl ForegroundObserver {
-    /// Calls `handler` on the posting thread (the main thread for real transitions) every time
-    /// the app is about to enter the foreground.
-    pub fn start(handler: impl Fn() + Send + Sync + 'static) -> Self {
+impl AppObserver {
+    fn start(name: &NSNotificationName, handler: impl Fn() + Send + Sync + 'static) -> Self {
         let center = NSNotificationCenter::defaultCenter();
         let block = RcBlock::new(move |_note: NonNull<NSNotification>| handler());
         // SAFETY: a constant notification name, no object filter, synchronous delivery on the
         // posting thread; the block is copied by the center and removed in `Drop`.
-        let token = unsafe {
-            center.addObserverForName_object_queue_usingBlock(
-                Some(UIApplicationWillEnterForegroundNotification),
-                None,
-                None,
-                &block,
-            )
-        };
+        let token =
+            unsafe { center.addObserverForName_object_queue_usingBlock(Some(name), None, None, &block) };
         Self { center, token }
     }
 }
 
-impl Drop for ForegroundObserver {
+/// Fires every time the app is about to enter the foreground.
+pub type ForegroundObserver = AppObserver;
+
+/// Fires every time the app has entered the background.
+pub type BackgroundObserver = AppObserver;
+
+impl AppObserver {
+    /// Calls `handler` on the posting thread (the main thread for real transitions) every time
+    /// the app is about to enter the foreground.
+    pub fn foreground(handler: impl Fn() + Send + Sync + 'static) -> ForegroundObserver {
+        // SAFETY: an immutable constant exported by UIKit.
+        Self::start(unsafe { UIApplicationWillEnterForegroundNotification }, handler)
+    }
+
+    /// Calls `handler` on the posting thread every time the app has entered the background
+    /// (iOS suspends it, and its sockets, shortly after).
+    pub fn background(handler: impl Fn() + Send + Sync + 'static) -> BackgroundObserver {
+        // SAFETY: an immutable constant exported by UIKit.
+        Self::start(unsafe { UIApplicationDidEnterBackgroundNotification }, handler)
+    }
+}
+
+impl Drop for AppObserver {
     fn drop(&mut self) {
         // SAFETY: removing the observer token we registered.
         unsafe { self.center.removeObserver(self.token.as_ref()) };
@@ -83,7 +100,7 @@ impl ReconnectTriggers {
         let f = feed.clone();
         let path = PathMonitor::start(move |status| f.path_status(status));
         let f = feed.clone();
-        let foreground = ForegroundObserver::start(move || f.trigger(Trigger::Wake));
+        let foreground = AppObserver::foreground(move || f.trigger(Trigger::Wake));
         Self { feed, _path: path, _foreground: foreground }
     }
 

@@ -19,7 +19,9 @@ use objc2::runtime::AnyClass;
 use objc2::{ClassType, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
 use objc2_core_foundation::{CGRect, CGSize};
 use objc2_quartz_core::CAMetalLayer;
-use objc2_ui_kit::{NSObjectUIAccessibility as _, UIColor, UITraitEnvironment as _, UIView, UIViewAutoresizing};
+use objc2_ui_kit::{
+    NSObjectUIAccessibility as _, UIColor, UITraitEnvironment as _, UIView, UIViewAutoresizing,
+};
 
 /// What VoiceOver announces for the picture until the session names it (M9-4).
 pub const DEFAULT_ACCESSIBILITY_LABEL: &str = "Remote desktop";
@@ -93,7 +95,10 @@ impl RemoteView {
         this.setOpaque(true);
         this.setAutoresizingMask(UIViewAutoresizing::FlexibleWidth | UIViewAutoresizing::FlexibleHeight);
         this.setIsAccessibilityElement(true, mtm);
-        this.setAccessibilityLabel(Some(&objc2_foundation::NSString::from_str(DEFAULT_ACCESSIBILITY_LABEL)), mtm);
+        this.setAccessibilityLabel(
+            Some(&objc2_foundation::NSString::from_str(DEFAULT_ACCESSIBILITY_LABEL)),
+            mtm,
+        );
         this.sync_drawable_size();
         this
     }

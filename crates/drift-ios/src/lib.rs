@@ -9,6 +9,7 @@
 //! | [`lifecycle`] | foreground observer and the reconnect triggers it feeds | IOS-3 |
 //! | [`settings`] | the app's page in Settings (Local Network permission) | IOS-3 |
 //! | [`view`] | `RemoteView`: `UIView` + `CAMetalLayer` under the `WKWebView` | IOS-4 |
+//! | [`webview`] | the page's `WKWebView`: picture below it, frames, main-queue dispatch | IOS-5 |
 //! | [`pacing`] | `CADisplayLink` asking for up to 120 Hz while a session is visible | IOS-4 |
 //!
 //! UIKit exists only on iOS, so the crate is empty on every other target. Every `unsafe` block
@@ -19,8 +20,9 @@ pub mod lifecycle;
 pub mod pacing;
 pub mod settings;
 pub mod view;
+pub mod webview;
 
 pub use drift_apple::{Keychain, KeychainError, PathMonitor, PathStatus, TriggerFeed};
-pub use lifecycle::{ForegroundObserver, ReconnectTriggers};
+pub use lifecycle::{AppObserver, ReconnectTriggers};
 pub use pacing::FramePacing;
 pub use view::{RemoteView, RemoteViewHandler};

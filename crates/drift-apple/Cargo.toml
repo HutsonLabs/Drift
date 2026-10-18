@@ -9,6 +9,8 @@ publish.workspace = true
 
 [dependencies]
 drift-core.workspace = true
+ironrdp-graphics.workspace = true
+ironrdp-pdu.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 zeroize.workspace = true

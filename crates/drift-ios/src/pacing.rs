@@ -14,7 +14,8 @@ use objc2_foundation::{NSDefaultRunLoopMode, NSRunLoop};
 use objc2_quartz_core::{CADisplayLink, CAFrameRateRange};
 
 /// The range asked for while a session is visible.
-pub const PREFERRED_RANGE: CAFrameRateRange = CAFrameRateRange { minimum: 60.0, maximum: 120.0, preferred: 120.0 };
+pub const PREFERRED_RANGE: CAFrameRateRange =
+    CAFrameRateRange { minimum: 60.0, maximum: 120.0, preferred: 120.0 };
 
 define_class!(
     /// The display link's target; the tick does nothing (the render thread presents).
