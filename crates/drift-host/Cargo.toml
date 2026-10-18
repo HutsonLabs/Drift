@@ -14,6 +14,7 @@ path = "src/main.rs"
 [dependencies]
 drift-apple.workspace = true
 drift-clipboard.workspace = true
+drift-capture.workspace = true
 drift-core.workspace = true
 drift-ext.workspace = true
 # The VideoToolbox H.264 encoder (behind `recording` today) draws the skeleton's test pattern;
@@ -22,7 +23,10 @@ drift-video = { workspace = true, features = ["recording"] }
 ironrdp-displaycontrol.workspace = true
 ironrdp-dvc.workspace = true
 ironrdp-egfx.workspace = true
+ironrdp-cliprdr.workspace = true
+ironrdp-core.workspace = true
 ironrdp-pdu.workspace = true
+ironrdp-rdpsnd.workspace = true
 ironrdp-server = { workspace = true, features = ["egfx"] }
 ironrdp-svc.workspace = true
 async-trait = "0.1"

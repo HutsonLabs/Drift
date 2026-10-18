@@ -101,6 +101,9 @@ fn run() -> Result<(), String> {
         desktop: config.desktop,
         frames: Box::new(|| Box::new(TestPattern::new())),
         input: Box::new(RecordingInput::default()),
+        // HOST-11: the Mac's pasteboard over CLIPRDR, its system audio over rdpsnd.
+        clipboard: Some(Box::new(|| Box::new(drift_clipboard::pasteboard::NsPasteboard::general()))),
+        audio: Some(Box::new(|| Box::new(drift_host::audio::SystemAudio::default()))),
     })
     .map_err(|e| format!("cannot listen on {}: {e}", config.listen))?;
     println!("Drift Host listening on {}", host.addr());

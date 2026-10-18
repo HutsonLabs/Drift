@@ -2,7 +2,7 @@
 //! the samples. The source is a synthetic tone (ScreenCaptureKit audio needs Screen Recording).
 #![allow(missing_docs, clippy::unwrap_used, clippy::expect_used)]
 
-#[path = "support_host.rs"]
+#[path = "support/host.rs"]
 mod support;
 
 use std::sync::{Arc, Mutex};

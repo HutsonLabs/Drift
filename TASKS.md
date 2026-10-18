@@ -84,8 +84,12 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   Accessibility, Local Network) with plain-language first-run guidance.
 - [ ] **HOST-10 Virtual display.** `CGVirtualDisplay` created and resized from Display Control
   layouts; launch self-test; fallback to the physical display.
-- [ ] **HOST-11 Clipboard and audio.** CLIPRDR server role reusing `drift-clipboard`'s mapping;
+- [~] **HOST-11 Clipboard and audio.** CLIPRDR server role reusing `drift-clipboard`'s mapping;
   `ironrdp-rdpsnd` fed from ScreenCaptureKit audio.
+  *Both directions of the clipboard and the host's sound to Drift's client work over loopback
+  (ADR `HOST-11-clipboard-and-audio`); the client plays it through `AVAudioEngine`. Live system
+  audio needs Screen Recording and the real pasteboard a person: manual steps in
+  `docs/acceptance.md`.*
 - [ ] **HOST-13 Login window.** LaunchDaemon + per-session LaunchAgent + LoginWindow agent, so a
   paired device reaches the Mac after a restart.
 - [ ] **HOST-14 Extra paths.** USB cable link and peer-to-peer Wi-Fi alongside the LAN; remote

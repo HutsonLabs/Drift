@@ -5,6 +5,7 @@
 //!
 //! | Module | Area | Task |
 //! |---|---|---|
+//! | [`audio_out`] | remote sound: `AVAudioEngine` player with the 200 ms latency cap | HOST-11 |
 //! | [`cursor`] | pure fast-path pointer decode + cache, shared by `NSCursor` and the iPad pointer | M2-5, IOS-5 |
 //! | [`keychain`] | Keychain password adapter (login keychain on macOS, data-protection keychain on iOS) | M3-2, IOS-3 |
 //! | [`network`] | `NWPathMonitor` and the merged reconnect-trigger feed | M7-2, IOS-3 |
@@ -15,6 +16,7 @@
 //! Every `unsafe` block has a `// SAFETY:` comment.
 #![cfg(target_vendor = "apple")]
 
+pub mod audio_out;
 pub mod bonjour;
 pub mod cursor;
 pub mod keychain;

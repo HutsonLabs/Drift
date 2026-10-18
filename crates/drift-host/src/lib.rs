@@ -12,10 +12,14 @@
 //! | [`layout`] | client monitor layouts → desktop sizes the encoder accepts | HOST-2 |
 //! | [`input`] | input sinks: count/log only for now; HOST-6's injection plugs in here | HOST-2 |
 //! | [`frames`] | what the host shows: a test pattern until capture and the real-time encoder land | HOST-2 |
+//! | [`clipboard`] | the CLIPRDR server role over `drift-clipboard`'s sync state and the Mac pasteboard | HOST-11 |
+//! | [`audio`] | the rdpsnd server: 16-bit PCM from ScreenCaptureKit (or a test tone) | HOST-11 |
 //! | [`server`] | the listener, the connection loop, EGFX and Display Control wiring | HOST-2 |
 //!
 //! Pure modules are unit tested; [`server`] is covered by a loopback test against `drift-rdp`.
 
+pub mod audio;
+pub mod clipboard;
 pub mod config;
 pub mod frames;
 pub mod gate;

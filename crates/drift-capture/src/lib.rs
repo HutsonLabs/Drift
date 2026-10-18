@@ -7,6 +7,7 @@
 //!
 //! | Module | Area |
 //! |---|---|
+//! | [`audio`] | system audio: float → 16-bit stereo PCM; `AudioCapture` (macOS) for rdpsnd (HOST-11) |
 //! | [`config`] | frame format, rate cap, queue depth |
 //! | [`display`] | display geometry and selection |
 //! | [`frame`] | `SCStreamFrameInfo` status and damage |
@@ -18,6 +19,7 @@
 //! The pure modules build everywhere and carry the logic; the macOS modules are humble objects.
 //! Every `unsafe` block has a `// SAFETY:` comment.
 
+pub mod audio;
 pub mod config;
 pub mod cursor;
 pub mod display;

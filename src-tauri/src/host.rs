@@ -86,7 +86,31 @@ impl<R: Runtime> SessionHost for TauriHost<R> {
 }
 
 /// Every session offers the `Drift::Mac::v1` channel (EXT-1): a Drift Host opens it, every
-/// other server leaves it closed and the session is plain RDP.
+/// other server leaves it closed and the session is plain RDP. Every session also plays the
+/// server's sound (HOST-11), through its own `AVAudioEngine` player.
 fn session_options() -> SessionOptions {
-    SessionOptions { drift_mac: Some(drift_ext::channel::Link::new()), ..SessionOptions::default() }
+    SessionOptions {
+        drift_mac: Some(drift_ext::channel::Link::new()),
+        audio: Some(drift_rdp::audio::AudioOutput::new(SessionSound(drift_apple::audio_out::Player::new()))),
+        ..SessionOptions::default()
+    }
+}
+
+/// A session's sound output: the `drift-apple` player behind `drift-rdp`'s sink trait.
+struct SessionSound(drift_apple::audio_out::Player);
+
+impl drift_rdp::audio::AudioSink for SessionSound {
+    fn start(&self, format: drift_core::audio::PcmFormat) {
+        if let Err(e) = self.0.start(format) {
+            tracing::warn!(error = %e, "no sound for this session");
+        }
+    }
+
+    fn play(&self, pcm: &[u8]) {
+        self.0.play(pcm);
+    }
+
+    fn stop(&self) {
+        self.0.stop();
+    }
 }

@@ -86,6 +86,9 @@ pub struct SessionOptions {
     /// not offer the channel at all; with a link it accepts it when a Drift Host opens it, and
     /// the link stays `Absent` with any other server. Reset at every connection leg.
     pub drift_mac: Option<drift_ext::channel::Link>,
+    /// Play the server's sound here (HOST-11). With `None` the client does not offer the sound
+    /// channel.
+    pub audio: Option<crate::audio::AudioOutput>,
 }
 
 impl Default for SessionOptions {
@@ -97,6 +100,7 @@ impl Default for SessionOptions {
             reconnect: ReconnectConfig::default(),
             reconnect_seed: None,
             drift_mac: None,
+            audio: None,
         }
     }
 }

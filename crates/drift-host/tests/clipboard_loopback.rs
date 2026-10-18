@@ -3,7 +3,7 @@
 //! The host's pasteboard is a fake port: tests never touch the real general pasteboard.
 #![allow(missing_docs, clippy::unwrap_used, clippy::expect_used)]
 
-#[path = "support_host.rs"]
+#[path = "support/host.rs"]
 mod support;
 
 use std::sync::{Arc, Mutex};
@@ -14,6 +14,15 @@ use drift_clipboard::{ClipboardContents, ClipboardItem};
 use drift_core::ClipboardPrefs;
 use drift_rdp::{SessionCommand, SessionEvent, SessionOptions};
 use support::*;
+
+/// A 2×2 RGBA PNG (red, green): a valid image for the PNG/DIB path. Test data only.
+const TINY_PNG: &[u8] = &[
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00,
+    0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x08, 0x06, 0x00, 0x00, 0x00, 0x72, 0xb6, 0x0d, 0x24, 0x00,
+    0x00, 0x00, 0x10, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0xf0, 0x1f, 0x0a, 0x21,
+    0x14, 0x00, 0x45, 0xcc, 0x07, 0xf9, 0x66, 0xcb, 0xff, 0x39, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e,
+    0x44, 0xae, 0x42, 0x60, 0x82,
+];
 
 #[derive(Debug, Default)]
 struct FakeBoard {
@@ -30,6 +39,11 @@ impl FakePasteboard {
         let mut b = self.0.lock().unwrap();
         b.change_count += 1;
         b.contents = ClipboardContents { items: vec![ClipboardItem::Text(text.to_owned())] };
+    }
+    fn copy_image(&self) {
+        let mut b = self.0.lock().unwrap();
+        b.change_count += 1;
+        b.contents = ClipboardContents { items: vec![ClipboardItem::Png(TINY_PNG.to_vec())] };
     }
     fn written_text(&self) -> Vec<String> {
         self.0.lock().unwrap().writes.iter().filter_map(|c| c.text().map(str::to_owned)).collect()
@@ -76,7 +90,16 @@ async fn host_and_client_copies_cross_in_both_directions() {
     .await;
     assert!(matches!(got, SessionEvent::ClipboardRemote(_)));
 
-    // Client copy → the host fetches it and writes its pasteboard.
+    // An image copied on the host arrives as an image (PNG, or DIB converted back to PNG).
+    board.copy_image();
+    wait_event(&mut events, "the host's image at the client", |e| {
+        matches!(e, SessionEvent::ClipboardRemote(c) if c.items.iter().any(|i| matches!(i, ClipboardItem::Png(_))))
+    })
+    .await;
+
+    // Client copy → the host fetches it and writes its pasteboard. Wait out the echo window
+    // first: a text list within 500 ms of our own text advertisement counts as its echo (M5-1).
+    tokio::time::sleep(drift_clipboard::sync::ECHO_WINDOW + Duration::from_millis(200)).await;
     handle
         .send(SessionCommand::ClipboardLocalChanged(ClipboardContents {
             items: vec![ClipboardItem::Text("copied on the iPad".into())],

@@ -18,6 +18,7 @@
 //! | [`stats`] | fps / bit rate sampling for `SessionEvent::Stats` |
 
 mod actor;
+pub mod audio;
 mod clipboard;
 pub mod connect;
 mod fastpath;
