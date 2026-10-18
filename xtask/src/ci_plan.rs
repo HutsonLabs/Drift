@@ -165,6 +165,12 @@ fn check(name: &str, c: Check) -> Step {
 pub const VENDORED_TEST_PACKAGES: &[&str] =
     &["ironrdp-testsuite-core", "ironrdp-cliprdr", "ironrdp-connector", "ironrdp-pdu", "ironrdp-session"];
 
+/// The iOS targets the iOS crates must build for (ADR `IOS-0`, decision 8).
+pub const IOS_TARGETS: &[&str] = &[];
+
+/// The crates that build for iOS: platform-neutral ones plus the Apple-framework ones.
+pub const IOS_CRATES: &[&str] = &[];
+
 /// The lint pass: formatting and clippy over every target and every feature.
 ///
 /// `--all-features` rather than a hand-maintained list: a new cargo feature is then covered by
