@@ -37,7 +37,7 @@ pub struct SpikeLog {
     pub avc420_negotiated: bool,
     /// The client confirmed a capability set with AVC444 enabled.
     pub avc444_negotiated: bool,
-    /// AVC420 frames queued for the client.
+    /// Frames queued for the client (AVC420, or AVC444 for [`SpikeHost::start_avc444`]).
     pub frames_sent: u32,
     /// Frame acknowledgements received (frame ids).
     pub frames_acked: Vec<u32>,
@@ -79,6 +79,31 @@ impl SpikeHost {
         password: &str,
         size: Size<u32>,
         frames: Vec<Vec<u8>>,
+    ) -> io::Result<Self> {
+        Self::start_frames(cert, user, password, size, frames.into_iter().map(SpikeFrame::Avc420).collect())
+            .await
+    }
+
+    /// Like [`Self::start`], but each frame is an AVC444 picture: the main (luma) and auxiliary
+    /// (chroma) views as Annex-B access units. They are sent only if the client confirmed a
+    /// capability set with AVC444 (ADR `AVC444-client`); otherwise nothing is sent.
+    pub async fn start_avc444(
+        cert: TestCert,
+        user: &str,
+        password: &str,
+        size: Size<u32>,
+        frames: Vec<(Vec<u8>, Vec<u8>)>,
+    ) -> io::Result<Self> {
+        let frames = frames.into_iter().map(|(main, aux)| SpikeFrame::Avc444 { main, aux }).collect();
+        Self::start_frames(cert, user, password, size, frames).await
+    }
+
+    async fn start_frames(
+        cert: TestCert,
+        user: &str,
+        password: &str,
+        size: Size<u32>,
+        frames: Vec<SpikeFrame>,
     ) -> io::Result<Self> {
         let listener = std::net::TcpListener::bind(("127.0.0.1", 0))?;
         listener.set_nonblocking(true)?;
@@ -174,17 +199,23 @@ impl RdpServerDisplay for SpikeDisplay {
     }
 }
 
+/// One queued picture.
+enum SpikeFrame {
+    Avc420(Vec<u8>),
+    Avc444 { main: Vec<u8>, aux: Vec<u8> },
+}
+
 /// Builds the EGFX bridge and, once the client is ready, sends the queued frames.
 struct SpikeGfx {
     log: SharedLog,
-    frames: Arc<Mutex<VecDeque<Vec<u8>>>>,
+    frames: Arc<Mutex<VecDeque<SpikeFrame>>>,
     size: (u16, u16),
     sender: Arc<Mutex<Option<mpsc::UnboundedSender<ServerEvent>>>>,
     handle: Arc<Mutex<Option<GfxServerHandle>>>,
 }
 
 impl SpikeGfx {
-    fn new(log: SharedLog, frames: Vec<Vec<u8>>, size: (u16, u16)) -> Self {
+    fn new(log: SharedLog, frames: Vec<SpikeFrame>, size: (u16, u16)) -> Self {
         Self {
             log,
             frames: Arc::new(Mutex::new(frames.into())),
@@ -226,7 +257,7 @@ impl GfxServerFactory for SpikeGfx {
 
 struct SpikeGfxHandler {
     log: SharedLog,
-    frames: Arc<Mutex<VecDeque<Vec<u8>>>>,
+    frames: Arc<Mutex<VecDeque<SpikeFrame>>>,
     size: (u16, u16),
     sender: Arc<Mutex<Option<mpsc::UnboundedSender<ServerEvent>>>>,
     handle: Arc<Mutex<Option<GfxServerHandle>>>,
@@ -259,8 +290,24 @@ impl GraphicsPipelineHandler for SpikeGfxHandler {
                     quantization_parameter: 22,
                     quality: 100,
                 };
-                while let Some(au) = lock(&frames).pop_front() {
-                    if server.send_avc420_frame(surface, &au, std::slice::from_ref(&region), 0).is_some() {
+                let avc444 = server.supports_avc444();
+                while let Some(frame) = lock(&frames).pop_front() {
+                    let sent = match frame {
+                        SpikeFrame::Avc420(au) => {
+                            server.send_avc420_frame(surface, &au, std::slice::from_ref(&region), 0)
+                        }
+                        // Never fall back silently: a client without AVC444 gets nothing.
+                        SpikeFrame::Avc444 { .. } if !avc444 => None,
+                        SpikeFrame::Avc444 { main, aux } => server.send_avc444_frame(
+                            surface,
+                            &main,
+                            std::slice::from_ref(&region),
+                            Some(&aux),
+                            Some(std::slice::from_ref(&region)),
+                            0,
+                        ),
+                    };
+                    if sent.is_some() {
                         lock(&log).frames_sent += 1;
                     }
                 }

@@ -3,20 +3,20 @@
 use drift_codec::{
     BgraTile, ClearCodec, ProgressiveCodec, TilePool, UncompressedFormat, decode_planar, decode_uncompressed,
 };
-use drift_core::video::H264Decoder;
+use drift_core::video::{Avc444Decoder, H264Decoder};
 use drift_core::{Bgra, Point, Rect, Size};
 use ironrdp_core::{Decode as _, ReadCursor};
 use ironrdp_dvc::{DvcClientProcessor, DvcMessage, DvcProcessor};
 use ironrdp_egfx::pdu::{
-    Avc420BitmapStream, CacheToSurfacePdu, CapabilitySet, Codec1Type, GfxPdu, PixelFormat, SolidFillPdu,
-    SurfaceToCachePdu, SurfaceToSurfacePdu, WireToSurface1Pdu, WireToSurface2Pdu,
+    Avc420BitmapStream, Avc444BitmapStream, CacheToSurfacePdu, CapabilitySet, Codec1Type, Encoding, GfxPdu,
+    PixelFormat, SolidFillPdu, SurfaceToCachePdu, SurfaceToSurfacePdu, WireToSurface1Pdu, WireToSurface2Pdu,
 };
 use ironrdp_graphics::zgfx;
 use ironrdp_pdu::{PduResult, pdu_other_err};
 use tracing::{debug, trace};
 
 use crate::ack::AckOutbox;
-use crate::caps::caps_advertise_pdu;
+use crate::caps::{GfxCaps, caps_advertise_pdu_for};
 use crate::error::GfxError;
 use crate::sink::FrameSink;
 use crate::state::{GfxState, clip, ensure_within, point, rect};
@@ -44,6 +44,9 @@ const MAX_RETAINED_BUFFER: usize = 1 << 20;
 pub struct GfxClient {
     sink: Box<dyn FrameSink>,
     h264: Box<dyn H264Decoder>,
+    /// AVC444 (ADR `AVC444-client`); `None` keeps the codec unsupported, as for GNOME.
+    avc444: Option<Box<dyn Avc444Decoder>>,
+    caps: GfxCaps,
     progressive: ProgressiveCodec,
     clear: ClearCodec,
     zgfx: zgfx::Decompressor,
@@ -73,6 +76,8 @@ impl GfxClient {
         Self {
             sink,
             h264,
+            avc444: None,
+            caps: GfxCaps::Gnome,
             progressive: ProgressiveCodec::new(pool),
             clear: ClearCodec::new(),
             zgfx: zgfx::Decompressor::new(),
@@ -83,6 +88,16 @@ impl GfxClient {
             output: Size::new(0, 0),
             error: None,
         }
+    }
+
+    /// Decodes AVC444 with `decoder` (sessions for a Drift Host; ADR `AVC444-client`).
+    pub fn set_avc444(&mut self, decoder: Box<dyn Avc444Decoder>) {
+        self.avc444 = Some(decoder);
+    }
+
+    /// Advertises `caps` when the channel starts (default [`GfxCaps::Gnome`]).
+    pub fn set_caps(&mut self, caps: GfxCaps) {
+        self.caps = caps;
     }
 
     /// Handle onto the frame acknowledgements this client produces. The session actor
@@ -243,6 +258,9 @@ impl GfxClient {
         self.progressive.reset();
         self.clear = ClearCodec::new();
         self.h264.reset();
+        if let Some(avc444) = self.avc444.as_mut() {
+            avc444.reset();
+        }
         self.output = output;
         self.sink.reset(output);
     }
@@ -329,6 +347,9 @@ impl GfxClient {
                 ensure_within(w.surface_id, surface.size, dest, "destination")?;
                 self.clear.decode(dest, &w.bitmap_data)?
             }
+            Codec1Type::Avc444 if self.avc444.is_some() => {
+                return self.avc444(w.surface_id, surface.size, &w.bitmap_data);
+            }
             Codec1Type::RemoteFx | Codec1Type::Alpha | Codec1Type::Avc444 | Codec1Type::Avc444v2 => {
                 return Err(GfxError::UnsupportedCodec(format!("{:?}", w.codec_id)));
             }
@@ -364,6 +385,44 @@ impl GfxClient {
             && !regions.is_empty()
         {
             self.sink.blit_nv12(id, &frame, &regions);
+        }
+        Ok(())
+    }
+
+    /// `RFX_AVC444_BITMAP_STREAM` (MS-RDPEGFX 2.2.4.5): `LC` says which views it carries; the
+    /// first stream's metablock says what changed. The decoder recombines the views into one
+    /// full-chroma BGRA picture, and the changed regions of it are blitted.
+    fn avc444(&mut self, id: u16, bounds: Size<u32>, data: &[u8]) -> Result<(), GfxError> {
+        let stream = Avc444BitmapStream::decode(&mut ReadCursor::new(data))
+            .map_err(|e| GfxError::Decode(e.to_string()))?;
+        let mut regions = Vec::with_capacity(stream.stream1.rectangles.len());
+        for r in &stream.stream1.rectangles {
+            if let Some(r) = clip(rect(r)?, bounds) {
+                regions.push(r);
+            }
+        }
+        let (main, aux) = if stream.encoding == Encoding::LUMA_AND_CHROMA {
+            (Some(stream.stream1.data), stream.stream2.as_ref().map(|s| s.data))
+        } else if stream.encoding == Encoding::LUMA {
+            (Some(stream.stream1.data), None)
+        } else {
+            (None, Some(stream.stream1.data))
+        };
+        let Some(decoder) = self.avc444.as_mut() else {
+            return Err(GfxError::UnsupportedCodec("Avc444".into()));
+        };
+        // Always decode: later pictures of either view reference this one.
+        if let Some(picture) = decoder.decode(main, aux)?
+            && !regions.is_empty()
+        {
+            let stride = picture.stride();
+            for r in &regions {
+                let Some(r) = clip(*r, picture.size()) else { continue };
+                let offset = r.y as usize * stride + r.x as usize * 4;
+                if let Some(rows) = picture.data().get(offset..) {
+                    self.sink.blit_bgra(id, r, stride, rows);
+                }
+            }
         }
         Ok(())
     }
@@ -416,9 +475,10 @@ impl DvcProcessor for GfxClient {
         CHANNEL_NAME
     }
 
-    /// Sends exactly `[V8_1{AVC420_ENABLED}, V8{}]` (plan §1.4).
+    /// Sends exactly `[V8_1{AVC420_ENABLED}, V8{}]` (plan §1.4), or `V10 {}` first for a
+    /// Drift Host ([`GfxCaps::DriftHost`]).
     fn start(&mut self, _channel_id: u32) -> PduResult<Vec<DvcMessage>> {
-        Ok(vec![Box::new(caps_advertise_pdu()) as DvcMessage])
+        Ok(vec![Box::new(caps_advertise_pdu_for(self.caps)) as DvcMessage])
     }
 
     /// Processes one payload and returns the acks that are already due (a renderer that

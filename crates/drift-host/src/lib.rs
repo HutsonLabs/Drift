@@ -18,11 +18,13 @@
 //! | [`link`] | link hygiene: video service class, idle heartbeat, backlog level | HOST-7 |
 //! | [`setup`] | the binary's wiring: screen or pattern, injection or logging | HOST-pipeline |
 //! | [`inject`] | client input → `drift-inject` plans → CoreGraphics events | HOST-pipeline |
+//! | [`codec`] | AVC444 or AVC420 for an output size and what the client confirmed | AVC444-client |
 //! | [`server`] | the listener, the connection loop, EGFX and Display Control wiring | HOST-2 |
 //!
 //! Pure modules are unit tested; [`server`] is covered by a loopback test against `drift-rdp`.
 
 pub mod capture;
+pub mod codec;
 pub mod config;
 pub mod frames;
 pub mod gate;

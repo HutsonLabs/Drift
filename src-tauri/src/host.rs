@@ -3,7 +3,8 @@
 
 use std::sync::Arc;
 
-use drift_core::SystemClock;
+use drift_core::{ConnectionProfile, SystemClock};
+use drift_gfx::GfxCaps;
 use drift_rdp::{CursorUpdate, SessionEvent, SessionEvents, SessionHandle, SessionOptions, spawn_session};
 use tauri::{AppHandle, Runtime};
 use uuid::Uuid;
@@ -38,7 +39,7 @@ impl<R: Runtime> SessionHost for TauriHost<R> {
         let runtime = tauri::async_runtime::handle();
         let _guard = runtime.inner().enter();
         let (handle, events) =
-            spawn_session(profile.clone(), secrets, sink, Arc::new(SystemClock), session_options());
+            spawn_session(profile.clone(), secrets, sink, Arc::new(SystemClock), session_options(profile));
         windows::attach_session(&self.app, window, handle.clone());
         Ok((handle, events))
     }
@@ -86,7 +87,26 @@ impl<R: Runtime> SessionHost for TauriHost<R> {
 }
 
 /// Every session offers the `Drift::Mac::v1` channel (EXT-1): a Drift Host opens it, every
-/// other server leaves it closed and the session is plain RDP.
-fn session_options() -> SessionOptions {
-    SessionOptions { drift_mac: Some(drift_ext::channel::Link::new()), ..SessionOptions::default() }
+/// other server leaves it closed and the session is plain RDP. Only a paired Drift Host gets
+/// the V10 graphics caps that allow AVC444; GNOME keeps the verified V8.1 list, because V10
+/// makes g-r-d send AVC444v2 (ADR `AVC444-client`).
+pub(crate) fn session_options(profile: &ConnectionProfile) -> SessionOptions {
+    let gfx_caps = if profile.paired_host.is_some() { GfxCaps::DriftHost } else { GfxCaps::Gnome };
+    SessionOptions { drift_mac: Some(drift_ext::channel::Link::new()), gfx_caps, ..SessionOptions::default() }
+}
+
+#[cfg(test)]
+mod tests {
+    use drift_core::ConnectMode;
+
+    use super::*;
+
+    #[test]
+    fn only_paired_drift_hosts_get_the_v10_caps() {
+        let mut profile = ConnectionProfile::new("Studio", "studio.local", ConnectMode::Headless);
+        assert_eq!(session_options(&profile).gfx_caps, GfxCaps::Gnome);
+        profile.paired_host = Some(Uuid::new_v4());
+        assert_eq!(session_options(&profile).gfx_caps, GfxCaps::DriftHost);
+        assert!(session_options(&profile).drift_mac.is_some());
+    }
 }

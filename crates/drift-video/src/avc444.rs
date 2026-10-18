@@ -97,6 +97,47 @@ pub fn bgra_to_yuv444(bgra: &[u8], size: Size<u32>, stride: usize) -> Option<Yuv
     Some(Yuv444 { size, y, u, v })
 }
 
+/// Converts back to BGRA (opaque) with the BT.709 full-range inverse of [`bgra_to_yuv444`]'s
+/// matrix: `R = Y + 1.5748 V'`, `G = Y - 0.1873 U' - 0.4681 V'`, `B = Y + 1.8556 U'` with
+/// `U' = U - 128`, `V' = V - 128` (fixed point, 16 fractional bits).
+pub fn yuv444_to_bgra(pic: &Yuv444) -> Vec<u8> {
+    let Some((w, h)) = dims(pic.size) else { return Vec::new() };
+    let mut out = vec![0u8; w * h * 4];
+    if w == 0 {
+        return out;
+    }
+    let clamp = |x: i32| x.clamp(0, 255) as u8;
+    out.par_chunks_mut(w * 4).enumerate().for_each(|(row, dst)| {
+        let (ys, us, vs) = (&pic.y[row * w..][..w], &pic.u[row * w..][..w], &pic.v[row * w..][..w]);
+        for (x, px) in dst.chunks_exact_mut(4).enumerate() {
+            let y = i32::from(ys[x]) << 16;
+            let (u, v) = (i32::from(us[x]) - 128, i32::from(vs[x]) - 128);
+            let r = (y + 103_206 * v + 32_768) >> 16;
+            let g = (y - 12_275 * u - 30_677 * v + 32_768) >> 16;
+            let b = (y + 121_609 * u + 32_768) >> 16;
+            px.copy_from_slice(&[clamp(b), clamp(g), clamp(r), 255]);
+        }
+    });
+    out
+}
+
+/// A full-chroma picture from the main view alone (each 4:2:0 chroma sample repeated over its
+/// 2×2 block): what a client shows before the first auxiliary view arrives.
+pub fn upsample_main(main: &Nv12Planes) -> Option<Yuv444> {
+    let size = main.size();
+    let (w, h) = dims(size)?;
+    let (mut u, mut v) = (vec![GREY; w * h], vec![GREY; w * h]);
+    let uv = main.uv();
+    for row in 0..h {
+        for x in 0..w {
+            let i = (row / 2) * w + (x / 2) * 2;
+            u[row * w + x] = *uv.get(i)?;
+            v[row * w + x] = *uv.get(i + 1)?;
+        }
+    }
+    Yuv444::new(size, main.y().to_vec(), u, v)
+}
+
 /// The source chroma row and plane of auxiliary-view luma row `row`: in each 16-row band, rows
 /// 0–7 are U rows `2(8k + r) + 1`, rows 8–15 are V rows `2(8k + r) + 1`.
 fn aux_luma_source(row: usize) -> (bool, usize) {

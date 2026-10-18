@@ -518,3 +518,15 @@ realtime_bench -- <width> <height> <frames>` while other builds ran. Still to do
       else running; update the ADR's table if the CPU-split or AVC444 rows move.
 - [ ] **M1:** run it on an M1 Mac (ADR `IOS-0` open question 5 asked about M1).
 
+### AVC444 — Full chroma from a Drift Host (ADR `AVC444-client`)
+
+Done on 2026-10-18 on loopback (`cargo test -p drift-rdp --test avc444_host`): a session with
+the Drift Host caps negotiates V10, and an AVC444 frame from HOST-4's encoder is drawn with a
+chroma PSNR of 34.7 dB on coloured strokes. Still to do by hand:
+
+- [ ] **GNOME unchanged:** connect to the GNOME host with an ordinary profile; the log shows
+      `GFX capabilities confirmed` with V8.1 and the session looks as before (no V10 offered).
+- [ ] **Text quality:** once Drift Host streams the real screen (HOST-2 + HOST-3/4), compare red
+      and blue text on white between a paired profile (AVC444) and the same Mac at 2560×1600
+      (AVC420): coloured strokes stay crisp with AVC444.
+

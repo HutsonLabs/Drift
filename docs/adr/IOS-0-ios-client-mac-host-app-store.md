@@ -21,8 +21,8 @@ protocol is private, so a third-party client cannot speak it. Getting that exper
 means shipping **both ends**: a host on the Mac and a client on the device.
 
 Drift today is a sandboxed Tauri 2.11.6 app for macOS that speaks RDP to GNOME Remote Desktop.
-It already has the hard client half: the GFX pipeline including AVC420 and AVC444
-(`drift-gfx`, `drift-video`), CPU codecs (`drift-codec`), a Metal compositor (`drift-render`),
+It already has the hard client half: the GFX pipeline with AVC420 (`drift-gfx`, `drift-video`;
+AVC444 decoding was not there yet and came with ADR `AVC444-client`), CPU codecs (`drift-codec`), a Metal compositor (`drift-render`),
 keyboard/scroll translation (`drift-input`), CLIPRDR text + images (`drift-clipboard`),
 display-control resize (M4), and reconnect (M7). The vendored IronRDP tree also carries the
 server halves: `ironrdp-server` (TLS, fast-path input, bitmap updates; `egfx` optional),
@@ -63,8 +63,8 @@ sandboxed (decision 9).
 
 Drift Host speaks RDP, built on the vendored `ironrdp-server` + `ironrdp-egfx`. Reasons:
 
-- Drift's client pipeline (GFX, AVC444, CLIPRDR, DISP, reconnect) is reused unchanged against a
-  Mac, so one client serves GNOME and Mac hosts.
+- Drift's client pipeline (GFX, CLIPRDR, DISP, reconnect) is reused against a Mac, so one client
+  serves GNOME and Mac hosts. AVC444 decoding was added for Drift Hosts (ADR `AVC444-client`).
 - AVC444 gives full-chroma text with H.264 on hardware every Apple device can decode, which is
   the main visible quality gap in Sill.
 - Any RDP client (Microsoft's Windows App on iPad, `mstsc`) can test the host before Drift's iOS

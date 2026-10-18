@@ -47,4 +47,4 @@ pub use reconnect::{ReconnectConfig, ReconnectDecision, ReconnectPolicy};
 pub use state::{ConnectStage, DisconnectReason, InvalidTransition, SessionState};
 pub use store::{ProfileStore, StoreError};
 pub use triggers::{Trigger, TriggerAction, TriggerMerger};
-pub use video::{Nv12Frame, Nv12Planes, Nv12Source};
+pub use video::{BgraPicture, Nv12Frame, Nv12Planes, Nv12Source};

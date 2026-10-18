@@ -86,6 +86,10 @@ pub struct SessionOptions {
     /// not offer the channel at all; with a link it accepts it when a Drift Host opens it, and
     /// the link stays `Absent` with any other server. Reset at every connection leg.
     pub drift_mac: Option<drift_ext::channel::Link>,
+    /// The graphics capabilities to advertise: the verified V8.1 list for GNOME and every other
+    /// host, or V10 first for a paired Drift Host, which then may send AVC444 (ADR
+    /// `AVC444-client`).
+    pub gfx_caps: drift_gfx::GfxCaps,
 }
 
 impl Default for SessionOptions {
@@ -97,6 +101,7 @@ impl Default for SessionOptions {
             reconnect: ReconnectConfig::default(),
             reconnect_seed: None,
             drift_mac: None,
+            gfx_caps: drift_gfx::GfxCaps::Gnome,
         }
     }
 }
