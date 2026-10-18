@@ -16,6 +16,7 @@ members = [
   "crates/drift-capture",
   "crates/drift-ios",
   "crates/drift-host",
+  "crates/drift-host-app",
   "crates/drift-testkit",
   "crates/drift-transport",
   "src-tauri",
