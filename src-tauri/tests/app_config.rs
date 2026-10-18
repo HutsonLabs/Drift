@@ -176,3 +176,16 @@ fn both_apps_register_the_drift_pair_url_scheme() {
     }
     assert!(read("gen/apple/project.yml").contains("CFBundleURLSchemes: [drift-pair]"));
 }
+
+/// The generated Xcode project links every SDK `project.yml` lists. xcodegen can fail without
+/// rewriting it (a missing `assets` folder), which once left GameController out of the link
+/// after a merge (IOS-6 + IOS-9).
+#[test]
+fn xcode_project_is_regenerated_from_project_spec() {
+    let spec = read("gen/apple/project.yml");
+    let pbxproj = read("gen/apple/drift-app.xcodeproj/project.pbxproj");
+    for line in spec.lines() {
+        let Some(sdk) = line.trim().strip_prefix("- sdk: ") else { continue };
+        assert!(pbxproj.contains(sdk), "project.pbxproj lacks {sdk}; run `xcodegen generate` in gen/apple");
+    }
+}
