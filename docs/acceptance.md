@@ -443,3 +443,14 @@ to do by hand:
       connecting it reaches the pin check (a wrong certificate fails before credentials are sent).
 - [ ] **After HOST-8:** the Mac accepts the code and lists the device; a wrong code is refused
       with "The Mac did not accept the code."
+
+## HOST / EXT — Drift Host and the `Drift::Mac::v1` channel
+
+- [ ] **HOST-6 injection (by hand, once HOST-2 wires it):** with Accessibility granted to Drift
+      Host, type from a client: letters with Shift, Command shortcuts (Windows key), arrows,
+      Option-accented text, and Unicode text from the iOS keyboard. Click, double-click, drag a
+      window, right-click, middle-click, scroll both ways with a wheel. Disconnect while holding
+      Shift and a mouse button: nothing stays held on the Mac. Without Accessibility, the host
+      says so and injects nothing. `cargo test -p drift-inject --test cg_events -- --ignored`
+      posts one harmless move (passed on the dev Mac on 2026-10-18).
+
