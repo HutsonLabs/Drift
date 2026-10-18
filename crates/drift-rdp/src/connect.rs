@@ -28,8 +28,46 @@ use crate::tls;
 /// How often a pending network phase re-checks its deadline on the injected [`Clock`].
 const DEADLINE_TICK: Duration = Duration::from_millis(25);
 
+/// The byte stream a leg runs over (HOST-12): TCP or QUIC's main stream.
+pub use drift_transport::stream::TransportStream as BoxedStream;
+
 /// The TLS-upgraded transport of a connected leg.
-pub type UpgradedFramed = ironrdp_tokio::TokioFramed<tokio_rustls::client::TlsStream<TcpStream>>;
+pub type UpgradedFramed = ironrdp_tokio::TokioFramed<tokio_rustls::client::TlsStream<BoxedStream>>;
+
+/// A dialed connection, before X.224.
+pub struct Dialed {
+    /// The byte stream.
+    pub stream: BoxedStream,
+    /// The local address (the RDP client address field).
+    pub local_addr: std::net::SocketAddr,
+    /// Which transport it is.
+    pub transport: drift_transport::plan::Transport,
+}
+
+impl std::fmt::Debug for Dialed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Dialed")
+            .field("local_addr", &self.local_addr)
+            .field("transport", &self.transport)
+            .finish()
+    }
+}
+
+impl Dialed {
+    /// A TCP connection.
+    pub fn tcp(stream: TcpStream) -> io::Result<Self> {
+        let local_addr = stream.local_addr()?;
+        Ok(Self {
+            stream: BoxedStream::Tcp(stream),
+            local_addr,
+            transport: drift_transport::plan::Transport::Tcp,
+        })
+    }
+}
+
+/// How long a QUIC attempt may take before falling back to TCP: a firewall that drops UDP makes
+/// QUIC wait rather than fail (ADR `HOST-12-quic-transport`).
+pub const QUIC_ATTEMPT: Duration = Duration::from_secs(3);
 
 /// Desktop size requested when the view geometry is not known yet (plan §1.4 captures).
 pub const DEFAULT_DESKTOP: DesktopSize = DesktopSize { width: 1280, height: 800 };
@@ -122,6 +160,8 @@ pub struct LegRequest {
     pub desktop: DesktopSize,
     /// `DesktopScaleFactor` in percent.
     pub scale: u32,
+    /// A paired Drift Host's pinned certificate: try QUIC first (HOST-12). `None` for TCP only.
+    pub quic_pin: Option<CertFingerprint>,
 }
 
 /// The user's answer to a certificate prompt.
@@ -153,21 +193,56 @@ pub trait ConnectObserver: Send {
     ) -> impl Future<Output = CertDecision> + Send;
 }
 
-/// Opens the TCP connection of a leg (injectable for tests).
+/// Opens the connection of a leg (injectable for tests).
 pub trait Dialer: Send + Sync {
-    /// Connects to `host:port`.
-    fn dial(&self, host: &str, port: u16) -> impl Future<Output = io::Result<TcpStream>> + Send;
+    /// Connects to `host:port`. With `quic_pin` (a paired Drift Host's pinned certificate), RDP
+    /// over QUIC on the same port (UDP) is tried first, then TCP (ADR `IOS-0` decision 6).
+    fn dial(
+        &self,
+        host: &str,
+        port: u16,
+        quic_pin: Option<CertFingerprint>,
+    ) -> impl Future<Output = io::Result<Dialed>> + Send;
 }
 
-/// The real dialer (`tokio::net::TcpStream::connect`, `TCP_NODELAY`).
+/// The real dialer: TCP (`TCP_NODELAY`), or QUIC first for a paired Drift Host.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct TokioDialer;
 
+impl TokioDialer {
+    async fn dial_quic(host: String, port: u16, pin: CertFingerprint) -> io::Result<Dialed> {
+        // Owned: a borrowed host held across these awaits trips rustc's higher-ranked `Send`
+        // check for the session actor's future.
+        let addr = tokio::net::lookup_host(format!("{host}:{port}"))
+            .await?
+            .next()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no address"))?;
+        let session = drift_transport::quic::connect(addr, &host, pin).await.map_err(io::Error::other)?;
+        let local_addr =
+            session.local_addr().unwrap_or_else(|| std::net::SocketAddr::from(([0, 0, 0, 0], 0)));
+        Ok(Dialed {
+            stream: BoxedStream::Quic(session.into_stream()),
+            local_addr,
+            transport: drift_transport::plan::Transport::Quic,
+        })
+    }
+}
+
 impl Dialer for TokioDialer {
-    async fn dial(&self, host: &str, port: u16) -> io::Result<TcpStream> {
+    async fn dial(&self, host: &str, port: u16, quic_pin: Option<CertFingerprint>) -> io::Result<Dialed> {
+        if let Some(pin) = quic_pin {
+            match tokio::time::timeout(QUIC_ATTEMPT, Self::dial_quic(host.to_owned(), port, pin)).await {
+                Ok(Ok(dialed)) => {
+                    tracing::info!(%host, port, "connected over QUIC");
+                    return Ok(dialed);
+                }
+                Ok(Err(e)) => tracing::info!(error = %e, "QUIC failed; falling back to TCP"),
+                Err(_) => tracing::info!("no QUIC answer; falling back to TCP"),
+            }
+        }
         let stream = TcpStream::connect((host, port)).await?;
         stream.set_nodelay(true)?;
-        Ok(stream)
+        Dialed::tcp(stream)
     }
 }
 
@@ -351,15 +426,17 @@ pub async fn connect_leg(
     attach: impl FnOnce(ClientConnector) -> ClientConnector + Send,
 ) -> Result<ConnectedLeg, DisconnectReason> {
     let config = build_config(&req);
-    let LegRequest { host, port, tls_server_name, auth, expectation, role, routing_token, .. } = req;
+    let LegRequest { host, port, tls_server_name, auth, expectation, role, routing_token, quic_pin, .. } =
+        req;
 
     // TCP.
     observer.stage(ConnectStage::Tcp);
     let deadline = clock.now() + timeout;
-    let tcp = until(clock, deadline, dialer.dial(&host, port))
+    let dialed = until(clock, deadline, dialer.dial(&host, port, quic_pin))
         .await?
         .map_err(|e| classify_io_error(&e, ConnectStage::Tcp))?;
-    let client_addr = tcp.local_addr().map_err(|e| classify_io_error(&e, ConnectStage::Tcp))?;
+    let client_addr = dialed.local_addr;
+    let tcp = dialed.stream;
 
     let mut connector = attach(ClientConnector::new(config, client_addr));
     if let Some(token) = routing_token {

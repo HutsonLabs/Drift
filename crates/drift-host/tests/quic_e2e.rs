@@ -49,7 +49,7 @@ fn has_picture(frames: &FrameLog) -> bool {
 fn start_host(dir: &std::path::Path, quic: bool) -> (Host, HostIdentity, Pairing) {
     let identity = HostIdentity::load_or_create(dir).unwrap();
     let pairing = Pairing::new(DeviceStore::memory(), Arc::new(SystemClock));
-    let host = Host::start(HostOptions {
+    let mut host = Host::start(HostOptions {
         listen: "127.0.0.1:0".parse().unwrap(),
         identity: identity.clone(),
         username: USER.into(),

@@ -15,6 +15,8 @@ path = "src/main.rs"
 drift-apple.workspace = true
 drift-core.workspace = true
 drift-ext.workspace = true
+# RDP over QUIC for paired devices (HOST-12).
+drift-transport.workspace = true
 # The VideoToolbox H.264 encoder (behind `recording` today) draws the skeleton's test pattern;
 # HOST-4's real-time encoder replaces it.
 drift-video = { workspace = true, features = ["recording"] }
@@ -43,7 +45,6 @@ uuid.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
-drift-transport.workspace = true
 drift-ext.workspace = true
 drift-rdp.workspace = true
 drift-testkit.workspace = true

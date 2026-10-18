@@ -18,7 +18,6 @@ use drift_testkit::{FakeServer, LegScript, ManualClock, TestCert};
 use ironrdp_connector::rdstls::RdstlsResultCode;
 use ironrdp_connector::{ConnectorError, ConnectorErrorKind};
 use ironrdp_pdu::rdp::capability_sets::MajorPlatformType;
-use tokio::net::TcpStream;
 use zeroize::Zeroizing;
 
 const WAIT: Duration = Duration::from_secs(20);
@@ -234,7 +233,12 @@ async fn input_is_forwarded_as_fast_path() {
 struct Unreachable;
 
 impl Dialer for Unreachable {
-    async fn dial(&self, _host: &str, _port: u16) -> io::Result<TcpStream> {
+    async fn dial(
+        &self,
+        _host: &str,
+        _port: u16,
+        _quic_pin: Option<drift_core::CertFingerprint>,
+    ) -> io::Result<drift_rdp::connect::Dialed> {
         Err(io::Error::from_raw_os_error(libc_ehostunreach()))
     }
 }
@@ -274,6 +278,7 @@ fn nla_request(port: u16, expectation: CertExpectation) -> LegRequest {
         client_name: "drift-test".into(),
         desktop: connect::DEFAULT_DESKTOP,
         scale: 100,
+        quic_pin: None,
     }
 }
 
