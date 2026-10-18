@@ -118,6 +118,7 @@ pub fn start(dir: &Path, listen: Option<SocketAddr>) -> Result<Launched, String>
         audio: Some(Box::new(|| Box::new(crate::audio::SystemAudio::default()))),
         displays: display_manager(&config),
         pairing: pairing.clone(),
+        menus: menus_for(&config),
     })
     .map_err(|e| format!("cannot listen on {}: {e}", config.listen))?;
     let host_name = local_host_name();
@@ -136,4 +137,21 @@ pub fn start(dir: &Path, listen: Option<SocketAddr>) -> Result<Launched, String>
     // Discovery only makes sense where devices may connect: with pairing.
     let advert = pairing.as_ref().and_then(|_| announcement.advertise());
     Ok(Launched { host, config, fingerprint: identity.fingerprint(), pairing, announcement, advert })
+}
+
+/// The frontmost app's menu bar through Accessibility (EXT-3), if the config wants it.
+fn menus_for(config: &HostConfig) -> Option<Arc<dyn crate::menus::MenuSource>> {
+    if !config.menus {
+        return None;
+    }
+    if !crate::menus::ax::is_trusted() {
+        tracing::warn!("no Accessibility permission: clients see no menu bar until it is granted");
+    }
+    match crate::menus::ax::AxMenus::start() {
+        Ok(menus) => Some(menus as Arc<dyn crate::menus::MenuSource>),
+        Err(e) => {
+            tracing::warn!(error = %e, "could not start the menu reader");
+            None
+        }
+    }
 }

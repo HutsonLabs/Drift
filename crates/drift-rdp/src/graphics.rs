@@ -192,27 +192,29 @@ impl Graphics {
         &self,
         display_control: DisplayControlClient,
         clipboard: Option<CliprdrClient>,
-        drift_mac: Option<&drift_ext::channel::Link>,
-        pairing: Option<&drift_ext::pairing::ClientPairing>,
+        drift_mac: Option<DriftMacOffer<'_>>,
         caps: drift_gfx::GfxCaps,
         sound: Option<ironrdp_rdpsnd::client::Rdpsnd>,
     ) -> impl FnOnce(ClientConnector) -> ClientConnector + Send + use<> {
         let drdynvc = DrdynvcClient::new().with_dynamic_channel(display_control);
         // EXT-1: offered only when the app asked for it; a non-Drift server never opens it.
         let drdynvc = match drift_mac {
-            Some(link) => {
+            Some(DriftMacOffer { link, pairing, menus }) => {
                 link.reset();
+                // EXT-3: offer menu mirroring when the app shows the host's menus.
+                let menus = if menus {
+                    drift_ext::wire::Capabilities::MENUS
+                } else {
+                    drift_ext::wire::Capabilities::NONE
+                };
                 let client = match pairing {
                     // HOST-8: offer pairing and answer the host's challenge on every leg.
                     Some(pairing) => drift_ext::channel::DriftMacClient::new(
                         link.clone(),
-                        drift_ext::pairing::ClientPairing::capabilities(),
+                        drift_ext::pairing::ClientPairing::capabilities() | menus,
                     )
                     .with_responder(pairing.responder()),
-                    None => drift_ext::channel::DriftMacClient::new(
-                        link.clone(),
-                        drift_ext::wire::Capabilities::NONE,
-                    ),
+                    None => drift_ext::channel::DriftMacClient::new(link.clone(), menus),
                 };
                 drdynvc.with_dynamic_channel(client)
             }
@@ -259,6 +261,35 @@ pub(crate) fn flush_acks(stage: &ActiveStage) -> Result<Option<Vec<u8>>, Disconn
         .process_svc_processor_messages(SvcProcessorMessages::<DrdynvcClient>::new(svc))
         .map(Some)
         .map_err(|e| DisconnectReason::ProtocolError(format!("send frame acknowledge: {e}")))
+}
+
+/// What a leg offers on `Drift::Mac::v1` (EXT-1): the link it reports to, the pairing exchange
+/// (HOST-8) and whether it mirrors the host's menus (EXT-3).
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct DriftMacOffer<'a> {
+    /// Where the channel reports.
+    pub link: &'a drift_ext::channel::Link,
+    /// Pairing or authentication with a Drift Host.
+    pub pairing: Option<&'a drift_ext::pairing::ClientPairing>,
+    /// Offer menu mirroring.
+    pub menus: bool,
+}
+
+/// Encodes `Drift::Mac::v1` messages as a frame for the wire (`None` when the channel is not
+/// open). EXT-3's polls and presses are sent this way, outside a reply.
+pub(crate) fn encode_drift_mac(
+    stage: &ActiveStage,
+    messages: &[drift_ext::wire::Message],
+) -> Result<Option<Vec<u8>>, String> {
+    let Some(channel) = stage.get_dvc::<drift_ext::channel::DriftMacClient>() else { return Ok(None) };
+    let channel_id = channel.channel_id();
+    let messages = drift_ext::channel::outgoing(messages).map_err(|e| e.to_string())?;
+    let svc = ironrdp_dvc::encode_dvc_messages(channel_id, messages, ChannelFlags::empty())
+        .map_err(|e| format!("encode Drift::Mac::v1: {e}"))?;
+    stage
+        .process_svc_processor_messages(SvcProcessorMessages::<DrdynvcClient>::new(svc))
+        .map(Some)
+        .map_err(|e| format!("send Drift::Mac::v1: {e}"))
 }
 
 /// The graphics pipeline's own error, if the last processing failure came from it.

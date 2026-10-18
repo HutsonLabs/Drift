@@ -121,6 +121,7 @@ async fn a_device_pairs_reconnects_and_strangers_are_refused() {
         audio: None,
         displays: Box::new(drift_host::display::PhysicalOnly),
         pairing: Some(pairing.clone()),
+        menus: None,
     })
     .unwrap();
     let port = host.port();

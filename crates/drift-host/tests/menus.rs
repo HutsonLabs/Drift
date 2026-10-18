@@ -44,7 +44,8 @@ fn text_edit_bar() -> AxNode {
     save_as.cmd_modifiers = Some(1);
     let mut separator = node("AXMenuItem", "", vec![]);
     separator.enabled = false;
-    let mut revert = node("AXMenuItem", "Revert To", vec![menu(vec![node("AXMenuItem", "Last Saved", vec![])])]);
+    let mut revert =
+        node("AXMenuItem", "Revert To", vec![menu(vec![node("AXMenuItem", "Last Saved", vec![])])]);
     revert.enabled = true;
     let mut ruler = node("AXMenuItem", "Show Ruler", vec![]);
     ruler.marked = true;
@@ -71,7 +72,10 @@ fn an_ax_tree_becomes_a_snapshot_without_the_apple_menu() {
     assert_eq!(file.children.len(), 4);
     let save = &file.children[0];
     assert_eq!(save.key.as_ref().map(|k| k.label()), Some("⌘S".to_owned()));
-    assert_eq!(file.children[1].key.as_ref().map(|k| k.modifiers), Some(Modifiers::COMMAND | Modifiers::SHIFT));
+    assert_eq!(
+        file.children[1].key.as_ref().map(|k| k.modifiers),
+        Some(Modifiers::COMMAND | Modifiers::SHIFT)
+    );
     assert!(file.children[2].separator, "an untitled disabled item is a separator");
     assert_eq!(file.children[3].children.len(), 1, "submenus keep their items");
     assert!(snap.menus[2].children[0].checked);
@@ -127,7 +131,11 @@ fn the_responder_answers_polls_and_presses_only_when_authorized() {
     source.set(None);
     assert_eq!(reply(responder.on_message(&request(5))), [MenuMessage::Empty]);
     // Not a menu message: left for someone else.
-    assert!(responder.on_message(&Message::Unknown { kind: drift_ext::wire::MessageType(0x0401), payload: vec![] }).is_none());
+    assert!(
+        responder
+            .on_message(&Message::Unknown { kind: drift_ext::wire::MessageType(0x0401), payload: vec![] })
+            .is_none()
+    );
 }
 
 #[test]

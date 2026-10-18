@@ -3,10 +3,12 @@
 //! Every byte of a frame comes from the other end of the channel. The target decodes one frame,
 //! re-encodes what decoded and checks it decodes the same, then feeds a **sequence** of frames
 //! (u16-length-prefixed) through a client processor, which must never return an error (that
-//! would end the RDP session) and must stay in a sane state.
+//! would end the RDP session) and must stay in a sane state. Menu messages (EXT-3) also go
+//! through their own decoder, which must round-trip, and through the client's mirror.
 #![no_main]
 
 use drift_ext::channel::{DriftMacClient, Link, LinkState};
+use drift_ext::menus::{MenuMessage, MenuMirror};
 use drift_ext::wire::{Capabilities, decode, encode};
 use ironrdp_dvc::DvcProcessor;
 use libfuzzer_sys::fuzz_target;
@@ -15,6 +17,10 @@ fuzz_target!(|data: &[u8]| {
     if let Ok(message) = decode(data) {
         let bytes = encode(&message).expect("a decoded message re-encodes");
         assert_eq!(decode(&bytes).expect("and decodes again"), message);
+        if let Some(Ok(menu)) = MenuMessage::from_message(&message) {
+            let again = menu.try_to_message().expect("a decoded menu message re-encodes");
+            assert_eq!(MenuMessage::from_message(&again).expect("still a menu message").expect("decodes"), menu);
+        }
     }
 
     let link = Link::new();
@@ -28,6 +34,9 @@ fuzz_target!(|data: &[u8]| {
         assert!(client.process(1, frame).is_ok(), "a bad frame must not end the session");
         rest = &rest[2 + take..];
     }
-    let _ = link.take_inbox();
+    let mut mirror = MenuMirror::default();
+    for message in link.take_inbox() {
+        let _ = mirror.on_message(&message);
+    }
     assert!(!matches!(link.state(), LinkState::Absent), "the channel was opened");
 });

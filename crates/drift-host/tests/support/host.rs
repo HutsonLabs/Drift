@@ -36,6 +36,7 @@ pub fn start_host(
         audio,
         displays: Box::new(drift_host::display::PhysicalOnly),
         pairing: None,
+        menus: None,
     })
     .unwrap();
     (host, identity)

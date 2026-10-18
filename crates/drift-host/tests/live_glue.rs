@@ -98,6 +98,7 @@ fn start(identity: &HostIdentity, live: LiveFactory, displays: Box<dyn DisplayMa
         audio: None,
         displays,
         pairing: None,
+        menus: None,
     })
     .unwrap()
 }

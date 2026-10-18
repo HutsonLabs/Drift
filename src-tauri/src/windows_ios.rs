@@ -50,6 +50,8 @@ use crate::present::{self, CloseAction, Surface};
 use crate::profiles::CommandError;
 use crate::view::{SessionView, SessionViewChanged};
 
+#[path = "windows_ios_menus.rs"]
+mod menus;
 #[path = "windows_ios_phone.rs"]
 mod phone_shell;
 pub(crate) use phone_shell::{controls_used, phone_controls, set_touch_mode};
@@ -573,6 +575,7 @@ pub fn session_labels() -> Vec<String> {
 /// once.
 pub(crate) fn focus_window<R: Runtime>(app: &AppHandle<R>, label: &str) {
     let label = label.to_owned();
+    let app2 = app.clone();
     defer_main(app, move |mtm| {
         let page = if label == CONNECTIONS_WINDOW {
             SHELL.with(|s| s.borrow().connections_web.clone())
@@ -582,6 +585,8 @@ pub(crate) fn focus_window<R: Runtime>(app: &AppHandle<R>, label: &str) {
         if let Some(page) = page {
             drift_ios::webview::bring_to_front(mtm, &page);
         }
+        // EXT-3: the menu bar follows the window in front.
+        menus::refresh(&app2, mtm);
     });
 }
 
@@ -756,6 +761,7 @@ pub(crate) fn release_session<R: Runtime>(app: &AppHandle<R>, label: &str) {
     let label = label.to_owned();
     let app2 = app.clone();
     let _ = on_main(app, move |_| {
+        menus::forget(&app2, &label);
         with_platform(&label, |plat| {
             plat.view.release_all();
             plat.view.clear_desktop();
@@ -932,4 +938,14 @@ pub(crate) fn write_pasteboard<R: Runtime>(app: &AppHandle<R>, label: &str, cont
             UiPasteboard::general().write(&contents);
         }
     });
+}
+
+/// Session window `label`'s host menu bar changed (EXT-3): the iPad shows the front session's.
+pub(crate) fn apply_menu<R: Runtime>(
+    app: &AppHandle<R>,
+    label: &str,
+    menu: Option<std::sync::Arc<drift_ext::menus::MenuSnapshot>>,
+) {
+    let (app2, label) = (app.clone(), label.to_owned());
+    let _ = on_main(app, move |mtm| menus::apply_menu(&app2, mtm, &label, menu));
 }

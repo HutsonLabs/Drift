@@ -127,6 +127,7 @@ async fn clipboard_and_sound_wait_for_the_device_to_be_authorized() {
         audio: Some(Box::new(|| Box::new(ToneSource::new()) as Box<dyn AudioSource>)),
         displays: Box::new(drift_host::display::PhysicalOnly),
         pairing: Some(pairing.clone()),
+        menus: None,
     })
     .unwrap();
 

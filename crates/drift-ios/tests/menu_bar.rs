@@ -44,7 +44,15 @@ mod tests {
     }
 
     fn item(id: u32, title: &str) -> MenuItem {
-        MenuItem { id, title: title.into(), enabled: true, checked: false, separator: false, key: None, children: vec![] }
+        MenuItem {
+            id,
+            title: title.into(),
+            enabled: true,
+            checked: false,
+            separator: false,
+            key: None,
+            children: vec![],
+        }
     }
 
     fn snapshot() -> MenuSnapshot {

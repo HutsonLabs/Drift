@@ -59,6 +59,8 @@ objc2.workspace = true
 objc2-core-foundation.workspace = true
 objc2-core-graphics.workspace = true
 objc2-foundation = { workspace = true, features = ["NSArray", "NSString"] }
+# EXT-3: the frontmost app (NSWorkspace) whose menu bar is mirrored.
+objc2-app-kit = { workspace = true, features = ["NSWorkspace", "NSRunningApplication"] }
 
 [dev-dependencies]
 drift-gfx.workspace = true

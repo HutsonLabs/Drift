@@ -80,6 +80,7 @@ impl<R: Runtime> SessionHost for TauriHost<R> {
             SessionEvent::Stats(stats) => {
                 tracing::trace!(%window, fps = stats.fps, unacked = stats.unacked_frames);
             }
+            SessionEvent::Menu(menu) => windows::apply_menu(&self.app, window, menu.clone()),
             SessionEvent::State(_)
             | SessionEvent::CertificatePrompt { .. }
             | SessionEvent::CertificatePinned(_) => {}
@@ -112,7 +113,8 @@ impl<R: Runtime> TauriHost<R> {
 /// the V10 graphics caps that allow AVC444; GNOME keeps the verified V8.1 list, because V10
 /// makes g-r-d send AVC444v2 (ADR `AVC444-client`). Every session also plays the server's
 /// sound (HOST-11), through its own `AVAudioEngine` player. A paired Mac also gets its pairing or
-/// authentication exchange (HOST-8).
+/// authentication exchange (HOST-8). On iOS every session also mirrors a Drift Host's menu bar
+/// (EXT-3).
 pub(crate) fn session_options(
     profile: &ConnectionProfile,
     pairing: Option<drift_ext::pairing::ClientPairing>,
@@ -123,6 +125,8 @@ pub(crate) fn session_options(
         gfx_caps,
         pairing,
         audio: Some(drift_rdp::audio::AudioOutput::new(SessionSound(drift_apple::audio_out::Player::new()))),
+        // EXT-3: an iPad shows the host's menus in its menu bar; a Mac client does not mirror them.
+        menus: cfg!(target_os = "ios"),
         ..SessionOptions::default()
     }
 }

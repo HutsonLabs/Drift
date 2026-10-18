@@ -9,10 +9,12 @@
 //! | [`wire`] | versioned, length-delimited framing; strict decode (fuzzed: `fuzz/`) |
 //! | [`channel`] | the client and server DVC processors and the session-facing [`channel::Link`] |
 //! | [`pairing`] | pairing and device authentication messages, and the client's side (HOST-8) |
+//! | [`menus`] | the mirrored menu bar: snapshot, polls and presses, and the client's side (EXT-3) |
 //!
 //! [`negotiate`] settles the version and the shared capabilities from two [`wire::Hello`]s.
 
 pub mod channel;
+pub mod menus;
 pub mod pairing;
 pub mod wire;
 

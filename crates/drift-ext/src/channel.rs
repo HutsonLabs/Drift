@@ -100,6 +100,15 @@ impl Link {
         inner.inbox.clear();
     }
 
+    /// Takes the queued messages `keep` selects, leaving the others for their task.
+    pub fn take_matching(&self, keep: impl Fn(&Message) -> bool) -> Vec<Message> {
+        let mut inner = self.inner();
+        let (taken, left): (Vec<_>, Vec<_>) =
+            std::mem::take(&mut inner.inbox).into_iter().partition(|m| keep(m));
+        inner.inbox = left;
+        taken
+    }
+
     fn set(&self, state: LinkState) {
         self.inner().state = state;
     }
@@ -127,6 +136,41 @@ pub trait Responder: Send + std::fmt::Debug {
         let _ = message;
         None
     }
+}
+
+/// Several responders on one channel, asked in order: the first to consume a message answers
+/// it, and every one may speak once both Hellos agreed (pairing and menus share the host's end,
+/// EXT-3).
+#[derive(Debug, Default)]
+pub struct Chain(Vec<Box<dyn Responder>>);
+
+impl Chain {
+    /// An empty chain.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a responder after the others.
+    #[must_use]
+    pub fn with(mut self, responder: Box<dyn Responder>) -> Self {
+        self.0.push(responder);
+        self
+    }
+}
+
+impl Responder for Chain {
+    fn on_negotiated(&mut self, negotiated: &Negotiated) -> Vec<Message> {
+        self.0.iter_mut().flat_map(|r| r.on_negotiated(negotiated)).collect()
+    }
+
+    fn on_message(&mut self, message: &Message) -> Option<Vec<Message>> {
+        self.0.iter_mut().find_map(|r| r.on_message(message))
+    }
+}
+
+/// Encodes messages for sending outside a reply (the client's polls and presses, EXT-3).
+pub fn outgoing(messages: &[Message]) -> Result<Vec<DvcMessage>, crate::wire::WireError> {
+    messages.iter().map(|m| encode(m).map(|bytes| Box::new(Frame(bytes)) as DvcMessage)).collect()
 }
 
 /// An encoded frame as a DVC message.

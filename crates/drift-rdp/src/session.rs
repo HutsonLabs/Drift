@@ -97,6 +97,10 @@ pub struct SessionOptions {
     /// [`Self::drift_mac`]. A host that refuses the device ends the session with
     /// `DisconnectReason::PairingRefused` and no retry.
     pub pairing: Option<drift_ext::pairing::ClientPairing>,
+    /// Mirror the host's menu bar (EXT-3): offer menus on `Drift::Mac::v1` and poll for the
+    /// frontmost Mac app's menus while the session is in front ([`SessionEvent::Menu`]). Needs
+    /// [`Self::drift_mac`]; only a Drift Host answers.
+    pub menus: bool,
 }
 
 impl Default for SessionOptions {
@@ -111,6 +115,7 @@ impl Default for SessionOptions {
             gfx_caps: drift_gfx::GfxCaps::Gnome,
             audio: None,
             pairing: None,
+            menus: false,
         }
     }
 }
@@ -154,6 +159,8 @@ pub enum SessionCommand {
     Cancel,
     /// Graceful shutdown (sends Shutdown Request at the greeter, M3-4), then the actor exits.
     Close,
+    /// Choose item `id` of the mirrored menu bar ([`SessionEvent::Menu`], EXT-3).
+    MenuPress(u32),
 }
 
 /// A remote pointer shape or position update (M2-5).
@@ -236,6 +243,8 @@ pub enum SessionEvent {
     ClipboardRemote(ClipboardContents),
     /// Statistics.
     Stats(SessionStats),
+    /// The host's frontmost app's menu bar changed; `None` when there is none to show (EXT-3).
+    Menu(Option<std::sync::Arc<drift_ext::menus::MenuSnapshot>>),
 }
 
 /// The actor has exited; the command was not delivered.

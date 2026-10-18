@@ -14,7 +14,15 @@ use drift_ext::wire::{Capabilities, Message, MessageType, decode, encode};
 use drift_ext::{Negotiated, negotiate};
 
 fn item(id: u32, title: &str) -> MenuItem {
-    MenuItem { id, title: title.into(), enabled: true, checked: false, separator: false, key: None, children: vec![] }
+    MenuItem {
+        id,
+        title: title.into(),
+        enabled: true,
+        checked: false,
+        separator: false,
+        key: None,
+        children: vec![],
+    }
 }
 
 fn sample() -> MenuSnapshot {
@@ -65,7 +73,9 @@ fn menu_types_are_in_the_ext3_range_and_other_messages_are_not_ours() {
     for t in [types::REQUEST, types::SNAPSHOT, types::UNCHANGED, types::PRESS, types::EMPTY] {
         assert_eq!(t.area(), "menu mirroring (EXT-3)");
     }
-    assert!(MenuMessage::from_message(&Message::Unknown { kind: MessageType(0x0401), payload: vec![] }).is_none());
+    assert!(
+        MenuMessage::from_message(&Message::Unknown { kind: MessageType(0x0401), payload: vec![] }).is_none()
+    );
 }
 
 #[test]
@@ -86,7 +96,9 @@ fn decoding_is_strict_and_bounded() {
     }
     // A press with a wrong length.
     assert!(
-        MenuMessage::from_message(&Message::Unknown { kind: types::PRESS, payload: vec![0; 7] }).unwrap().is_err()
+        MenuMessage::from_message(&Message::Unknown { kind: types::PRESS, payload: vec![0; 7] })
+            .unwrap()
+            .is_err()
     );
 }
 
@@ -104,7 +116,8 @@ fn encoding_refuses_snapshots_over_the_limits() {
     let snap = MenuSnapshot { revision: 1, app: "Many".into(), menus: many };
     assert!(MenuMessage::Snapshot(snap).try_to_message().is_err(), "too many items");
 
-    let long = MenuSnapshot { revision: 1, app: "Long".into(), menus: vec![item(1, &"x".repeat(MAX_TITLE + 1))] };
+    let long =
+        MenuSnapshot { revision: 1, app: "Long".into(), menus: vec![item(1, &"x".repeat(MAX_TITLE + 1))] };
     assert!(MenuMessage::Snapshot(long).try_to_message().is_err(), "title too long");
 }
 
@@ -159,7 +172,10 @@ fn the_mirror_polls_once_per_interval_while_wanted() {
     assert!(mirror.poll(t0, Some(&plain), true).is_none(), "nothing when the host has no menus");
     assert!(mirror.poll(t0, Some(&menus_negotiated()), false).is_none(), "nothing while not wanted");
     let first = mirror.poll(t0, Some(&menus_negotiated()), true).expect("first poll at once");
-    assert_eq!(MenuMessage::from_message(&first).unwrap().unwrap(), MenuMessage::Request { known_revision: 0 });
+    assert_eq!(
+        MenuMessage::from_message(&first).unwrap().unwrap(),
+        MenuMessage::Request { known_revision: 0 }
+    );
     assert!(mirror.poll(t0 + POLL_INTERVAL / 2, Some(&menus_negotiated()), true).is_none());
     assert!(mirror.poll(t0 + POLL_INTERVAL, Some(&menus_negotiated()), true).is_some());
 }
@@ -174,7 +190,10 @@ fn the_mirror_reports_new_snapshots_and_ignores_unchanged() {
     assert_eq!(mirror.current().map(|s| s.revision), Some(7));
     // The next poll names the revision it has.
     let next = mirror.poll(t0, Some(&menus_negotiated()), true).unwrap();
-    assert_eq!(MenuMessage::from_message(&next).unwrap().unwrap(), MenuMessage::Request { known_revision: 7 });
+    assert_eq!(
+        MenuMessage::from_message(&next).unwrap().unwrap(),
+        MenuMessage::Request { known_revision: 7 }
+    );
     assert_eq!(
         mirror.on_message(&MenuMessage::Unchanged { revision: 7 }.to_message()),
         MirrorEvent::NoChange,
@@ -184,7 +203,10 @@ fn the_mirror_reports_new_snapshots_and_ignores_unchanged() {
     assert_eq!(mirror.on_message(&MenuMessage::Empty.to_message()), MirrorEvent::Changed(None));
     assert_eq!(mirror.on_message(&MenuMessage::Empty.to_message()), MirrorEvent::NoChange);
     // Not ours.
-    assert_eq!(mirror.on_message(&Message::Unknown { kind: MessageType(0x0301), payload: vec![] }), MirrorEvent::NotOurs);
+    assert_eq!(
+        mirror.on_message(&Message::Unknown { kind: MessageType(0x0301), payload: vec![] }),
+        MirrorEvent::NotOurs
+    );
 }
 
 #[test]
@@ -193,7 +215,10 @@ fn the_mirror_presses_only_items_of_its_snapshot() {
     assert!(mirror.press(3).is_none(), "no snapshot yet");
     mirror.on_message(&MenuMessage::Snapshot(sample()).to_message());
     let press = mirror.press(3).unwrap();
-    assert_eq!(MenuMessage::from_message(&press).unwrap().unwrap(), MenuMessage::Press { revision: 7, id: 3 });
+    assert_eq!(
+        MenuMessage::from_message(&press).unwrap().unwrap(),
+        MenuMessage::Press { revision: 7, id: 3 }
+    );
     assert!(mirror.press(8).is_none(), "a disabled item");
     assert!(mirror.press(2).is_none(), "a submenu title");
     assert!(mirror.press(5).is_none(), "a separator");
@@ -207,7 +232,10 @@ fn reset_forgets_everything_for_a_new_leg() {
     mirror.reset();
     assert!(mirror.current().is_none());
     let poll = mirror.poll(Instant::now(), Some(&menus_negotiated()), true).unwrap();
-    assert_eq!(MenuMessage::from_message(&poll).unwrap().unwrap(), MenuMessage::Request { known_revision: 0 });
+    assert_eq!(
+        MenuMessage::from_message(&poll).unwrap().unwrap(),
+        MenuMessage::Request { known_revision: 0 }
+    );
 }
 
 #[derive(Debug)]
@@ -232,8 +260,18 @@ fn a_chain_asks_each_responder_in_turn() {
         .with(Box::new(Fixed(a, Some(vec![hello_a.clone()]), vec![hello_a.clone()])))
         .with(Box::new(Fixed(b, Some(vec![hello_b.clone()]), vec![hello_b.clone()])));
     let n = negotiate(
-        &drift_ext::wire::Hello { min_version: 1, max_version: 1, capabilities: Capabilities::NONE, agent: "a".into() },
-        &drift_ext::wire::Hello { min_version: 1, max_version: 1, capabilities: Capabilities::NONE, agent: "b".into() },
+        &drift_ext::wire::Hello {
+            min_version: 1,
+            max_version: 1,
+            capabilities: Capabilities::NONE,
+            agent: "a".into(),
+        },
+        &drift_ext::wire::Hello {
+            min_version: 1,
+            max_version: 1,
+            capabilities: Capabilities::NONE,
+            agent: "b".into(),
+        },
     )
     .unwrap();
     assert_eq!(chain.on_negotiated(&n), vec![hello_a.clone(), hello_b.clone()]);

@@ -107,6 +107,7 @@ pub(crate) fn spawn(
         policy,
         started: false,
         activations: 0,
+        menus: drift_ext::menus::MenuMirror::default(),
         scale: 100,
         profile,
         secrets,
@@ -243,6 +244,8 @@ struct Actor {
     activations: u32,
     /// `DesktopScaleFactor` currently requested.
     scale: u32,
+    /// The host's menu bar as mirrored (EXT-3); reset with every leg.
+    menus: drift_ext::menus::MenuMirror,
 }
 
 impl Actor {
@@ -512,8 +515,11 @@ impl Actor {
         self.graphics.channels_for_leg(
             display_control,
             Some(cliprdr),
-            self.options.drift_mac.as_ref(),
-            self.options.pairing.as_ref(),
+            self.options.drift_mac.as_ref().map(|link| graphics::DriftMacOffer {
+                link,
+                pairing: self.options.pairing.as_ref(),
+                menus: self.options.menus,
+            }),
             self.options.gfx_caps,
             sound,
         )
@@ -633,6 +639,11 @@ impl Actor {
     /// Everything a freshly activated leg needs.
     async fn on_activated(&mut self, leg: &mut Leg, clipboard: bool) -> Option<LegEnd> {
         let now = self.clock.now();
+        // EXT-3: a new leg asks for the menu afresh; the old one may belong to another app.
+        if self.menus.current().is_some() {
+            self.io.emit(SessionEvent::Menu(None));
+        }
+        self.menus.reset();
         self.policy.on_connected(now);
         self.resize.on_leg_activated(MonitorLayout {
             width: leg.desktop.width,
@@ -720,6 +731,9 @@ impl Actor {
         if let Some(end) = self.apply_clipboard(leg, actions).await {
             return Some(end);
         }
+        if let Some(end) = self.poll_menus(leg).await {
+            return Some(end);
+        }
         leg.stats.frames(self.graphics.take_presented_frames());
         leg.stats.frame_latencies(self.graphics.take_frame_latencies());
         if let Some(stats) = leg.stats.sample(now, Graphics::unacked_frames(&leg.stage)) {
@@ -773,6 +787,13 @@ impl Actor {
                 self.policy.set_network_reachable(reachable);
                 None
             }
+            Some(SessionCommand::MenuPress(id)) => match self.menus.press(id) {
+                Some(message) => self.send_drift_mac(leg, &[message]).await,
+                None => {
+                    tracing::debug!(id, "no such menu item to press");
+                    None
+                }
+            },
             // Certificate answers, Cancel and ReconnectNow have no meaning on a live session.
             Some(_) => None,
         }
@@ -854,7 +875,54 @@ impl Actor {
             self.resize.on_display_control_ready(caps, self.clock.now());
         }
         let actions = self.with_clipboard(ClipboardChannel::drain);
-        self.apply_clipboard(leg, actions).await
+        if let Some(end) = self.apply_clipboard(leg, actions).await {
+            return Some(end);
+        }
+        self.drain_menus();
+        None
+    }
+
+    /// EXT-3: applies the host's menu replies and reports a changed menu bar.
+    fn drain_menus(&mut self) {
+        let Some(link) = self.options.drift_mac.as_ref() else { return };
+        for message in link.take_matching(|m| drift_ext::menus::MenuMessage::from_message(m).is_some()) {
+            if let drift_ext::menus::MirrorEvent::Changed(menu) = self.menus.on_message(&message) {
+                self.io.emit(SessionEvent::Menu(menu));
+            }
+        }
+    }
+
+    /// EXT-3: asks for the menu bar while the session is in front, at most once a
+    /// [`drift_ext::menus::POLL_INTERVAL`].
+    async fn poll_menus(&mut self, leg: &mut Leg) -> Option<LegEnd> {
+        if !self.options.menus {
+            return None;
+        }
+        let negotiated = self.options.drift_mac.as_ref().and_then(drift_ext::channel::Link::negotiated);
+        let wanted = self.view.focused && self.view.visible;
+        let message = self.menus.poll(self.clock.now(), negotiated.as_ref(), wanted)?;
+        self.send_drift_mac(leg, &[message]).await
+    }
+
+    /// Sends messages on `Drift::Mac::v1` outside a reply (EXT-3's polls and presses).
+    async fn send_drift_mac(
+        &mut self,
+        leg: &mut Leg,
+        messages: &[drift_ext::wire::Message],
+    ) -> Option<LegEnd> {
+        match graphics::encode_drift_mac(&leg.stage, messages) {
+            Ok(Some(frame)) => {
+                if let Err(e) = leg.framed.write_all(&frame).await {
+                    return Some(LegEnd::Ended(connect::classify_io_error(&e, ConnectStage::Activation)));
+                }
+                None
+            }
+            Ok(None) => None,
+            Err(e) => {
+                tracing::warn!(error = %e, "could not send on Drift::Mac::v1");
+                None
+            }
+        }
     }
 
     /// Writes response frames and turns terminal outputs into a [`LegEnd`].
