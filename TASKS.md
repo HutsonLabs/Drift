@@ -129,8 +129,12 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   universal, sandboxed, Apple Distribution-signed app in an installer-signed `.pkg` (ADR
   `STORE-1-mac-app-store`). Blocked on the account: no `com.hutsonlabs.drift` App ID, profile or
   app record, and the export-compliance answer is the owner's to give.*
-- [ ] **STORE-2 Review-risk check.** Upload a build to App Store Connect and validate it,
+- [~] **STORE-2 Review-risk check.** Upload a build to App Store Connect and validate it,
   including the transparent webview (ADR open question 7). Plan native overlays if it fails.
+  *Validate only (no upload, per the owner). `altool --validate-app` needs an App Store Connect
+  record for `com.hutsonlabs.drift`, which does not exist yet. `cargo xtask review-risk` finds
+  one private key (`drawsBackground`, from wry's transparent webview); the native-overlay plan is
+  in ADR `STORE-2-review-risk`, and iOS drops the key (STORE-3).*
 - [ ] **STORE-3 iOS App Store packaging.** `NSLocalNetworkUsageDescription`,
   `NSBonjourServices`, privacy manifest, TestFlight build.
 - [ ] **STORE-4 Drift Host release.** Developer ID signing, notarization and DMG through the

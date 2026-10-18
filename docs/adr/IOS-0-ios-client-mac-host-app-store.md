@@ -285,4 +285,7 @@ wry 0.55.1), tauri-cli 2.11.4.
    QUIC fallback? (HOST-12) **Answered (ADR `HOST-12-quic-transport`): QUIC.** The vendored
    crates have no lossy mode, and reliable RDP-UDP2 collapses at 0.5 % random loss (p95 1.5 s at
    9.6 Mbit/s, 20 ms RTT). QUIC with BBR keeps p99 under 80 ms up to 2 % loss.
-7. Does App Store review accept wry's transparent webview? (STORE-2)
+7. Does App Store review accept wry's transparent webview? (STORE-2) *Still open: validation
+   needs an App Store Connect record that does not exist yet. The private key is
+   `drawsBackground`; iOS drops it, and ADR `STORE-2-review-risk` plans native overlays for the
+   Mac App Store build if review objects.*

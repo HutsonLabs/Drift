@@ -77,6 +77,11 @@ enum Cmd {
         #[arg(long)]
         debug: bool,
     },
+    /// List private-API strings in a built app's executables that App Review may flag (STORE-2).
+    ReviewRisk {
+        /// The `.app` bundle (every file in `Contents/MacOS` is scanned) or one executable.
+        path: PathBuf,
+    },
     /// Build the Mac App Store package: universal, sandboxed, Apple Distribution (STORE-1).
     MasPackage {
         /// The Mac App Store provisioning profile for `com.hutsonlabs.drift` to embed.
@@ -137,6 +142,7 @@ fn run(cmd: Cmd) -> Result<()> {
         }
         Cmd::Bundle => not_yet("bundle", "M9-5"),
         Cmd::HostBundle { debug } => host_bundle(&root, if debug { "debug" } else { "release" }),
+        Cmd::ReviewRisk { path } => review_risk(&path),
         Cmd::MasPackage { profile } => mas_package(&root, profile.as_deref()),
         Cmd::HostSetupCheck { host, headless, report, save_report } => {
             host_setup_check(host, &headless, report.as_deref(), save_report.as_deref())
@@ -167,6 +173,25 @@ fn host_bundle(root: &Path, profile: &str) -> Result<()> {
         bail!("codesign failed");
     }
     println!("{}", plan.app.display());
+    Ok(())
+}
+
+fn review_risk(path: &Path) -> Result<()> {
+    let macos = path.join("Contents/MacOS");
+    let files: Vec<PathBuf> = if macos.is_dir() {
+        std::fs::read_dir(&macos)?.filter_map(|e| e.ok().map(|e| e.path())).collect()
+    } else {
+        vec![path.to_owned()]
+    };
+    let mut found = 0;
+    for file in files {
+        let bytes = std::fs::read(&file).with_context(|| format!("reading {}", file.display()))?;
+        for risk in xtask::store::review_risks(&bytes) {
+            found += 1;
+            println!("{}: `{}` — {}", file.display(), risk.needle, risk.why);
+        }
+    }
+    println!("{found} review risk(s)");
     Ok(())
 }
 

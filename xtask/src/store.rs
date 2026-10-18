@@ -68,7 +68,27 @@ pub struct ReviewRisk {
     pub why: &'static str,
 }
 
-/// Not yet implemented.
-pub fn review_risks(_binary: &[u8]) -> Vec<ReviewRisk> {
-    Vec::new()
+/// Private keys and selectors Drift's dependencies are known to use, and why.
+///
+/// Only strings that name private API belong here.
+pub const PRIVATE_API_STRINGS: &[ReviewRisk] = &[
+    ReviewRisk {
+        needle: "drawsBackground",
+        why: "wry sets WKWebView's private `drawsBackground` key (KVC) for transparent webviews; \
+              Drift's overlays over the live picture need it (ADR M7-3, IOS-0 open question 7)",
+    },
+    ReviewRisk {
+        needle: "_setDrawsTransparentBackground:",
+        why: "private WKWebView selector for transparent backgrounds",
+    },
+];
+
+/// The [`PRIVATE_API_STRINGS`] found in `binary`, in table order. Matching is case-sensitive,
+/// so public look-alikes (`setDrawsBackground:` on `NSScrollView`) do not match.
+pub fn review_risks(binary: &[u8]) -> Vec<ReviewRisk> {
+    PRIVATE_API_STRINGS
+        .iter()
+        .filter(|r| memchr::memmem::find(binary, r.needle.as_bytes()).is_some())
+        .cloned()
+        .collect()
 }
