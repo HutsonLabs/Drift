@@ -1479,6 +1479,52 @@ impl GraphicsPipelineServer {
         Some(frame_id)
     }
 
+    /// Queue a frame of Drift's private HEVC codec ([`Codec1Type::DriftHevc`]): the same
+    /// metablock as AVC420 followed by one HEVC Annex-B access unit.
+    ///
+    /// The caller must only use it with a client that negotiated the codec out of band (Drift's
+    /// `Drift::Mac::v1` channel); there is no capability set for it.
+    ///
+    /// Returns `Some(frame_id)` if queued, `None` if not ready or backpressured.
+    pub fn send_drift_hevc_frame(
+        &mut self,
+        surface_id: u16,
+        hevc_data: &[u8],
+        regions: &[Avc420Region],
+        timestamp_ms: u32,
+    ) -> Option<u32> {
+        if !self.is_ready() {
+            return None;
+        }
+        if self.should_backpressure() {
+            self.qoe.record_backpressure();
+            return None;
+        }
+
+        let surface = self.surfaces.get(surface_id)?;
+
+        let timestamp = Self::make_timestamp(timestamp_ms);
+        let frame_id = self.frames.begin_frame(timestamp);
+
+        let encoded_stream = encode_avc420_bitmap_stream(regions, hevc_data);
+        let target_rect = Self::compute_dest_rect(regions, surface.width, surface.height);
+
+        self.output_queue
+            .push_back(GfxPdu::StartFrame(StartFramePdu { timestamp, frame_id }));
+
+        self.output_queue.push_back(GfxPdu::WireToSurface1(WireToSurface1Pdu {
+            surface_id,
+            codec_id: Codec1Type::DriftHevc,
+            pixel_format: surface.pixel_format,
+            destination_rectangle: target_rect,
+            bitmap_data: encoded_stream,
+        }));
+
+        self.output_queue.push_back(GfxPdu::EndFrame(EndFramePdu { frame_id }));
+
+        Some(frame_id)
+    }
+
     /// Queue an H.264 AVC444 frame for transmission
     ///
     /// AVC444 uses two streams: luma (Y) and chroma (UV). Set `chroma_data` to

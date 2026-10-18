@@ -2193,6 +2193,10 @@ pub enum Codec1Type {
     Alpha = 0xc,
     Avc444 = 0xe,
     Avc444v2 = 0xf,
+    /// Drift's private HEVC codec (not part of MS-RDPEGFX): an `RFX_AVC420_METABLOCK` followed by
+    /// one HEVC Annex-B access unit. A Drift Host sends it only to a Drift client that negotiated
+    /// it on the `Drift::Mac::v1` channel; no other client ever receives it.
+    DriftHevc = 0xD001,
 }
 
 impl TryFrom<u16> for Codec1Type {
@@ -2208,6 +2212,7 @@ impl TryFrom<u16> for Codec1Type {
             0xc => Ok(Codec1Type::Alpha),
             0xe => Ok(Codec1Type::Avc444),
             0xf => Ok(Codec1Type::Avc444v2),
+            0xD001 => Ok(Codec1Type::DriftHevc),
             _ => Err(invalid_field_err!("Codec1Type", "invalid codec type")),
         }
     }
