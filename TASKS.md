@@ -67,7 +67,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 - [ ] **HOST-4 Real-time encoder.** Extend `drift-video::encode` with a real-time profile (no
   reordering, low-latency rate control, bounded keyframe interval) and an AVC444 mode. Measure
   60 fps at 4K on M1 (ADR open question 5).
-- [ ] **HOST-5 Frame mailbox.** One-slot newest-frame mailbox between capture and encode, and
+- [✓] **HOST-5 Frame mailbox.** One-slot newest-frame mailbox between capture and encode, and
   between encode and the socket. Stats for dropped frames.
 - [ ] **HOST-6 Input injection.** Inverse of `drift-input::keymap` (set-1 scancodes → `kVK_*`),
   mouse and wheel through `CGEventPost`. One shared table and round-trip tests.

@@ -110,6 +110,22 @@ pub enum Damage {
     Full,
 }
 
+impl Damage {
+    /// The damage of two frames shown one after the other: what a frame replaced unread in the
+    /// mailbox (HOST-5) passes on to the newer one.
+    #[must_use]
+    pub fn merge(self, other: Self, bounds: Size<u32>, max_rects: usize) -> Self {
+        match (self, other) {
+            (Self::Full, _) | (_, Self::Full) => Self::Full,
+            (Self::None, d) | (d, Self::None) => d,
+            (Self::Rects(mut a), Self::Rects(b)) => {
+                a.extend(b);
+                coalesce(&a, bounds, max_rects)
+            }
+        }
+    }
+}
+
 /// More than this share of the frame changed: encode it as a full update.
 const FULL_FRACTION: f64 = 0.5;
 

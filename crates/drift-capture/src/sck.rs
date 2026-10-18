@@ -8,6 +8,7 @@ use std::time::Duration;
 use block2::RcBlock;
 use dispatch2::{DispatchQueue, DispatchRetained};
 use drift_core::Size;
+use drift_core::mailbox::Poster;
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, ProtocolObject};
 use objc2::{AllocAnyThread, DefinedClass, define_class, msg_send};
@@ -150,6 +151,11 @@ pub struct CapturedFrame {
     /// The frame's status.
     pub status: FrameStatus,
 }
+
+// SAFETY: CoreFoundation reference counting is thread-safe, and a CVPixelBuffer's pixels are only
+// read (by the encoder) after ScreenCaptureKit hands the frame over; moving the handle between
+// the capture queue and the encode thread is how VideoToolbox pipelines use it.
+unsafe impl Send for CapturedFrame {}
 
 impl CapturedFrame {
     /// Whether the pixels live in an IOSurface (zero-copy to VideoToolbox and Metal).
@@ -354,6 +360,21 @@ impl CaptureStream {
         unsafe { stream.startCaptureWithCompletionHandler(Some(&block)) };
         wait(&rx)?;
         Ok(Self { stream, _output: output, _queue: queue, display: info, stopped: false })
+    }
+
+    /// Like [`Self::start`], but frames go into a one-slot mailbox (HOST-5): an unread frame is
+    /// replaced by the newer one, which takes over its damage, so a slow encoder never builds a
+    /// queue and never misses a changed region.
+    pub fn start_into(config: CaptureConfig, poster: Poster<CapturedFrame>) -> Result<Self, CaptureError> {
+        let max_rects = config.max_dirty_rects;
+        Self::start(config, move |frame| {
+            let _ = poster.post_merging(frame, |new, old| {
+                let size = new.size;
+                let damage = std::mem::replace(&mut new.damage, Damage::None);
+                new.damage =
+                    if old.size == size { damage.merge(old.damage, size, max_rects) } else { Damage::Full };
+            });
+        })
     }
 
     /// The display being captured.

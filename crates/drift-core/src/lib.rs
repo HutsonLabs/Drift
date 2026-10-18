@@ -18,11 +18,13 @@
 //! - [`triggers`]: [`TriggerMerger`], network/wake reconnect triggers (M7-2).
 //! - [`store`]: [`ProfileStore`], the `profiles.toml` document (M1-6).
 //! - [`messages`]: user-facing disconnect explanations with next steps (M1-6, M9-4).
+//! - [`mailbox`]: the one-slot newest-item mailbox between Drift Host's pipeline stages (HOST-5).
 
 pub mod clock;
 pub mod geometry;
 pub mod input;
 pub mod layout;
+pub mod mailbox;
 pub mod messages;
 pub mod pairing;
 pub mod profile;
