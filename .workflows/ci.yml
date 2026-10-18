@@ -1,0 +1,48 @@
+# Drift CI on Spaces (plan M0-6): the same gate as local development, `cargo xtask ci`.
+# Runs on the spacer host runner (label macos, this Mac's toolchains); run: steps only.
+# GitHub keeps .github/workflows/ci.yml, which `cargo xtask workflows` audits.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUST_BACKTRACE: "1"
+
+jobs:
+  ci:
+    name: cargo xtask ci (macOS arm64)
+    runs-on: macos
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      # Spaces has LFS turned off, so the fixtures come from the public GitHub mirror.
+      - name: LFS fixtures
+        run: |
+          git lfs install --local
+          git -c lfs.url=https://github.com/HutsonLabs/drift.git/info/lfs lfs pull
+
+      - name: Rust toolchain (rust-toolchain.toml)
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          rustc --version
+
+      - name: Tools
+        run: |
+          bun --version
+          for t in cargo-nextest cargo-llvm-cov cargo-deny shellcheck; do
+            command -v "$t" || { echo "missing $t on the runner"; exit 1; }
+          done
+
+      - name: cargo xtask ci
+        run: cargo xtask ci

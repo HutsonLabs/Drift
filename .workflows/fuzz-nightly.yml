@@ -1,0 +1,64 @@
+# Nightly fuzzing on Spaces (plan M1-2, M9-2): 5 minutes per target on nightly Rust with
+# cargo-fuzz, on the spacer host runner (label macos). The required targets are asserted by
+# `cargo xtask fuzz-targets` against .github/workflows/fuzz-nightly.yml; keep the two in step.
+# Spaces has no artifact store: crash inputs are printed (base64) in the log and kept on the
+# runner under ~/spaces-artifacts/drift/fuzz/<run id>/.
+name: fuzz-nightly
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fuzz:
+    name: cargo fuzz ${{ matrix.target }}
+    runs-on: macos
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - fuzz_dir: crates/drift-gfx/fuzz
+            target: gfx_pdu_zgfx
+          - fuzz_dir: crates/drift-gfx/fuzz
+            target: zgfx
+          - fuzz_dir: crates/drift-rdp/fuzz
+            target: redirection
+          - fuzz_dir: crates/drift-rdp/fuzz
+            target: rdstls
+          - fuzz_dir: crates/drift-rdp/fuzz
+            target: cliprdr
+          - fuzz_dir: crates/drift-macos/fuzz
+            target: pointer
+    env:
+      FUZZ_DIR: ${{ matrix.fuzz_dir }}
+      FUZZ_TARGET: ${{ matrix.target }}
+      RUN_ID: ${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Nightly toolchain
+        run: rustup toolchain install nightly --profile minimal
+
+      - name: cargo-fuzz
+        run: command -v cargo-fuzz || cargo install --locked cargo-fuzz
+
+      - name: Fuzz for 5 minutes
+        run: cargo +nightly fuzz run --fuzz-dir "$FUZZ_DIR" "$FUZZ_TARGET" -- -max_total_time=300 -rss_limit_mb=4096
+
+      - name: Crash artifacts
+        if: failure()
+        run: |
+          dir="$FUZZ_DIR/artifacts/$FUZZ_TARGET"
+          [ -d "$dir" ] || { echo "no artifacts"; exit 0; }
+          keep="$HOME/spaces-artifacts/drift/fuzz/$RUN_ID/$FUZZ_TARGET"
+          mkdir -p "$keep" && cp -R "$dir"/. "$keep"/
+          echo "kept on the runner in $keep"
+          for f in "$dir"/*; do
+            echo "== $f ($(wc -c <"$f") bytes)"
+            head -c 65536 "$f" | base64
+          done
