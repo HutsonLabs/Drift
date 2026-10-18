@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 drift-apple.workspace = true
 drift-core.workspace = true
+drift-ext.workspace = true
 drift-input.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
@@ -44,6 +45,11 @@ harness = false
 # IOS-6: keyboard, pointer and pointer lock glue, same main-thread harness.
 [[test]]
 name = "input"
+harness = false
+
+# EXT-3: the remote app's menus in the iPadOS menu bar, same main-thread harness.
+[[test]]
+name = "menu_bar"
 harness = false
 
 [lints]
