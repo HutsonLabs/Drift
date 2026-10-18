@@ -149,6 +149,14 @@ pub fn run_with(options: RunOptions) {
             let frames = frames::FrameStore::in_dir(&dir);
             let pairing = pairing::PairingService::new(profiles.clone(), pairing_store);
             app.manage(commands::AppState::new(profiles.clone(), sessions, frames, pairing));
+            // Simulator smoke builds only: stand in for the Camera app opening a drift-pair:
+            // link, which a headless simulator cannot confirm (IOS-9).
+            #[cfg(feature = "smoke-env")]
+            if let Ok(link) = std::env::var("DRIFT_SMOKE_PAIRING_LINK")
+                && let Some(link) = pairing::pairing_link(std::iter::once(link.as_str()))
+            {
+                app.state::<commands::AppState>().set_pairing_link(link);
+            }
             // iOS has no menu bar and no Dock (IOS-5).
             #[cfg(target_os = "macos")]
             {

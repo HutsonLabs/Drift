@@ -235,7 +235,7 @@
 			path = "drift-app_iOS";
 			sourceTree = "<group>";
 		};
-		"TEMP_FBD8A60F-7073-4ED3-9010-80DEC7749BFE" /* x86_64 */ = {
+		"TEMP_1A8BFB87-7F14-46CD-AB97-90F6CDA0FBF4" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
