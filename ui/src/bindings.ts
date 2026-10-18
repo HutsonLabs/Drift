@@ -365,7 +365,12 @@ export type DisconnectReason =
 /**  The remote user logged off. */
 { kind: "logged-off-remotely" } | 
 /**  macOS Local Network Privacy denied the connection (`EHOSTUNREACH`, errno 65). */
-{ kind: "local-network-denied" };
+{ kind: "local-network-denied" } | 
+/**
+ *  A Drift Host refused this device: wrong or expired pairing code, or a device it does not
+ *  know (HOST-8). The text says which. Not retryable.
+ */
+{ kind: "pairing-refused"; detail: string };
 
 /**  Display preferences. */
 export type DisplayPrefs = {

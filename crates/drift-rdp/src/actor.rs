@@ -249,6 +249,15 @@ impl Actor {
     async fn run(mut self) {
         loop {
             let reason = self.connect_loop().await;
+            // A Drift Host that refused this device closes the connection; say why, and do not
+            // retry (HOST-8).
+            let reason =
+                match self.options.pairing.as_ref().and_then(drift_ext::pairing::ClientPairing::refusal) {
+                    Some(why) if reason != DisconnectReason::UserClosed => {
+                        DisconnectReason::PairingRefused(why)
+                    }
+                    _ => reason,
+                };
             let end = match self.after_disconnect(&reason).await {
                 Resume::Exit => return,
                 Resume::Reconnect => continue,
@@ -500,6 +509,7 @@ impl Actor {
             display_control,
             Some(cliprdr),
             self.options.drift_mac.as_ref(),
+            self.options.pairing.as_ref(),
             self.options.gfx_caps,
             sound,
         )

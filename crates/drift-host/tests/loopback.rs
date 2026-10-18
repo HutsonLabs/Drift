@@ -72,6 +72,7 @@ async fn drift_connects_sees_the_pattern_and_its_input_reaches_the_host() {
         clipboard: None,
         audio: None,
         displays: Box::new(drift_host::display::PhysicalOnly),
+        pairing: None,
     })
     .unwrap();
 

@@ -93,6 +93,10 @@ pub struct SessionOptions {
     /// Play the server's sound here (HOST-11). With `None` the client does not offer the sound
     /// channel.
     pub audio: Option<crate::audio::AudioOutput>,
+    /// Pair with, or authenticate to, a Drift Host over `Drift::Mac::v1` (HOST-8). Needs
+    /// [`Self::drift_mac`]. A host that refuses the device ends the session with
+    /// `DisconnectReason::PairingRefused` and no retry.
+    pub pairing: Option<drift_ext::pairing::ClientPairing>,
 }
 
 impl Default for SessionOptions {
@@ -106,6 +110,7 @@ impl Default for SessionOptions {
             drift_mac: None,
             gfx_caps: drift_gfx::GfxCaps::Gnome,
             audio: None,
+            pairing: None,
         }
     }
 }

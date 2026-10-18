@@ -97,6 +97,7 @@ fn start(identity: &HostIdentity, live: LiveFactory, displays: Box<dyn DisplayMa
         clipboard: None,
         audio: None,
         displays,
+        pairing: None,
     })
     .unwrap()
 }

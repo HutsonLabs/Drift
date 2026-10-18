@@ -19,11 +19,14 @@ real-time encoder (HOST-4), injection (HOST-6), pairing (HOST-8) and the menu-ba
 2. **Loopback by default.** `host.toml` defaults to `listen = "127.0.0.1:3389"`. Until pairing
    (HOST-8) refuses unpaired devices, reaching the host from the network is an explicit edit, and
    the binary warns when the listener is wider than loopback (ADR `IOS-0` consequences). 3389 is
-   the RDP port and macOS uses nothing on it; Screen Sharing uses 5900.
+   the RDP port and macOS uses nothing on it; Screen Sharing uses 5900. *Superseded by ADR
+   `HOST-8-pairing`: with pairing on (the default) the host listens on every interface; without
+   it, loopback only.*
 3. **Authentication for now: one NLA account.** `ironrdp-server` checks CredSSP against one
    preloaded account (HOST-1). The user name is in `host.toml`; the password is in the Keychain
    (`drift-apple`, service `com.hutsonlabs.drift.host`), set with `drift-host set-password`. The
-   host never stores it in a file. HOST-8 replaces this with paired device keys.
+   host never stores it in a file. *HOST-8 kept this and added paired device keys on top (ADR
+   `HOST-8-pairing`, decision 3).*
 4. **A self-signed certificate created once.** `host-cert.der` and `host-key.der` (mode 0600) in
    `~/Library/Application Support/com.hutsonlabs.drift.host`. The binary prints the SHA-256
    fingerprint Drift pins. The certificate never rotates by itself, because paired devices pin it.

@@ -8,10 +8,12 @@
 //! |---|---|
 //! | [`wire`] | versioned, length-delimited framing; strict decode (fuzzed: `fuzz/`) |
 //! | [`channel`] | the client and server DVC processors and the session-facing [`channel::Link`] |
+//! | [`pairing`] | pairing and device authentication messages, and the client's side (HOST-8) |
 //!
 //! [`negotiate`] settles the version and the shared capabilities from two [`wire::Hello`]s.
 
 pub mod channel;
+pub mod pairing;
 pub mod wire;
 
 use wire::{Capabilities, Hello};

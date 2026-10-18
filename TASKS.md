@@ -39,10 +39,10 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   on iPhone.
 - [✓] **IOS-8 iPhone layout.** Portrait: picture on top, trackpad and key row below. Landscape:
   full screen with auto-hiding controls.
-- [~] **IOS-9 Pairing UI.** Bonjour list of Drift Hosts, QR scan or typed code, pinned host key
-  stored in the Keychain (pairs with HOST-8). *Client half done (ADR `IOS-9-pairing`): discovery,
-  code and `drift-pair:` link, QR scanner, paired profiles, Keychain device key and pins. The
-  host checking the code and storing the device key waits for HOST-8 and EXT-1.*
+- [✓] **IOS-9 Pairing UI.** Bonjour list of Drift Hosts, QR scan or typed code, pinned host key
+  stored in the Keychain (pairs with HOST-8). *The handshake landed with HOST-8 (ADR
+  `HOST-8-pairing`) and runs end to end on loopback; the camera and a real device are manual
+  steps in `docs/acceptance.md`.*
 - [✓] **IOS-10 Clipboard on iOS.** UIPasteboard backend for `drift-clipboard`; paste only on an
   explicit user action, so iOS never shows its paste prompt unasked.
 - [✓] **IOS-11 Session switcher.** On iOS, the UI-windows "one window per connection" becomes an
@@ -81,7 +81,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 - [✓] **HOST-7 Link hygiene.** Interactive-video service class on the socket; idle heartbeat to
   keep a phone's Wi-Fi radio awake; backlog detection feeding EXT-4.
   *ADR `HOST-7-link-hygiene`; the effect on a phone over Wi-Fi is a manual measurement.*
-- [ ] **HOST-8 Pairing and pins.** Code shown on the Mac, device key stored, host certificate
+- [✓] **HOST-8 Pairing and pins.** Code shown on the Mac, device key stored, host certificate
   pinned on the device. Pairing on by default; listener refuses unpaired devices.
 - [~] **HOST-9 Menu-bar app.** Status, paired devices, permissions check (Screen Recording,
   Accessibility, Local Network) with plain-language first-run guidance. *`drift-host-app` and `cargo xtask host-bundle` (ADR

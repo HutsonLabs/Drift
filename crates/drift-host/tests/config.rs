@@ -8,10 +8,11 @@ use drift_host::identity::HostIdentity;
 use drift_host::layout::{MAX_SIDE, MIN_SIDE, clamp_layout};
 
 #[test]
-fn the_default_listener_is_loopback_only_on_the_rdp_port() {
-    // Until pairing (HOST-8) exists the host must not be reachable from the network by default.
+fn the_default_listener_is_the_rdp_port_on_every_interface() {
+    // HOST-8 changed this: with pairing on by default the host may be reached from the network
+    // (unpaired devices are refused); without pairing it stays on loopback (below).
     let c = HostConfig::default();
-    assert!(c.listen.ip().is_loopback(), "{}", c.listen);
+    assert!(c.listen.ip().is_unspecified(), "{}", c.listen);
     assert_eq!(c.listen.port(), 3389);
     assert_eq!(c.inject_input, None, "injection is automatic: on only with Accessibility");
     assert_eq!(c.desktop, Size::new(1920, 1080));
@@ -29,7 +30,8 @@ fn config_round_trips_through_toml_and_a_missing_file_is_the_default() {
     c.save(dir.path()).unwrap();
     assert_eq!(HostConfig::load(dir.path()).unwrap(), c);
     assert!(c.listens_beyond_loopback());
-    assert!(!HostConfig::default().listens_beyond_loopback());
+    let off = HostConfig { pairing: false, ..HostConfig::default() };
+    assert!(!off.listens_beyond_loopback());
 }
 
 #[test]
@@ -72,4 +74,15 @@ fn client_layouts_are_clamped_to_even_sizes_within_limits() {
     assert_eq!(clamp_layout(Size::new(1001, 701)), Size::new(1000, 700), "even, as H.264 4:2:0 wants");
     assert_eq!(clamp_layout(Size::new(10, 10)), Size::new(MIN_SIDE, MIN_SIDE));
     assert_eq!(clamp_layout(Size::new(100_000, 3)), Size::new(MAX_SIDE, MIN_SIDE));
+}
+
+#[test]
+fn pairing_is_on_by_default_and_only_then_the_host_listens_beyond_loopback() {
+    // HOST-8 (ADR IOS-0 Consequences): the listener binds beyond loopback only with pairing.
+    let c = HostConfig::default();
+    assert!(c.pairing, "pairing is on by default");
+    assert!(c.effective_listen().ip().is_unspecified(), "{}", c.effective_listen());
+    let off = HostConfig { pairing: false, listen: "0.0.0.0:3390".parse().unwrap(), ..HostConfig::default() };
+    assert!(off.effective_listen().ip().is_loopback(), "without pairing the host stays on loopback");
+    assert_eq!(off.effective_listen().port(), 3390);
 }

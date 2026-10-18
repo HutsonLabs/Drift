@@ -19,12 +19,18 @@ use crate::windows;
 pub struct TauriHost<R: Runtime> {
     app: AppHandle<R>,
     profiles: Arc<ProfileService>,
+    pairing: crate::pairing::PairingService,
 }
 
 impl<R: Runtime> TauriHost<R> {
-    /// A host for `app`, reading secrets and pins from `profiles`.
-    pub fn new(app: AppHandle<R>, profiles: Arc<ProfileService>) -> Self {
-        Self { app, profiles }
+    /// A host for `app`, reading secrets and pins from `profiles` and paired Macs' handshakes
+    /// from `pairing`.
+    pub fn new(
+        app: AppHandle<R>,
+        profiles: Arc<ProfileService>,
+        pairing: crate::pairing::PairingService,
+    ) -> Self {
+        Self { app, profiles, pairing }
     }
 }
 
@@ -38,8 +44,13 @@ impl<R: Runtime> SessionHost for TauriHost<R> {
         let sink = windows::create_render_sink(&self.app, window)?;
         let runtime = tauri::async_runtime::handle();
         let _guard = runtime.inner().enter();
-        let (handle, events) =
-            spawn_session(profile.clone(), secrets, sink, Arc::new(SystemClock), session_options(profile));
+        let (handle, events) = spawn_session(
+            profile.clone(),
+            secrets,
+            sink,
+            Arc::new(SystemClock),
+            self.session_options(profile)?,
+        );
         windows::attach_session(&self.app, window, handle.clone());
         Ok((handle, events))
     }
@@ -86,16 +97,31 @@ impl<R: Runtime> SessionHost for TauriHost<R> {
     }
 }
 
+impl<R: Runtime> TauriHost<R> {
+    /// [`session_options`] with this profile's pairing or authentication exchange (HOST-8).
+    fn session_options(
+        &self,
+        profile: &drift_core::ConnectionProfile,
+    ) -> Result<SessionOptions, CommandError> {
+        Ok(session_options(profile, self.pairing.client_pairing(profile.id)?))
+    }
+}
+
 /// Every session offers the `Drift::Mac::v1` channel (EXT-1): a Drift Host opens it, every
 /// other server leaves it closed and the session is plain RDP. Only a paired Drift Host gets
 /// the V10 graphics caps that allow AVC444; GNOME keeps the verified V8.1 list, because V10
 /// makes g-r-d send AVC444v2 (ADR `AVC444-client`). Every session also plays the server's
-/// sound (HOST-11), through its own `AVAudioEngine` player.
-pub(crate) fn session_options(profile: &ConnectionProfile) -> SessionOptions {
+/// sound (HOST-11), through its own `AVAudioEngine` player. A paired Mac also gets its pairing or
+/// authentication exchange (HOST-8).
+pub(crate) fn session_options(
+    profile: &ConnectionProfile,
+    pairing: Option<drift_ext::pairing::ClientPairing>,
+) -> SessionOptions {
     let gfx_caps = if profile.paired_host.is_some() { GfxCaps::DriftHost } else { GfxCaps::Gnome };
     SessionOptions {
         drift_mac: Some(drift_ext::channel::Link::new()),
         gfx_caps,
+        pairing,
         audio: Some(drift_rdp::audio::AudioOutput::new(SessionSound(drift_apple::audio_out::Player::new()))),
         ..SessionOptions::default()
     }
@@ -129,10 +155,10 @@ mod tests {
     #[test]
     fn only_paired_drift_hosts_get_the_v10_caps() {
         let mut profile = ConnectionProfile::new("Studio", "studio.local", ConnectMode::Headless);
-        assert_eq!(session_options(&profile).gfx_caps, GfxCaps::Gnome);
+        assert_eq!(session_options(&profile, None).gfx_caps, GfxCaps::Gnome);
         profile.paired_host = Some(Uuid::new_v4());
-        assert_eq!(session_options(&profile).gfx_caps, GfxCaps::DriftHost);
-        assert!(session_options(&profile).drift_mac.is_some());
-        assert!(session_options(&profile).audio.is_some(), "every session plays sound (HOST-11)");
+        assert_eq!(session_options(&profile, None).gfx_caps, GfxCaps::DriftHost);
+        assert!(session_options(&profile, None).drift_mac.is_some());
+        assert!(session_options(&profile, None).audio.is_some(), "every session plays sound (HOST-11)");
     }
 }

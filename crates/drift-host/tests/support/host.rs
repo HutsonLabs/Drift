@@ -35,6 +35,7 @@ pub fn start_host(
         clipboard,
         audio,
         displays: Box::new(drift_host::display::PhysicalOnly),
+        pairing: None,
     })
     .unwrap();
     (host, identity)

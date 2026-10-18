@@ -17,6 +17,7 @@ fn all_reasons() -> Vec<DisconnectReason> {
         DisconnectReason::UserClosed,
         DisconnectReason::LoggedOffRemotely,
         DisconnectReason::LocalNetworkDenied,
+        DisconnectReason::PairingRefused("The Mac did not accept the code.".into()),
     ]
 }
 

@@ -209,3 +209,42 @@ fn opened_urls_yield_the_first_pairing_link() {
     assert_eq!(pairing_link(urls.iter().map(String::as_str)), Some(uri));
     assert_eq!(pairing_link(["file:///tmp/x"].into_iter()), None);
 }
+
+// ---- HOST-8: the handshake runs on the next connection ---------------------------------------
+
+#[test]
+fn the_next_connection_carries_the_code_then_authenticates_with_the_device_key() {
+    use drift_app::profiles::{LinuxPasswordUpdate, SecretsUpdate};
+    use drift_ext::pairing::{PairStatus, PairingMessage, PairingOutcome};
+
+    let f = fixture();
+    let entry = f
+        .service
+        .pair(PairHostRequest::Qr {
+            uri: PairingPayload::from(target()).to_uri(),
+            username: "andrew".into(),
+            password: None,
+        })
+        .unwrap();
+    let id = entry.profile.id;
+
+    // A GNOME profile gets no pairing exchange at all.
+    let none = SecretsUpdate { rdp_password: None, linux_password: LinuxPasswordUpdate::Keep };
+    let mut gnome =
+        drift_core::ConnectionProfile::new("GNOME", "gnome.local", drift_core::ConnectMode::Headless);
+    "someone".clone_into(&mut gnome.rdp_username);
+    let gnome = f.profiles.save(gnome, none).unwrap();
+    assert!(f.service.client_pairing(gnome.profile.id).unwrap().is_none());
+
+    let first = f.service.client_pairing(id).unwrap().expect("a paired profile authenticates");
+    assert_eq!(first.code(), Some(target().code.as_str()), "the code the user saw goes to the Mac once");
+    assert_eq!(first.host_fingerprint(), FP.as_bytes());
+
+    // The Mac accepts: the following connection only signs with the device key.
+    let mut responder = first.responder();
+    responder.on_message(&PairingMessage::Challenge { nonce: [1; 32] }.to_message());
+    responder.on_message(&PairingMessage::PairReply(PairStatus::Accepted).to_message());
+    assert_eq!(first.outcome(), Some(PairingOutcome::Paired));
+    let next = f.service.client_pairing(id).unwrap().unwrap();
+    assert_eq!(next.code(), None);
+}

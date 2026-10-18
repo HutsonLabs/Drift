@@ -6,6 +6,7 @@
 //!
 //! | Module | What | Task |
 //! |---|---|---|
+//! | [`advert`] | the Bonjour advert and the pairing link / QR code | HOST-8 |
 //! | [`config`] | `host.toml`: listen address (loopback by default), account, desktop size | HOST-2 |
 //! | [`identity`] | the host's self-signed TLS certificate, created once and reused | HOST-2 |
 //! | [`gate`] | one session at a time | HOST-2 |
@@ -25,10 +26,12 @@
 //! | [`vdisplay_plan`] | client layouts → virtual-display modes (pure) | HOST-10 |
 //! | [`display`] | the display manager: a virtual display for the client, or the physical one | HOST-10 |
 //! | `cg_virtual` | the private `CGVirtualDisplay` API, isolated, with a launch self-test | HOST-10 |
+//! | [`pairing`] | the pairing code, the paired devices and each connection's authentication | HOST-8 |
 //! | [`server`] | the listener, the connection loop, EGFX and Display Control wiring | HOST-2 |
 //!
 //! Pure modules are unit tested; [`server`] is covered by a loopback test against `drift-rdp`.
 
+pub mod advert;
 pub mod audio;
 pub mod capture;
 #[cfg(target_os = "macos")]
@@ -46,6 +49,7 @@ pub mod launch;
 pub mod layout;
 pub mod link;
 mod live;
+pub mod pairing;
 pub mod pipeline;
 pub mod pointer;
 pub mod server;
