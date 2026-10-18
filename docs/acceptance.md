@@ -453,4 +453,7 @@ to do by hand:
       Shift and a mouse button: nothing stays held on the Mac. Without Accessibility, the host
       says so and injects nothing. `cargo test -p drift-inject --test cg_events -- --ignored`
       posts one harmless move (passed on the dev Mac on 2026-10-18).
+- [ ] **EXT-1 against a real Drift Host (after HOST-2):** connect the Mac client and an iPad to
+      Drift Host; the client log shows `Drift::Mac::v1 negotiated`. Connect the same client to
+      the GNOME host: no such line, and the session works as before.
 

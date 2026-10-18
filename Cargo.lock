@@ -1440,6 +1440,7 @@ dependencies = [
  "drift-apple",
  "drift-clipboard",
  "drift-core",
+ "drift-ext",
  "drift-gfx",
  "drift-input",
  "drift-ios",

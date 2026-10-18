@@ -40,22 +40,31 @@ pub struct Channels {
     pub gfx: bool,
     /// Clipboard.
     pub clipboard: bool,
+    /// The `Drift::Mac::v1` extension channel, as a Drift Host opens it (EXT-1).
+    pub drift_mac: bool,
 }
 
 impl Channels {
     /// Every channel (Remote Login / Headless).
     pub const fn all() -> Self {
-        Self { display_control: true, gfx: true, clipboard: true }
+        Self { display_control: true, gfx: true, clipboard: true, drift_mac: false }
     }
 
     /// What g-r-d's Desktop Sharing daemon offers: no Display Control.
     pub const fn desktop_sharing() -> Self {
-        Self { display_control: false, gfx: true, clipboard: true }
+        Self { display_control: false, gfx: true, clipboard: true, drift_mac: false }
+    }
+
+    /// The same channels plus `Drift::Mac::v1`, opened by the server like a Drift Host does.
+    #[must_use]
+    pub const fn with_drift_mac(mut self) -> Self {
+        self.drift_mac = true;
+        self
     }
 
     /// `true` when DRDYNVC must be attached.
     pub const fn any_dynamic(&self) -> bool {
-        self.display_control || self.gfx
+        self.display_control || self.gfx || self.drift_mac
     }
 }
 
@@ -106,6 +115,8 @@ pub(crate) struct ChannelState {
     pub(crate) gfx_suspend_acks: u32,
     pub(crate) gfx_resets_sent: Vec<(u32, u32)>,
     pub(crate) gfx_fills_sent: u32,
+    /// The server end of `Drift::Mac::v1`, when offered.
+    pub(crate) drift_mac: Option<drift_ext::channel::Link>,
     /// Clipboard backend events not yet handled by the loop.
     pub(crate) clip_events: Vec<ClipEvent>,
 }

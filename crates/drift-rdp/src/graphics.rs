@@ -192,8 +192,20 @@ impl Graphics {
         &self,
         display_control: DisplayControlClient,
         clipboard: Option<CliprdrClient>,
+        drift_mac: Option<&drift_ext::channel::Link>,
     ) -> impl FnOnce(ClientConnector) -> ClientConnector + Send + use<> {
         let drdynvc = DrdynvcClient::new().with_dynamic_channel(display_control);
+        // EXT-1: offered only when the app asked for it; a non-Drift server never opens it.
+        let drdynvc = match drift_mac {
+            Some(link) => {
+                link.reset();
+                drdynvc.with_dynamic_channel(drift_ext::channel::DriftMacClient::new(
+                    link.clone(),
+                    drift_ext::wire::Capabilities::NONE,
+                ))
+            }
+            None => drdynvc,
+        };
         let drdynvc = match tile_pool() {
             Some(pool) => {
                 let gfx = GfxClient::new(Box::new(self.sink.clone()), Box::new(VtDecoder::new()), pool);

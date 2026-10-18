@@ -38,7 +38,7 @@ impl<R: Runtime> SessionHost for TauriHost<R> {
         let runtime = tauri::async_runtime::handle();
         let _guard = runtime.inner().enter();
         let (handle, events) =
-            spawn_session(profile.clone(), secrets, sink, Arc::new(SystemClock), SessionOptions::default());
+            spawn_session(profile.clone(), secrets, sink, Arc::new(SystemClock), session_options());
         windows::attach_session(&self.app, window, handle.clone());
         Ok((handle, events))
     }
@@ -83,4 +83,10 @@ impl<R: Runtime> SessionHost for TauriHost<R> {
     fn session_ended(&self, window: &str) {
         windows::release_session(&self.app, window);
     }
+}
+
+/// Every session offers the `Drift::Mac::v1` channel (EXT-1): a Drift Host opens it, every
+/// other server leaves it closed and the session is plain RDP.
+fn session_options() -> SessionOptions {
+    SessionOptions { drift_mac: Some(drift_ext::channel::Link::new()), ..SessionOptions::default() }
 }

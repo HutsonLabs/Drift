@@ -86,7 +86,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 
 ## EXT — `Drift::Mac::v1` channel
 
-- [ ] **EXT-1 Channel framing.** Versioned, length-delimited DVC messages with a fuzz target
+- [✓] **EXT-1 Channel framing.** Versioned, length-delimited DVC messages with a fuzz target
   (M9-2 style). Client and host negotiate and fall back to plain RDP when absent.
 - [ ] **EXT-2 Precise scroll and gestures.** Scroll with phase and momentum; swipe and pinch
   mapped on the host to Mission Control, App Exposé and Spaces shortcuts.
