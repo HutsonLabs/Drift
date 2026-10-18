@@ -13,6 +13,7 @@ import type {
   ProfileField,
   ProfileIssue,
   SecretsUpdate,
+  TouchMode,
 } from "../bindings";
 import { actionButton, h } from "../dom";
 import { icon, modeGlyph } from "../icons";
@@ -94,6 +95,7 @@ function normalize(p: ConnectionProfile_Serialize): ConnectionProfile_Serialize 
     keyboard: { cmd_as: p.keyboard.cmd_as ?? "super", type_with_mac_layout: p.keyboard.type_with_mac_layout ?? false },
     display: { adaptive: p.display.adaptive ?? true, retina: p.display.retina ?? true },
     clipboard: p.clipboard ?? "text-and-images",
+    touch: p.touch ?? "auto",
   };
 }
 
@@ -320,6 +322,12 @@ export function formFields(model: FormModel, on: FieldIntents, draft: () => Form
         ["text", "Text only"],
         ["off", "Off"],
       ]),
+      // IOS-7: how a finger drives the remote pointer; the Mac ignores it.
+      selectField("touch", "Touch on iPhone and iPad", p.touch ?? "auto", [
+        ["auto", "Automatic (trackpad on iPhone, direct on iPad)"],
+        ["trackpad", "Trackpad"],
+        ["direct", "Tap where you touch"],
+      ]),
     ),
   );
 
@@ -465,6 +473,7 @@ export function readDraft(form: HTMLFormElement, base: ConnectionProfile_Seriali
       retina: checked("retina", base.display.retina ?? true),
     },
     clipboard: val("clipboard", base.clipboard ?? "text-and-images") as ClipboardPrefs,
+    touch: val("touch", base.touch ?? "auto") as TouchMode,
   };
   return {
     profile,

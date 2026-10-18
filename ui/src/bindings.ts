@@ -242,6 +242,8 @@ export type ConnectionProfile_Deserialize = {
 	display?: DisplayPrefs,
 	/**  Clipboard preferences. */
 	clipboard?: ClipboardPrefs,
+	/**  Touch on iPhone and iPad (IOS-7); ignored on the Mac. */
+	touch?: TouchMode,
 };
 
 /**  A saved connection (plan §3). Contains no secrets. */
@@ -276,6 +278,8 @@ export type ConnectionProfile_Serialize = {
 	display: DisplayPrefs,
 	/**  Clipboard preferences. */
 	clipboard: ClipboardPrefs,
+	/**  Touch on iPhone and iPad (IOS-7); ignored on the Mac. */
+	touch?: TouchMode,
 };
 
 /**  Where a profile's connection stands (gallery pills, Dock menu, Window menu, identity capsule). */
@@ -747,6 +751,15 @@ export type Thumbnail = {
 
 /**  Emitted to the `connections` page only, while it is visible. */
 export type ThumbnailUpdated = Thumbnail;
+
+/**  How a finger on the picture drives the remote pointer on iPhone and iPad (IOS-7). */
+export type TouchMode = 
+/**  The device decides: trackpad on iPhone, direct on iPad. Default. */
+"auto" | 
+/**  The screen is a trackpad: relative pointer, taps click where the pointer is. */
+"trackpad" | 
+/**  Tap where you touch. */
+"direct";
 
 /**  A session window's title bar: the identity capsule and the buttons. */
 export type WindowIdentity = {

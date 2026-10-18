@@ -19,6 +19,7 @@ fn full_profile() -> ConnectionProfile {
         keyboard: KeyboardPrefs { cmd_as: CmdAs::Ctrl, type_with_mac_layout: true },
         display: DisplayPrefs { adaptive: false, retina: true },
         clipboard: ClipboardPrefs::Text,
+        touch: drift_core::TouchMode::Trackpad,
     }
 }
 
@@ -103,4 +104,26 @@ fn fingerprint_parse_accepts_uppercase_and_rejects_garbage() {
     assert!(plus_sign.parse::<CertFingerprint>().is_err(), "from_str_radix accepts '+'");
     let too_long = format!("{fp}:00");
     assert!(too_long.parse::<CertFingerprint>().is_err());
+}
+
+// ---- IOS-7: touch mode ---------------------------------------------------------------------
+
+#[test]
+fn touch_mode_defaults_to_auto_and_is_not_written() {
+    let p = ConnectionProfile::new("x", "h", ConnectMode::Headless);
+    assert_eq!(p.touch, drift_core::TouchMode::Auto);
+    assert!(!p.to_toml().unwrap().contains("touch"), "existing files stay unchanged");
+}
+
+#[test]
+fn touch_mode_round_trips_and_resolves_per_device() {
+    use drift_core::TouchMode;
+    let mut p = ConnectionProfile::new("x", "h", ConnectMode::Headless);
+    p.touch = TouchMode::Direct;
+    let text = p.to_toml().unwrap();
+    assert!(text.contains("touch = \"direct\""), "{text}");
+    assert_eq!(ConnectionProfile::from_toml(&text).unwrap().touch, TouchMode::Direct);
+    assert_eq!(TouchMode::Auto.resolve(true), TouchMode::Trackpad, "iPhone: trackpad");
+    assert_eq!(TouchMode::Auto.resolve(false), TouchMode::Direct, "iPad: direct");
+    assert_eq!(TouchMode::Trackpad.resolve(false), TouchMode::Trackpad);
 }

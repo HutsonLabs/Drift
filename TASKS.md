@@ -34,7 +34,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   `drift-input`. Document which system shortcuts iPadOS keeps for itself. *Done in Rust in
   `drift-ios` instead of Swift (ADR `IOS-6-ios-input`); smoke-tested in the simulator, which
   cannot synthesize a keyboard, mouse or Pencil, so those checks are in `docs/acceptance.md`.*
-- [ ] **IOS-7 Touch modes.** Trackpad mode (relative pointer, two-finger scroll, tap to click,
+- [✓] **IOS-7 Touch modes.** Trackpad mode (relative pointer, two-finger scroll, tap to click,
   two-finger tap for right click) and direct mode (tap where you touch). Pinch zooms the viewport
   on iPhone.
 - [ ] **IOS-8 iPhone layout.** Portrait: picture on top, trackpad and key row below. Landscape:

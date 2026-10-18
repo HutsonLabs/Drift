@@ -398,6 +398,11 @@ app is in the background. Still to do by hand:
       session full screen, the pointer locks (system pointer disappears) and mouse motion,
       buttons and wheel still work; check the wheel's direction.
 - [ ] **IOS-6 Pencil:** hovering an Apple Pencil (M2 iPad or later) moves the remote pointer.
+- [ ] **IOS-7 touch:** on an iPhone (trackpad by default) a drag moves the pointer, a tap clicks,
+      tap-and-drag drags a window, two fingers scroll and a two-finger tap opens a context menu;
+      a pinch zooms the picture and taps still land under the finger. On an iPad (direct by
+      default) a tap clicks where you touch, a long press right-clicks, a drag drags. Switching the
+      profile's "Touch on iPhone and iPad" changes the next session.
 - [ ] **H.264 on a device:** `headless_motion.h264` decodes without `-8969` (it fails only in the
       simulator's software decoder, ADR `IOS-0` open question 3).
 - [ ] **IOS-10 paste button:** with a live session, copy text in Notes, tap the paste button in
