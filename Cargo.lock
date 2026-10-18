@@ -1609,6 +1609,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "drift-host"
+version = "0.2.0"
+dependencies = [
+ "drift-core",
+ "drift-rdp",
+ "drift-testkit",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "drift-inject"
 version = "0.2.0"
 dependencies = [

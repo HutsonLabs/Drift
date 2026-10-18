@@ -15,6 +15,7 @@ members = [
   "crates/drift-macos",
   "crates/drift-capture",
   "crates/drift-ios",
+  "crates/drift-host",
   "crates/drift-testkit",
   "crates/drift-transport",
   "src-tauri",
@@ -48,6 +49,7 @@ drift-apple = { path = "crates/drift-apple" }
 drift-macos = { path = "crates/drift-macos" }
 drift-capture = { path = "crates/drift-capture" }
 drift-ios = { path = "crates/drift-ios" }
+drift-host = { path = "crates/drift-host" }
 drift-testkit = { path = "crates/drift-testkit" }
 drift-transport = { path = "crates/drift-transport" }
 

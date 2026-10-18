@@ -1,0 +1,20 @@
+[package]
+name = "drift-host"
+description = "Drift Host: the Mac RDP host (listener, one session, test-pattern display; capture, encode and injection plug in later)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+drift-core.workspace = true
+
+[dev-dependencies]
+drift-rdp.workspace = true
+drift-testkit.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+
+[lints]
+workspace = true
