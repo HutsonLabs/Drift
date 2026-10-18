@@ -1,0 +1,18 @@
+[package]
+name = "drift-transport"
+description = "Drift-to-Drift transports: RDP over QUIC with a stream per GFX frame, the transport order (QUIC first with a paired Drift Host, TCP otherwise) and a lossy-link proxy for measurements."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+drift-core.workspace = true
+
+[dev-dependencies]
+drift-testkit.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "net", "io-util"] }
+
+[lints]
+workspace = true

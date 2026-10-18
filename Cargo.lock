@@ -1706,6 +1706,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "drift-transport"
+version = "0.2.0"
+dependencies = [
+ "drift-core",
+ "drift-testkit",
+ "tokio",
+]
+
+[[package]]
 name = "drift-video"
 version = "0.2.0"
 dependencies = [
