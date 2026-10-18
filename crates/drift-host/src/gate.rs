@@ -4,6 +4,16 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+/// Whether the current connection may see and exchange anything (HOST-8: its device paired or
+/// authenticated; always true without pairing). The clipboard and sound check it before every
+/// exchange, as the picture and input already do.
+pub type Authorized = Arc<dyn Fn() -> bool + Send + Sync>;
+
+/// An [`Authorized`] that always says yes (no pairing).
+pub fn always_authorized() -> Authorized {
+    Arc::new(|| true)
+}
+
 /// Admits one session at a time.
 #[derive(Debug, Clone, Default)]
 pub struct SessionGate(Arc<AtomicBool>);

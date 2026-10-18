@@ -68,14 +68,23 @@ impl std::fmt::Debug for HostClipboard {
 }
 
 impl HostClipboard {
-    /// Starts the clipboard thread over the pasteboard `factory` makes.
+    /// Starts the clipboard thread over the pasteboard `factory` makes, for every connection.
     pub fn start(factory: PasteboardFactory) -> std::io::Result<Self> {
+        Self::start_gated(factory, crate::gate::always_authorized())
+    }
+
+    /// Starts the clipboard thread; nothing is exchanged with a connection until `authorized`
+    /// says so (HOST-8): its copies are ignored, ours are not announced, its requests are refused.
+    pub fn start_gated(
+        factory: PasteboardFactory,
+        authorized: crate::gate::Authorized,
+    ) -> std::io::Result<Self> {
         let (tx, rx) = mpsc::channel();
         let ready = Arc::new(Mutex::new(false));
         let thread_ready = Arc::clone(&ready);
         std::thread::Builder::new()
             .name("drift-host-clipboard".into())
-            .spawn(move || run(factory(), &rx, &thread_ready))?;
+            .spawn(move || run(factory(), &rx, &thread_ready, &*authorized))?;
         Ok(Self { tx: Mutex::new(tx), ready })
     }
 
@@ -199,16 +208,31 @@ pub fn messages_for(action: SyncAction) -> Option<ClipboardMessage> {
 }
 
 /// The clipboard thread: one sync state per connection, the pasteboard poll, the PDUs out.
-fn run(port: Box<dyn PasteboardPort>, rx: &mpsc::Receiver<ClipEvent>, ready: &Mutex<bool>) {
+fn run(
+    port: Box<dyn PasteboardPort>,
+    rx: &mpsc::Receiver<ClipEvent>,
+    ready: &Mutex<bool>,
+    authorized: &(dyn Fn() -> bool + Send + Sync),
+) {
     let prefs = ClipboardPrefs::TextAndImages;
     let fresh = || ClipboardSync::new(prefs, true, Arc::new(SystemClock));
     let mut sync = fresh();
     let mut watcher = PasteboardWatcher::new(port.change_count());
     let mut sender: Option<UnboundedSender<ServerEvent>> = None;
+    // The client's channel came up before its device was authorized: start once it is.
+    let mut ready_pending = false;
+    let send = |sender: &Option<UnboundedSender<ServerEvent>>, message: ClipboardMessage| {
+        if let Some(sender) = sender.as_ref() {
+            let _ = sender.send(ServerEvent::Clipboard(message));
+        }
+    };
     loop {
-        let input = match rx.recv_timeout(POLL_INTERVAL) {
+        let event = rx.recv_timeout(POLL_INTERVAL);
+        let allowed = authorized();
+        let input = match event {
             Ok(ClipEvent::Reset) => {
                 sync = fresh();
+                ready_pending = false;
                 *lock(ready) = false;
                 continue;
             }
@@ -216,13 +240,29 @@ fn run(port: Box<dyn PasteboardPort>, rx: &mpsc::Receiver<ClipEvent>, ready: &Mu
                 sender = Some(s);
                 continue;
             }
+            Ok(ClipEvent::Ready) if !allowed => {
+                ready_pending = true;
+                continue;
+            }
             Ok(ClipEvent::Ready) => {
                 *lock(ready) = true;
                 SyncInput::InitialFormatListRequested
             }
+            // Nothing from or to an unauthorized connection; its requests get an error answer.
+            Ok(ClipEvent::DataRequest(_)) if !allowed => {
+                send(&sender, ClipboardMessage::SendFormatData(OwnedFormatDataResponse::new_error()));
+                continue;
+            }
+            Ok(ClipEvent::RemoteCopy(_) | ClipEvent::DataResponse(_)) if !allowed => continue,
             Ok(ClipEvent::RemoteCopy(formats)) => SyncInput::RemoteFormatList(formats),
             Ok(ClipEvent::DataRequest(format_id)) => SyncInput::RemoteDataRequest { format_id },
             Ok(ClipEvent::DataResponse(data)) => SyncInput::RemoteData(data),
+            Err(RecvTimeoutError::Timeout) if !allowed => continue,
+            Err(RecvTimeoutError::Timeout) if ready_pending => {
+                ready_pending = false;
+                *lock(ready) = true;
+                SyncInput::InitialFormatListRequested
+            }
             Err(RecvTimeoutError::Timeout) => match watcher.poll(&*port, prefs) {
                 Some(change) => {
                     SyncInput::LocalChanged { change_count: change.change_count, contents: change.contents }
@@ -242,8 +282,8 @@ fn run(port: Box<dyn PasteboardPort>, rx: &mpsc::Receiver<ClipEvent>, ready: &Mu
                 }
                 SyncAction::Rejected(e) => tracing::warn!(error = %e, "clipboard payload refused"),
                 other => {
-                    if let (Some(message), Some(sender)) = (messages_for(other), sender.as_ref()) {
-                        let _ = sender.send(ServerEvent::Clipboard(message));
+                    if let Some(message) = messages_for(other) {
+                        send(&sender, message);
                     }
                 }
             }

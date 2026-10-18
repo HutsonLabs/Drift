@@ -73,12 +73,26 @@ pub struct HostSound {
     factory: AudioSourceFactory,
     sender: Arc<Mutex<Option<UnboundedSender<ServerEvent>>>>,
     waves: Arc<AtomicU32>,
+    authorized: crate::gate::Authorized,
 }
 
 impl HostSound {
     /// Streams what `factory`'s sources deliver.
     pub fn new(factory: AudioSourceFactory) -> Self {
-        Self { factory, sender: Arc::default(), waves: Arc::default() }
+        Self {
+            factory,
+            sender: Arc::default(),
+            waves: Arc::default(),
+            authorized: crate::gate::always_authorized(),
+        }
+    }
+
+    /// Sends sound only while `authorized` says so (HOST-8): an unauthorized connection hears
+    /// nothing.
+    #[must_use]
+    pub fn gated(mut self, authorized: crate::gate::Authorized) -> Self {
+        self.authorized = authorized;
+        self
     }
 
     /// Waves sent so far (for stats and tests).
@@ -100,6 +114,7 @@ impl SoundServerFactory for HostSound {
             source: (self.factory)(),
             sender: Arc::clone(&self.sender),
             waves: Arc::clone(&self.waves),
+            authorized: Arc::clone(&self.authorized),
         })
     }
 }
@@ -113,6 +128,7 @@ struct SoundHandler {
     source: Box<dyn AudioSource>,
     sender: Arc<Mutex<Option<UnboundedSender<ServerEvent>>>>,
     waves: Arc<AtomicU32>,
+    authorized: crate::gate::Authorized,
 }
 
 impl std::fmt::Debug for SoundHandler {
@@ -141,8 +157,12 @@ impl RdpsndServerHandler for SoundHandler {
             return Err(Box::new(SourceError("no session to send to".into())));
         };
         let waves = Arc::clone(&self.waves);
+        let authorized = Arc::clone(&self.authorized);
         let origin = Instant::now();
         let deliver: Deliver = Box::new(move |pcm| {
+            if !authorized() {
+                return;
+            }
             let ts = u32::try_from(origin.elapsed().as_millis()).unwrap_or(u32::MAX);
             if sender.send(ServerEvent::Rdpsnd(RdpsndServerMessage::Wave(pcm, ts))).is_ok() {
                 waves.fetch_add(1, Ordering::Relaxed);

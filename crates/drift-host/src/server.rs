@@ -187,9 +187,16 @@ impl Host {
         let acceptor = identity.acceptor().map_err(std::io::Error::other)?;
         let stats = SharedStats::default();
         // HOST-11: the clipboard thread starts with the host; the sound factory per connection.
-        let clipboard = clipboard.map(HostClipboard::start).transpose()?;
+        // HOST-8: the current connection's authentication, shared by everything it may reach.
+        let current = Arc::new(Mutex::new(ConnectionAuth::open()));
+        let authorized: crate::gate::Authorized = {
+            let current = Arc::clone(&current);
+            Arc::new(move || lock(&current).is_authorized())
+        };
+        let clipboard =
+            clipboard.map(|f| HostClipboard::start_gated(f, Arc::clone(&authorized))).transpose()?;
         let clipboard_ready = clipboard.as_ref().map(HostClipboard::ready_flag);
-        let sound = audio.map(HostSound::new);
+        let sound = audio.map(|f| HostSound::new(f).gated(authorized));
         let audio_waves = sound.as_ref().map(HostSound::waves);
         let drift_mac: Arc<Mutex<Option<Link>>> = Arc::default();
         let (stop, mut stopped) = tokio::sync::oneshot::channel::<()>();
@@ -199,7 +206,6 @@ impl Host {
                 return;
             };
             let size = Arc::new(Mutex::new(desktop));
-            let current = Arc::new(Mutex::new(ConnectionAuth::open()));
             let gfx = Arc::new(GfxShared {
                 auth: Arc::clone(&current),
                 sender: Mutex::new(None),
@@ -268,12 +274,11 @@ impl Host {
                 *lock(&gfx.probe) = None;
                 *lock(&gfx.last_pointer) = None;
             };
-            let connections = Connections { pairing, current, gfx: Arc::clone(&gfx) };
+            let connections = Connections { pairing, current, gfx: Arc::clone(&gfx), displays };
             runtime.block_on(serve(
                 &mut server,
                 listener,
                 &thread_stats,
-                &displays,
                 &mut stopped,
                 &on_start,
                 &on_end,
@@ -337,6 +342,8 @@ struct Connections {
     pairing: Option<Pairing>,
     current: Arc<Mutex<ConnectionAuth>>,
     gfx: Arc<GfxShared>,
+    /// The display manager; each session's virtual display is released when it ends (HOST-10).
+    displays: SharedDisplays,
 }
 
 /// How long a refused connection stays up so the refusal reaches the client.
@@ -355,7 +362,6 @@ async fn serve(
     server: &mut RdpServer,
     listener: std::net::TcpListener,
     stats: &SharedStats,
-    displays: &SharedDisplays,
     stopped: &mut tokio::sync::oneshot::Receiver<()>,
     on_start: &dyn Fn(&tokio::net::TcpStream),
     on_end: &dyn Fn(),
@@ -436,7 +442,7 @@ async fn serve(
         on_end();
         drop(ticket);
         // The virtual display goes with the session; the next client gets its own size.
-        lock(displays).release();
+        lock(&connections.displays).release();
         lock(stats).display = None;
         // Nothing reaches the next connection's input or display until it is authorized.
         *lock(&connections.current) = match &connections.pairing {

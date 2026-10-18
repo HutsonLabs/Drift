@@ -65,3 +65,13 @@ binds beyond loopback only once that holds.
   certificate, the account password, and a device key the Mac approved in person.
 - Unpairing on the device (forgetting the host) and on the Mac are separate; a forgotten device
   is refused on its next connection with "This device is not paired with this Mac."
+
+## Clipboard and sound (added when HOST-11 merged)
+
+- The clipboard and the sound are held back like the picture and input: until the connection's
+  device paired or authenticated, the host ignores the client's copies, announces none of its
+  own, answers its data requests with an error, and sends no sound (`drift_host::gate::Authorized`).
+  A clipboard channel that came up early starts once the device is authorized.
+- Found when merging: before this, an unpaired device that passed NLA could write the Mac's
+  pasteboard. `tests/auth_gate.rs` covers it.
+
