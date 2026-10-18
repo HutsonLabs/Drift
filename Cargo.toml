@@ -16,6 +16,7 @@ members = [
   "crates/drift-capture",
   "crates/drift-ios",
   "crates/drift-testkit",
+  "crates/drift-transport",
   "src-tauri",
   "tests/e2e",
   "xtask",
@@ -48,6 +49,7 @@ drift-macos = { path = "crates/drift-macos" }
 drift-capture = { path = "crates/drift-capture" }
 drift-ios = { path = "crates/drift-ios" }
 drift-testkit = { path = "crates/drift-testkit" }
+drift-transport = { path = "crates/drift-transport" }
 
 # --- IronRDP (vendored at rev b149f50 + Drift patches; third_party/ironrdp) ---
 ironrdp-acceptor = { path = "third_party/ironrdp/crates/ironrdp-acceptor" }

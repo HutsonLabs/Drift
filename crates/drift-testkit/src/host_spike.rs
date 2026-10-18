@@ -260,7 +260,7 @@ impl GraphicsPipelineHandler for SpikeGfxHandler {
                     quality: 100,
                 };
                 while let Some(au) = lock(&frames).pop_front() {
-                    if server.send_avc420_frame(surface, &au, &[region.clone()], 0).is_some() {
+                    if server.send_avc420_frame(surface, &au, std::slice::from_ref(&region), 0).is_some() {
                         lock(&log).frames_sent += 1;
                     }
                 }

@@ -277,5 +277,7 @@ wry 0.55.1), tauri-cli 2.11.4.
    reach the host, which must resize the GFX surface itself; CLIPRDR's server role exists.
 5. Can VideoToolbox's real-time H.264 encoder produce AVC444's two streams at 60 fps on M1? (HOST-4)
 6. Is `ironrdp-rdpeudp`'s lossy mode usable for GFX, or do Drift-to-Drift sessions need the
-   QUIC fallback? (HOST-12)
+   QUIC fallback? (HOST-12) **Answered (ADR `HOST-12-quic-transport`): QUIC.** The vendored
+   crates have no lossy mode, and reliable RDP-UDP2 collapses at 0.5 % random loss (p95 1.5 s at
+   9.6 Mbit/s, 20 ms RTT). QUIC with BBR keeps p99 under 80 ms up to 2 % loss.
 7. Does App Store review accept wry's transparent webview? (STORE-2)

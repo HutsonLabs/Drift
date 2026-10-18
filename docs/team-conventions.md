@@ -55,6 +55,7 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `HOST-6-input-injection` | `drift-inject`: `kvk_for` from the same table, injection plan (flags, drags, clicks, 40 px per notch), CGEventPost at the HID tap, Accessibility |
 | `EXT-1-channel-framing` | `drift-ext`: `DRFT` v1 header, types by task, Hello negotiation, fallback without DVC errors, `SessionOptions::drift_mac`, fuzz target |
 | `HOST-1-server-spike` | `ironrdp-server` + `egfx` on loopback: AVC420 bit-exact to Drift, DISP layouts reach the host, what is missing for AVC444 (client caps and decode, encoder) |
+| `HOST-12-quic-transport` | no lossy RDP-UDP; reliable RDP-UDP2 collapses under loss; QUIC (quinn, BBR, pinned host, stream per GFX frame) for Drift-to-Drift; QUIC-then-TCP order |
 | `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility |
 
 ## Commands
