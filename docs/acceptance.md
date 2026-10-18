@@ -459,6 +459,19 @@ to do by hand:
       pattern shows (AVC420 over EGFX).
 - [ ] With `listen = "0.0.0.0:3389"` in `host.toml`, the host warns that it listens beyond loopback.
 
+### HOST-pipeline — The screen and input through Drift Host (ADR `HOST-pipeline`)
+
+With Screen Recording and Accessibility granted to the process running `drift-host`:
+
+- [ ] Run `drift-host` (after `drift-host set-password`); the log has no "test pattern" line.
+      Connect from Drift for Mac: the Mac's screen appears, moves smoothly (a video playing,
+      windows dragged) and the remote pointer follows, with its shape changing over text and
+      links.
+- [ ] Type and click from the client: the Mac reacts (inject_input unset = automatic). Disconnect
+      while holding Shift and a mouse button: nothing stays held.
+- [ ] Without Screen Recording: the log says so and the client shows the colour-bar pattern.
+- [ ] Without Accessibility and `inject_input` unset: the log says input is logged, not injected.
+
 ### HOST-3 — Capture (ADR `HOST-3-capture`)
 
 Needs a Mac where the process running the tests (Terminal, or the CI runner) has Screen

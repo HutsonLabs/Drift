@@ -130,3 +130,20 @@ fn pointer_events_become_display_updates_with_cached_shapes() {
         Some(DisplayUpdate::LargePointer(_))
     ));
 }
+
+#[test]
+fn injection_is_automatic_unless_set() {
+    use drift_host::setup::inject_enabled;
+    assert!(inject_enabled(None, true));
+    assert!(!inject_enabled(None, false));
+    assert!(inject_enabled(Some(true), false), "an explicit setting wins (macOS then drops the events)");
+    assert!(!inject_enabled(Some(false), true));
+}
+
+#[test]
+fn pointer_pixels_go_bottom_up_bgra() {
+    // 1×2: top pixel red, bottom pixel blue (RGBA).
+    let shape =
+        CursorShape::new(Size::new(1, 2), Point::new(0, 0), vec![255, 0, 0, 255, 0, 0, 255, 128]).unwrap();
+    assert_eq!(drift_host::pointer::to_rdp_pixels(&shape), vec![255, 0, 0, 128, 0, 0, 255, 255]);
+}

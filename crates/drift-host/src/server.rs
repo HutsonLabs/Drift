@@ -9,8 +9,14 @@
 //! one surface the size of the desktop and sends a keyframe from its [`FrameSource`]; a Display
 //! Control layout resizes the desktop (`resize_with_monitors`, then a new surface and keyframe).
 //! The `Drift::Mac::v1` channel (EXT-1) is offered on every connection.
+//!
+//! With a live source (`HostOptions::live`, the screen; ADR `HOST-pipeline`) the desktop is the
+//! source's size, a pump thread ([`crate::live`]) streams pictures and pointer updates while the
+//! session runs, and Display Control layouts are answered with the source's size (HOST-10 adds
+//! virtual displays sized to the client).
 
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use drift_core::Size;
@@ -30,14 +36,19 @@ use ironrdp_svc::ChannelFlags;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
-use crate::frames::FrameSource;
+use crate::frames::{FrameError, FrameSource};
 use crate::gate::SessionGate;
 use crate::identity::HostIdentity;
-use crate::input::{InputSink, SinkHandler};
+use crate::input::{InputSink, SharedSink, SinkHandler};
 use crate::layout::clamp_layout;
+use crate::live::{GfxTarget, Pump};
+use crate::pipeline::{LiveFrame, LiveSource};
 
 /// Makes the frame source for a connection.
 pub type FrameSourceFactory = Box<dyn Fn() -> Box<dyn FrameSource> + Send>;
+
+/// Makes the live picture for a connection (the screen); an error falls back to the test pattern.
+pub type LiveFactory = Box<dyn Fn() -> Result<Box<dyn LiveSource>, FrameError> + Send>;
 
 /// Everything [`Host::start`] needs.
 pub struct HostOptions {
@@ -51,8 +62,10 @@ pub struct HostOptions {
     pub password: zeroize::Zeroizing<String>,
     /// The desktop size before a client asks for its own.
     pub desktop: Size<u32>,
-    /// What the host shows.
+    /// What the host shows when there is no live picture.
     pub frames: FrameSourceFactory,
+    /// The live picture, if any (HOST-pipeline).
+    pub live: Option<LiveFactory>,
     /// Where input goes.
     pub input: Box<dyn InputSink>,
 }
@@ -112,7 +125,7 @@ impl Drop for Host {
 impl Host {
     /// Binds the listener and starts serving on a thread of its own.
     pub fn start(options: HostOptions) -> std::io::Result<Self> {
-        let HostOptions { listen, identity, username, password, desktop, frames, input } = options;
+        let HostOptions { listen, identity, username, password, desktop, frames, live, input } = options;
         let listener = std::net::TcpListener::bind(listen)?;
         listener.set_nonblocking(true)?;
         let addr = listener.local_addr()?;
@@ -132,12 +145,19 @@ impl Host {
                 source: Mutex::new(frames()),
                 size: Arc::clone(&size),
                 stats: Arc::clone(&thread_stats),
+                live_factory: Mutex::new(live),
+                live: Mutex::new(None),
+                pump: Mutex::new(None),
+                surface: Mutex::new(None),
+                pointer: Mutex::new(None),
+                keyframe_wanted: AtomicBool::new(false),
             });
+            let input: SharedSink = Arc::new(Mutex::new(input));
             // `RdpServer` holds non-`Send` parts, so it is built on this thread.
             let mut server = RdpServer::builder()
                 .with_addr(addr)
                 .with_hybrid(acceptor, identity.public_key().to_vec())
-                .with_input_handler(SinkHandler(input))
+                .with_input_handler(SinkHandler(Arc::clone(&input)))
                 .with_display_handler(HostDisplay { size: Arc::clone(&size), desktop, gfx: Arc::clone(&gfx) })
                 .with_gfx_factory(Some(Box::new(HostGfx(Arc::clone(&gfx)))))
                 .build();
@@ -147,7 +167,13 @@ impl Host {
                 password: password.to_string(),
                 domain: None,
             }));
-            runtime.block_on(serve(&mut server, listener, &thread_stats, &mut stopped));
+            let on_end = || {
+                // Stop the pump (and the capture with it), and let go of held keys and buttons.
+                drop(lock(&gfx.pump).take());
+                drop(lock(&gfx.live).take());
+                lock(&input).session_ended();
+            };
+            runtime.block_on(serve(&mut server, listener, &thread_stats, &mut stopped, &on_end));
         })?;
         Ok(Self { addr, stats, drift_mac, stop: Some(stop), thread: Some(thread) })
     }
@@ -195,6 +221,7 @@ async fn serve(
     listener: std::net::TcpListener,
     stats: &SharedStats,
     stopped: &mut tokio::sync::oneshot::Receiver<()>,
+    on_end: &dyn Fn(),
 ) {
     let Ok(listener) = TcpListener::from_std(listener) else { return };
     let gate = SessionGate::new();
@@ -234,6 +261,7 @@ async fn serve(
                 _ = &mut *stopped => return,
             }
         }
+        on_end();
         drop(ticket);
         lock(stats).sessions_ended += 1;
         tracing::info!(%peer, "session ended");
@@ -260,19 +288,34 @@ impl RdpServerDisplayUpdates for NoUpdates {
 #[async_trait::async_trait]
 impl RdpServerDisplay for HostDisplay {
     async fn size(&mut self) -> DesktopSize {
-        // A new connection starts from the configured desktop.
-        *lock(&self.size) = self.desktop;
-        to_desktop_size(self.desktop)
+        // A new connection starts from the live picture's size, or the configured desktop.
+        let size = self.gfx.open_live().unwrap_or(self.desktop);
+        *lock(&self.size) = size;
+        to_desktop_size(size)
     }
 
     async fn updates(&mut self) -> ServerResult<Box<dyn RdpServerDisplayUpdates>> {
-        Ok(Box::new(NoUpdates))
+        if lock(&self.gfx.live).is_none() {
+            return Ok(Box::new(NoUpdates));
+        }
+        let (tx, rx) = mpsc::unbounded_channel();
+        *lock(&self.gfx.pointer) = Some(tx);
+        Ok(Box::new(PointerUpdates(rx)))
     }
 
     fn request_layout(&mut self, layout: DisplayControlMonitorLayout) {
         let primary = layout.monitors().iter().find(|m| m.is_primary()).or_else(|| layout.monitors().first());
         let Some(monitor) = primary else { return };
         let (width, height) = monitor.dimensions();
+        if self.gfx.is_live() {
+            // The screen keeps its size until HOST-10's virtual displays; answer with it.
+            let size = *lock(&self.size);
+            tracing::info!(width, height, "client layout; keeping the screen's size");
+            lock(&self.gfx.stats).layouts.push(size);
+            let gfx = Arc::clone(&self.gfx);
+            tokio::spawn(async move { gfx.reset_live_surface() });
+            return;
+        }
         let size = clamp_layout(Size::new(width, height));
         tracing::info!(width = size.width, height = size.height, "client layout");
         *lock(&self.size) = size;
@@ -289,6 +332,19 @@ fn to_desktop_size(size: Size<u32>) -> DesktopSize {
     }
 }
 
+/// Pointer changes from the pump, as `ironrdp-server` display updates.
+struct PointerUpdates(mpsc::UnboundedReceiver<DisplayUpdate>);
+
+#[async_trait::async_trait]
+impl RdpServerDisplayUpdates for PointerUpdates {
+    async fn next_update(&mut self) -> ServerResult<Option<DisplayUpdate>> {
+        match self.0.recv().await {
+            Some(update) => Ok(Some(update)),
+            None => std::future::pending().await,
+        }
+    }
+}
+
 /// State shared by the EGFX factory, its handlers and the display.
 struct GfxShared {
     sender: Mutex<Option<mpsc::UnboundedSender<ServerEvent>>>,
@@ -296,9 +352,106 @@ struct GfxShared {
     source: Mutex<Box<dyn FrameSource>>,
     size: Arc<Mutex<Size<u32>>>,
     stats: SharedStats,
+    /// Makes the live picture for each connection (HOST-pipeline).
+    live_factory: Mutex<Option<LiveFactory>>,
+    /// This connection's live picture until the pump takes it.
+    live: Mutex<Option<Box<dyn LiveSource>>>,
+    /// The running pump.
+    pump: Mutex<Option<Pump>>,
+    /// The live picture's surface.
+    surface: Mutex<Option<u16>>,
+    /// Where pointer updates go.
+    pointer: Mutex<Option<mpsc::UnboundedSender<DisplayUpdate>>>,
+    /// The next picture must be a keyframe (a new surface).
+    keyframe_wanted: AtomicBool,
 }
 
 impl GfxShared {
+    /// Makes this connection's live picture; its size, or `None` without one.
+    fn open_live(&self) -> Option<Size<u32>> {
+        drop(lock(&self.pump).take());
+        let factory = lock(&self.live_factory);
+        let factory = factory.as_ref()?;
+        match factory() {
+            Ok(source) => {
+                let size = source.size();
+                *lock(&self.live) = Some(source);
+                Some(size)
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "no live picture; showing the test pattern");
+                lock(&self.stats).last_error = Some(e.to_string());
+                *lock(&self.live) = None;
+                None
+            }
+        }
+    }
+
+    /// Whether this connection shows the live picture.
+    fn is_live(&self) -> bool {
+        lock(&self.live).is_some() || lock(&self.pump).is_some()
+    }
+
+    /// Creates the live picture's surface (after a reset when `resize`), asks for a keyframe and
+    /// starts the pump if it is not running.
+    fn start_live(self: &Arc<Self>) {
+        if !self.new_live_surface(false) {
+            return;
+        }
+        let Some(source) = lock(&self.live).take() else { return };
+        let target: Arc<dyn GfxTarget> = Arc::clone(self) as Arc<dyn GfxTarget>;
+        match crate::live::start(source, target) {
+            Ok(pump) => *lock(&self.pump) = Some(pump),
+            Err(e) => tracing::warn!(error = %e, "could not start the picture pump"),
+        }
+    }
+
+    /// A client layout on a live desktop: a fresh output and surface at the same size.
+    fn reset_live_surface(&self) {
+        self.new_live_surface(true);
+    }
+
+    fn new_live_surface(&self, resize: bool) -> bool {
+        let size = *lock(&self.size);
+        let Some(server) = lock(&self.handle).clone() else { return false };
+        let (w, h) = (to_desktop_size(size).width, to_desktop_size(size).height);
+        let messages = {
+            let mut server = lock(&server);
+            if !server.is_ready() {
+                return false;
+            }
+            lock(&self.stats).avc420_negotiated = server.supports_avc420();
+            if resize {
+                let primary = Monitor {
+                    left: 0,
+                    top: 0,
+                    right: i32::from(w) - 1,
+                    bottom: i32::from(h) - 1,
+                    flags: MonitorFlags::PRIMARY,
+                };
+                server.resize_with_monitors(w, h, vec![primary]);
+            }
+            let Some(surface) = server.create_surface(w, h) else { return false };
+            server.map_surface_to_output(surface, 0, 0);
+            *lock(&self.surface) = Some(surface);
+            let Some(channel) = server.channel_id() else { return false };
+            encode_dvc_messages(channel, server.drain_output(), ChannelFlags::empty())
+        };
+        self.keyframe_wanted.store(true, Ordering::Relaxed);
+        self.forward(messages);
+        true
+    }
+
+    fn forward(&self, messages: ironrdp_core::EncodeResult<Vec<ironrdp_svc::SvcMessage>>) {
+        match (messages, lock(&self.sender).as_ref()) {
+            (Ok(messages), Some(tx)) => {
+                let _ = tx.send(ServerEvent::Egfx(EgfxServerMessage::SendMessages { messages }));
+            }
+            (Err(e), _) => tracing::warn!(error = %e, "could not encode graphics messages"),
+            (Ok(_), None) => {}
+        }
+    }
+
     /// Sends a keyframe of the current desktop on a new surface; with `resize`, resets the
     /// graphics output to the new size first.
     fn present(&self, resize: bool) {
@@ -388,7 +541,11 @@ impl GraphicsPipelineHandler for HostGfxHandler {
         let gfx = Arc::clone(&self.0);
         tokio::spawn(async move {
             tokio::task::yield_now().await;
-            gfx.present(false);
+            if lock(&gfx.live).is_some() {
+                gfx.start_live();
+            } else {
+                gfx.present(false);
+            }
         });
     }
 
@@ -405,5 +562,42 @@ impl DvcServerFactory for DriftMacFactory {
         let link = Link::new();
         *lock(&self.0) = Some(link.clone());
         dvc.with_dynamic_channel(DriftMacServer::new(link, Capabilities::NONE))
+    }
+}
+
+impl GfxTarget for GfxShared {
+    fn backpressure(&self) -> bool {
+        let Some(server) = lock(&self.handle).clone() else { return true };
+        let server = lock(&server);
+        !server.is_ready() || server.should_backpressure()
+    }
+
+    fn send(&self, frame: &LiveFrame, timestamp_ms: u32) -> Option<bool> {
+        let server = lock(&self.handle).clone()?;
+        let surface = (*lock(&self.surface))?;
+        let messages = {
+            let mut server = lock(&server);
+            if !server.is_ready() {
+                return Some(false);
+            }
+            if server.send_avc420_frame(surface, &frame.au, &frame.regions, timestamp_ms).is_none() {
+                return Some(false);
+            }
+            lock(&self.stats).frames_sent += 1;
+            let channel = server.channel_id()?;
+            encode_dvc_messages(channel, server.drain_output(), ChannelFlags::empty())
+        };
+        self.forward(messages);
+        Some(true)
+    }
+
+    fn pointer(&self, update: DisplayUpdate) {
+        if let Some(tx) = lock(&self.pointer).as_ref() {
+            let _ = tx.send(update);
+        }
+    }
+
+    fn take_keyframe_request(&self) -> bool {
+        self.keyframe_wanted.swap(false, Ordering::Relaxed)
     }
 }
