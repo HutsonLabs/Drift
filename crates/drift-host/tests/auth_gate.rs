@@ -170,8 +170,11 @@ async fn clipboard_and_sound_wait_for_the_device_to_be_authorized() {
     let mut got_clipboard = false;
     while !got_clipboard {
         match tokio::time::timeout_at(deadline, events.recv()).await {
+            // Either copy may arrive: the one waiting since the stranger, announced as soon as
+            // the device is authorized, or the newer one if the announcement is slower than the
+            // echo window (a loaded machine). Both are the host's clipboard after pairing.
             Ok(Some(SessionEvent::ClipboardRemote(c))) => {
-                got_clipboard = c.text() == Some("secret on the host")
+                got_clipboard = matches!(c.text(), Some("secret on the host" | "copied after pairing"))
             }
             Ok(Some(SessionEvent::State(SessionState::Failed { reason }))) => panic!("failed: {reason:?}"),
             Ok(Some(_)) => {}
