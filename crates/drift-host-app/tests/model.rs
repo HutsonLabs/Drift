@@ -74,9 +74,30 @@ fn the_menu_starts_with_the_status_and_ends_with_quit() {
 }
 
 #[test]
-fn without_pairing_the_menu_says_when_it_arrives() {
+fn with_pairing_off_the_menu_says_so() {
     let t = titles(&menu(&input(HostStatus::Starting)));
-    assert!(t.iter().any(|s| s == "Paired devices: none yet (pairing comes in a later version)"), "{t:?}");
+    assert!(t.iter().any(|s| s == "Pairing is off (this Mac only)"), "{t:?}");
+}
+
+/// HOST-8's pairing store feeds the menu: every paired device by name.
+#[cfg(target_os = "macos")]
+#[test]
+fn the_pairing_store_lists_its_devices() {
+    use std::sync::Arc;
+
+    use drift_host::pairing::{DeviceStore, Pairing};
+    use drift_host_app::model::PairedDevices;
+
+    let pairing = Pairing::new(DeviceStore::memory(), Arc::new(drift_core::SystemClock));
+    assert_eq!(pairing.devices().len(), 0);
+    assert_eq!(PairedDevices::devices(&pairing), Some(Vec::new()));
+    let code = pairing.open_window();
+    let device = drift_apple::pairing::DeviceKey::generate().unwrap();
+    let _ = pairing.try_pair(code.as_str(), "Test iPad", device.public_key());
+    assert_eq!(
+        PairedDevices::devices(&pairing),
+        Some(vec![PairedDevice { name: "Test iPad".into(), last_seen: None }])
+    );
 }
 
 #[test]

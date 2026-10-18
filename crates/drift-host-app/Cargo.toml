@@ -24,6 +24,10 @@ tracing-subscriber.workspace = true
 name = "drift-host-app"
 path = "src/main.rs"
 
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+drift-apple.workspace = true
+drift-core.workspace = true
+
 [lints]
 workspace = true
 
