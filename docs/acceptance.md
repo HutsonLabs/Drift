@@ -594,3 +594,18 @@ chroma PSNR of 34.7 dB on coloured strokes. Still to do by hand:
 - [ ] With `virtual_display = false` in `host.toml`, the host captures the main display and the
       client letterboxes.
 
+### EXT-5 — HEVC and HDR (ADR `EXT-5-hevc-hdr`)
+
+Measured on an M4 Pro on 2026-10-18 with `cargo run --release -p drift-video --example hevc_bench
+-- <width> <height> 240` (load average about 300). `tests/hevc_e2e.rs` streams HEVC between a
+paired client and Drift Host on loopback. Still to do by hand:
+
+- [ ] **Real screen, Mac client:** pair Drift for Mac with Drift Host (Screen Recording granted),
+      connect: the host log says `codec offer … Main444`, the client shows coloured text without
+      fringes, and the statistics HUD's bit rate matches the table in the ADR.
+- [ ] **iPad:** the same pairing from an iPad: the host picks HEVC Main (the iPad offers 4:2:0
+      only); check whether VideoToolbox on the device decodes a 4:4:4 stream before offering it.
+- [ ] **Quiet machine and M1:** rerun the benchmark with nothing else running, and on an M1 Mac.
+- [ ] **HDR (after capture and EDR rendering land):** on an HDR display, an HDR video on the Mac
+      shows HDR highlights on the client; on an SDR display the session stays SDR.
+
