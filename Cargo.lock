@@ -1440,6 +1440,7 @@ dependencies = [
  "drift-apple",
  "drift-clipboard",
  "drift-core",
+ "drift-ext",
  "drift-gfx",
  "drift-input",
  "drift-ios",
@@ -1571,6 +1572,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "drift-ext"
+version = "0.2.0"
+dependencies = [
+ "ironrdp-core",
+ "ironrdp-dvc",
+ "ironrdp-pdu",
+ "proptest",
+ "thiserror 2.0.20",
+ "tracing",
+]
+
+[[package]]
 name = "drift-gfx"
 version = "0.2.0"
 dependencies = [
@@ -1657,6 +1670,7 @@ dependencies = [
  "drift-clipboard",
  "drift-codec",
  "drift-core",
+ "drift-ext",
  "drift-gfx",
  "drift-input",
  "drift-testkit",
@@ -1710,6 +1724,7 @@ name = "drift-testkit"
 version = "0.2.0"
 dependencies = [
  "drift-core",
+ "drift-ext",
  "drift-gfx",
  "ironrdp-acceptor",
  "ironrdp-async",

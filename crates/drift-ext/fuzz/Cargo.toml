@@ -1,0 +1,29 @@
+[package]
+name = "drift-ext-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "MIT"
+description = "cargo-fuzz target for the Drift::Mac::v1 framing and processors (EXT-1, plan M9-2)."
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+drift-ext = { path = ".." }
+ironrdp-dvc = { path = "../../../third_party/ironrdp/crates/ironrdp-dvc" }
+
+[[bin]]
+name = "drift_mac"
+path = "fuzz_targets/drift_mac.rs"
+test = false
+doc = false
+bench = false
+
+# Standalone workspace: nightly-only sanitizer builds stay out of the main workspace.
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1

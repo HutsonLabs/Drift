@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 drift-core.workspace = true
 drift-gfx.workspace = true
+drift-ext.workspace = true
 ironrdp-server.workspace = true
 ironrdp-acceptor.workspace = true
 ironrdp-async.workspace = true

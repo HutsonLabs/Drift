@@ -82,6 +82,10 @@ pub struct SessionOptions {
     pub reconnect: ReconnectConfig,
     /// Seed for the backoff jitter; `None` seeds from the system time (tests pin it).
     pub reconnect_seed: Option<u64>,
+    /// Report the `Drift::Mac::v1` extension channel here (EXT-1). With `None` the client does
+    /// not offer the channel at all; with a link it accepts it when a Drift Host opens it, and
+    /// the link stays `Absent` with any other server. Reset at every connection leg.
+    pub drift_mac: Option<drift_ext::channel::Link>,
 }
 
 impl Default for SessionOptions {
@@ -92,6 +96,7 @@ impl Default for SessionOptions {
             connect_timeout: Duration::from_secs(15),
             reconnect: ReconnectConfig::default(),
             reconnect_seed: None,
+            drift_mac: None,
         }
     }
 }

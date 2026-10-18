@@ -35,6 +35,8 @@ jobs:
             target: cliprdr
           - fuzz_dir: crates/drift-macos/fuzz
             target: pointer
+          - fuzz_dir: crates/drift-ext/fuzz
+            target: drift_mac
     steps:
       - uses: actions/checkout@v4
 
