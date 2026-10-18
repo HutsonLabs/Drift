@@ -49,6 +49,9 @@ mod tests {
                 view_installs_hover_scroll_and_pointer_interaction,
             ),
             ("pointer_lock_is_per_view_controller", pointer_lock_is_per_view_controller),
+            ("direct_touch_clicks_on_the_picture", direct_touch_clicks_on_the_picture),
+            ("trackpad_touch_moves_relatively", trackpad_touch_moves_relatively),
+            ("pinch_transforms_the_view_on_phones", pinch_transforms_the_view_on_phones),
         ])
     }
 
@@ -181,5 +184,42 @@ mod tests {
         assert!(!locked(&b), "only the asked-for view controller locks");
         pointer_lock::set_locked(mtm(), &a, false);
         assert!(!locked(&a));
+    }
+
+    fn direct_touch_clicks_on_the_picture() {
+        let (view, rec) = attached();
+        view.set_touch(drift_core::TouchMode::Direct, false);
+        view.finger_began(1, Point::new(100.0, 50.0), 0.0);
+        view.finger_ended(1, Point::new(100.0, 50.0), 0.1);
+        assert_eq!(
+            *rec.events.borrow(),
+            vec![
+                InputEvent::MouseMove { x: 200, y: 100 },
+                InputEvent::MouseButton { button: MouseButton::Left, down: true, x: 200, y: 100 },
+                InputEvent::MouseButton { button: MouseButton::Left, down: false, x: 200, y: 100 },
+            ]
+        );
+    }
+
+    fn trackpad_touch_moves_relatively() {
+        let (view, rec) = attached();
+        view.set_touch(drift_core::TouchMode::Trackpad, false);
+        view.pointer_hover(Point::new(0.0, 0.0));
+        view.finger_began(1, Point::new(500.0, 250.0), 0.0);
+        view.finger_moved(1, Point::new(520.0, 250.0), 0.05);
+        assert_eq!(rec.events.borrow().last(), Some(&InputEvent::MouseMove { x: 60, y: 0 }));
+    }
+
+    fn pinch_transforms_the_view_on_phones() {
+        let (view, _rec) = attached();
+        view.set_touch(drift_core::TouchMode::Direct, true);
+        view.finger_began(1, Point::new(400.0, 250.0), 0.0);
+        view.finger_began(2, Point::new(600.0, 250.0), 0.0);
+        view.finger_moved(1, Point::new(300.0, 250.0), 0.05);
+        view.finger_moved(2, Point::new(700.0, 250.0), 0.05);
+        let t = view.transform();
+        assert!(t.a > 1.5, "zoomed in: {t:?}");
+        view.reset_zoom();
+        assert_eq!(view.transform().a, 1.0);
     }
 }
