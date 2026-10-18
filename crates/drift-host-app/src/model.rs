@@ -81,19 +81,33 @@ pub struct PairedDevice {
     pub last_seen: Option<String>,
 }
 
-/// Where the menu gets the paired devices from. `None` means this build has no pairing yet.
+/// Where the menu gets the paired devices from. `None` means pairing is off (the host then only
+/// listens on this Mac, HOST-8).
 pub trait PairedDevices {
     /// The paired devices, or `None` without pairing support.
     fn devices(&self) -> Option<Vec<PairedDevice>>;
 }
 
-/// No pairing support (until HOST-8).
+/// Pairing is off.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NoPairing;
 
 impl PairedDevices for NoPairing {
     fn devices(&self) -> Option<Vec<PairedDevice>> {
         None
+    }
+}
+
+/// HOST-8's pairing store: every device that paired with this Mac, by name.
+#[cfg(target_os = "macos")]
+impl PairedDevices for drift_host::pairing::Pairing {
+    fn devices(&self) -> Option<Vec<PairedDevice>> {
+        Some(
+            drift_host::pairing::Pairing::devices(self)
+                .into_iter()
+                .map(|d| PairedDevice { name: d.name, last_seen: None })
+                .collect(),
+        )
     }
 }
 
@@ -192,7 +206,7 @@ const ORDER: [Permission; 3] =
 pub fn menu(input: &MenuInput) -> Vec<MenuEntry> {
     let mut entries = vec![MenuEntry::Text(status_line(&input.status)), MenuEntry::Separator];
     entries.push(match &input.devices {
-        None => MenuEntry::Text("Paired devices: none yet (pairing comes in a later version)".to_owned()),
+        None => MenuEntry::Text("Pairing is off (this Mac only)".to_owned()),
         Some(devices) if devices.is_empty() => MenuEntry::Text("No paired devices".to_owned()),
         Some(devices) => MenuEntry::Submenu {
             title: "Paired Devices".to_owned(),

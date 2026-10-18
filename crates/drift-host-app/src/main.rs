@@ -16,7 +16,7 @@ mod app {
     use block2::RcBlock;
     use drift_host::launch::{self, Launched};
     use drift_host_app::model::{
-        self, HostStatus, MenuAction, MenuInput, NoPairing, PairedDevices as _, Permission, first_run_alert,
+        self, HostStatus, MenuAction, MenuInput, NoPairing, PairedDevices, Permission, first_run_alert,
         guidance, icon_state,
     };
     use drift_host_app::status_item::{StatusItem, build_menu};
@@ -97,7 +97,10 @@ mod app {
                 && app.launched.as_ref().is_some_and(|l| l.config.listens_beyond_loopback());
             let input = MenuInput {
                 permissions: permissions::current(reached),
-                devices: NoPairing.devices(),
+                devices: match app.launched.as_ref().and_then(|l| l.pairing.as_ref()) {
+                    Some(pairing) => PairedDevices::devices(pairing),
+                    None => NoPairing.devices(),
+                },
                 start_at_login: login::status() == login::LoginItem::On,
                 status,
             };
