@@ -192,28 +192,32 @@ impl Graphics {
         &self,
         display_control: DisplayControlClient,
         clipboard: Option<CliprdrClient>,
-        drift_mac: Option<&drift_ext::channel::Link>,
-        pairing: Option<&drift_ext::pairing::ClientPairing>,
+        drift_mac: DriftMacLeg<'_>,
         caps: drift_gfx::GfxCaps,
         sound: Option<ironrdp_rdpsnd::client::Rdpsnd>,
     ) -> impl FnOnce(ClientConnector) -> ClientConnector + Send + use<> {
         let drdynvc = DrdynvcClient::new().with_dynamic_channel(display_control);
         // EXT-1: offered only when the app asked for it; a non-Drift server never opens it.
-        let drdynvc = match drift_mac {
+        let DriftMacLeg { link, pairing, status } = drift_mac;
+        let drdynvc = match link {
             Some(link) => {
                 link.reset();
                 // EXT-2: every Drift client sends precise scrolls and gestures to a host that
                 // takes them.
-                let input = drift_ext::wire::Capabilities::SCROLL | drift_ext::wire::Capabilities::GESTURES;
+                // EXT-4: and asks for a quality, showing the host's status in its statistics.
+                let caps = drift_ext::wire::Capabilities::SCROLL
+                    | drift_ext::wire::Capabilities::GESTURES
+                    | drift_ext::status::StatusClient::capabilities();
                 let client = match pairing {
                     // HOST-8: offer pairing and answer the host's challenge on every leg.
                     Some(pairing) => drift_ext::channel::DriftMacClient::new(
                         link.clone(),
-                        input | drift_ext::pairing::ClientPairing::capabilities(),
+                        caps | drift_ext::pairing::ClientPairing::capabilities(),
                     )
                     .with_responder(pairing.responder()),
-                    None => drift_ext::channel::DriftMacClient::new(link.clone(), input),
+                    None => drift_ext::channel::DriftMacClient::new(link.clone(), caps),
                 };
+                let client = client.with_responder(status.responder());
                 drdynvc.with_dynamic_channel(client)
             }
             None => drdynvc,
@@ -259,6 +263,17 @@ pub(crate) fn flush_acks(stage: &ActiveStage) -> Result<Option<Vec<u8>>, Disconn
         .process_svc_processor_messages(SvcProcessorMessages::<DrdynvcClient>::new(svc))
         .map(Some)
         .map_err(|e| DisconnectReason::ProtocolError(format!("send frame acknowledge: {e}")))
+}
+
+/// What one leg offers on `Drift::Mac::v1` (EXT-1): the link to report to, pairing (HOST-8) and
+/// the quality preference with the host's status (EXT-4).
+pub(crate) struct DriftMacLeg<'a> {
+    /// `None`: the channel is not offered.
+    pub(crate) link: Option<&'a drift_ext::channel::Link>,
+    /// Pair or authenticate.
+    pub(crate) pairing: Option<&'a drift_ext::pairing::ClientPairing>,
+    /// The quality preference and the host's status.
+    pub(crate) status: &'a drift_ext::status::StatusClient,
 }
 
 /// Encodes `messages` on `Drift::Mac::v1` as a frame for the wire (`None` when the channel is

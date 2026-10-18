@@ -97,6 +97,9 @@ pub struct SessionOptions {
     /// [`Self::drift_mac`]. A host that refuses the device ends the session with
     /// `DisconnectReason::PairingRefused` and no retry.
     pub pairing: Option<drift_ext::pairing::ClientPairing>,
+    /// The quality to ask a Drift Host for (EXT-4). `None` picks the default from the profile's
+    /// host: the best at home, a lower cap when the host is away from the local network.
+    pub quality: Option<drift_ext::status::QualityPreference>,
 }
 
 impl Default for SessionOptions {
@@ -111,6 +114,7 @@ impl Default for SessionOptions {
             gfx_caps: drift_gfx::GfxCaps::Gnome,
             audio: None,
             pairing: None,
+            quality: None,
         }
     }
 }
@@ -207,6 +211,8 @@ pub struct SessionStats {
     pub input_to_wire_p99_ms: f32,
     /// Frames awaiting acknowledgement.
     pub unacked_frames: u32,
+    /// The quality a Drift Host reports it uses (EXT-4); `None` for any other server.
+    pub host_quality: Option<drift_ext::status::QualityLevel>,
 }
 
 /// Events from the session actor to the app.

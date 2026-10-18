@@ -422,6 +422,17 @@ export type HostAdvert = {
 	fingerprint: CertFingerprint,
 };
 
+/**  A Drift Host's quality step (EXT-4), as the HUD names it. */
+export type HostQuality = 
+/**  Full bit rate and frame rate. */
+"best" | 
+/**  A lower bit rate. */
+"high" | 
+/**  Lower again, half the frame rate. */
+"medium" | 
+/**  The lowest step. */
+"low";
+
 /**  Emitted to the `connections` page while discovery runs: every Drift Host currently found. */
 export type HostsDiscovered = HostAdvert[];
 
@@ -772,6 +783,8 @@ export type StatsView = {
 	latency_p95_tenths_ms: number,
 	/**  Frames awaiting acknowledgement. */
 	unacked_frames: number,
+	/**  The quality a Drift Host reports, or `None` for any other server (EXT-4). */
+	host_quality: HostQuality | null,
 };
 
 /**

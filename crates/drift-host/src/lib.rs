@@ -17,6 +17,7 @@
 //! | [`pipeline`] | the live picture: raw frames → real-time encoder → AVC420 frames with regions | HOST-pipeline |
 //! | [`capture`] | the screen (ScreenCaptureKit) as raw frames, and the pointer beside it | HOST-pipeline |
 //! | [`pointer`] | pointer changes → RDP pointer updates, shapes cached | HOST-pipeline |
+//! | [`quality`] | the quality ladder: backlog → level → bit rate and frame rate | EXT-4 |
 //! | [`link`] | link hygiene: video service class, idle heartbeat, backlog level | HOST-7 |
 //! | [`setup`] | the binary's wiring: screen or pattern, injection or logging | HOST-pipeline |
 //! | [`inject`] | client input → `drift-inject` plans → CoreGraphics events | HOST-pipeline |
@@ -52,6 +53,7 @@ mod live;
 pub mod pairing;
 pub mod pipeline;
 pub mod pointer;
+pub mod quality;
 pub mod server;
 pub mod setup;
 pub mod vdisplay_plan;

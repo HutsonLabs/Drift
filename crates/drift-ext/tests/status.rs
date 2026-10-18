@@ -4,7 +4,6 @@
 use std::net::IpAddr;
 
 use drift_ext::Negotiated;
-use drift_ext::channel::Responder;
 use drift_ext::status::{
     Backlog, HostStatus, QualityLevel, QualityPreference, StatusClient, away_from, types,
 };
@@ -31,8 +30,8 @@ fn malformed_status_messages_are_errors() {
     for (kind, payload) in [
         (types::HOST_STATUS, vec![0; 3]),
         (types::HOST_STATUS, vec![9, 0, 0, 0, 0, 0, 30]), // unknown backlog
-        (types::QUALITY_PREFERENCE, vec![7, 0]),         // unknown level
-        (types::QUALITY_PREFERENCE, vec![0, 2]),         // away is a bool
+        (types::QUALITY_PREFERENCE, vec![7, 0]),          // unknown level
+        (types::QUALITY_PREFERENCE, vec![0, 2]),          // away is a bool
     ] {
         let m = Message::Unknown { kind, payload };
         assert!(
@@ -58,15 +57,22 @@ fn levels_are_ordered_best_first() {
 #[test]
 fn a_host_away_from_the_local_network_gets_the_away_default() {
     let ip = |s: &str| s.parse::<IpAddr>().unwrap();
-    for local in ["192.168.1.20", "10.1.2.40", "172.20.0.5", "127.0.0.1", "169.254.3.4", "fe80::1", "fd00::5", "::1"]
+    for local in
+        ["192.168.1.20", "10.1.2.40", "172.20.0.5", "127.0.0.1", "169.254.3.4", "fe80::1", "fd00::5", "::1"]
     {
         assert!(!away_from(ip(local)), "{local} is on the local network");
     }
     for away in ["8.8.8.8", "100.101.102.103", "2001:db8::1", "17.253.144.10"] {
         assert!(away_from(ip(away)), "{away} is away (the internet, or a VPN's 100.64/10 range)");
     }
-    assert_eq!(QualityPreference::default_for(false), QualityPreference { max: QualityLevel::Best, away: false });
-    assert_eq!(QualityPreference::default_for(true), QualityPreference { max: QualityLevel::Medium, away: true });
+    assert_eq!(
+        QualityPreference::default_for(false),
+        QualityPreference { max: QualityLevel::Best, away: false }
+    );
+    assert_eq!(
+        QualityPreference::default_for(true),
+        QualityPreference { max: QualityLevel::Medium, away: true }
+    );
 }
 
 #[test]
@@ -85,4 +91,17 @@ fn the_client_sends_its_preference_once_status_was_agreed_and_keeps_the_hosts_st
     assert_eq!(client.host_status(), Some(status()));
     let other = Message::Unknown { kind: MessageType(0x0101), payload: vec![] };
     assert_eq!(responder.on_message(&other), None, "not ours");
+}
+
+#[test]
+fn profile_host_names_and_addresses() {
+    use drift_ext::status::away_from_host;
+    for local in
+        ["10.1.2.40", "studio.local", "studio", "nas.lan", "box.home.arpa", "[fe80::1]", "Studio.Local."]
+    {
+        assert!(!away_from_host(local), "{local}");
+    }
+    for away in ["mac.example.com", "8.8.8.8", "100.90.1.2", "[2001:db8::1]"] {
+        assert!(away_from_host(away), "{away}");
+    }
 }

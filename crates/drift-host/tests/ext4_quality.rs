@@ -5,16 +5,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use drift_core::{
-    ConnectMode, ConnectionProfile, InputEvent, MomentumPhase, ScrollPhase, SessionState, Size,
-    SwipeDirection, SystemClock,
-};
+use drift_core::{ConnectMode, ConnectionProfile, SessionState, Size, SystemClock};
 use drift_ext::status::{QualityLevel, QualityPreference};
 use drift_host::frames::TestPattern;
 use drift_host::identity::HostIdentity;
 use drift_host::input::RecordingInput;
 use drift_host::server::{Host, HostOptions};
-use drift_rdp::{SessionCommand, SessionEvent, SessionOptions, SessionSecrets};
+use drift_rdp::{SessionEvent, SessionOptions, SessionSecrets};
 use drift_testkit::{PresentMode, RecordingFrameSink};
 
 const USER: &str = "drift-host-test";
@@ -96,8 +93,10 @@ async fn an_away_client_caps_the_hosts_quality_and_sees_its_status() {
         },
     );
     wait_state(&mut events, "connected", |s| matches!(s, SessionState::Connected { .. })).await;
-    wait_until("the cap at the host", Duration::from_secs(10), || host.stats().quality_max == QualityLevel::Medium)
-        .await;
+    wait_until("the cap at the host", Duration::from_secs(10), || {
+        host.stats().quality_max == QualityLevel::Medium
+    })
+    .await;
     assert_eq!(host.stats().quality, QualityLevel::Medium, "{:?}", host.stats());
     // The host answers with its status; the client's statistics carry it.
     let deadline = tokio::time::Instant::now() + Duration::from_secs(10);

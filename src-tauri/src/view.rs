@@ -80,6 +80,34 @@ pub struct StatsView {
     pub latency_p95_tenths_ms: u32,
     /// Frames awaiting acknowledgement.
     pub unacked_frames: u32,
+    /// The quality a Drift Host reports, or `None` for any other server (EXT-4).
+    pub host_quality: Option<HostQuality>,
+}
+
+/// A Drift Host's quality step (EXT-4), as the HUD names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "kebab-case")]
+pub enum HostQuality {
+    /// Full bit rate and frame rate.
+    Best,
+    /// A lower bit rate.
+    High,
+    /// Lower again, half the frame rate.
+    Medium,
+    /// The lowest step.
+    Low,
+}
+
+impl From<drift_ext::status::QualityLevel> for HostQuality {
+    fn from(level: drift_ext::status::QualityLevel) -> Self {
+        use drift_ext::status::QualityLevel as L;
+        match level {
+            L::Best => Self::Best,
+            L::High => Self::High,
+            L::Medium => Self::Medium,
+            L::Low => Self::Low,
+        }
+    }
 }
 
 /// One decimal as a whole number of tenths; negative or non-finite input becomes `0`.
@@ -105,6 +133,7 @@ impl StatsView {
             mbit_tenths: tenths(mbit),
             latency_p95_tenths_ms: tenths(stats.frame_latency_p95_ms),
             unacked_frames: stats.unacked_frames,
+            host_quality: stats.host_quality.map(HostQuality::from),
         }
     }
 }

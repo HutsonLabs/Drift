@@ -37,6 +37,12 @@ pub(crate) trait GfxTarget: Send + Sync {
     fn report_backlog(&self, level: Backlog);
     /// The link has been idle: send something tiny and harmless. Returns whether it did.
     fn heartbeat(&self) -> bool;
+    /// EXT-4: folds in the backlog level and returns a quality level the source must switch to,
+    /// if it changed (from the backlog or from the client's cap).
+    fn quality(&self, backlog: Backlog) -> Option<crate::quality::QualityLevel> {
+        let _ = backlog;
+        None
+    }
 }
 
 /// A running pump; dropping it stops the thread and waits for it.
@@ -71,6 +77,10 @@ pub(crate) fn start(mut source: Box<dyn LiveSource>, target: Arc<dyn GfxTarget>)
             let before = backlog.level();
             if backlog.update(target.sample()) != before {
                 target.report_backlog(backlog.level());
+            }
+            if let Some(level) = target.quality(backlog.level()) {
+                tracing::info!(?level, "quality");
+                source.set_quality(level);
             }
             for event in source.pointer() {
                 if let Some(update) = pointer_update(&event, &mut pointers) {
@@ -173,5 +183,82 @@ mod tests {
         let beats = *fake.heartbeats.lock().unwrap();
         assert!((2..=7).contains(&beats), "about one per 100 ms of idle link, got {beats}");
         assert_eq!(fake.levels.lock().unwrap().as_slice(), &[Backlog::Backlogged]);
+    }
+
+    /// EXT-4: the pump asks the target for a quality level on every turn and switches the
+    /// source when it changes; with the real policy a backlogged link steps down at once.
+    #[test]
+    fn a_backlogged_link_lowers_the_sources_quality() {
+        use crate::quality::{QualityLevel, QualityPolicy};
+
+        struct Policy {
+            fake: Fake,
+            policy: Mutex<QualityPolicy>,
+            applied: Mutex<Option<QualityLevel>>,
+        }
+        impl GfxTarget for Policy {
+            fn backpressure(&self) -> bool {
+                false
+            }
+            fn send(&self, f: &LiveFrame, t: u32) -> Option<bool> {
+                self.fake.send(f, t)
+            }
+            fn pointer(&self, _: DisplayUpdate) {}
+            fn take_keyframe_request(&self) -> bool {
+                false
+            }
+            fn sample(&self) -> BacklogSample {
+                self.fake.sample()
+            }
+            fn report_backlog(&self, level: Backlog) {
+                self.fake.report_backlog(level);
+            }
+            fn heartbeat(&self) -> bool {
+                false
+            }
+            fn quality(&self, backlog: Backlog) -> Option<QualityLevel> {
+                let level = {
+                    let mut p = self.policy.lock().unwrap();
+                    p.update(backlog, std::time::Instant::now());
+                    p.level()
+                };
+                let mut applied = self.applied.lock().unwrap();
+                (*applied != Some(level)).then(|| {
+                    *applied = Some(level);
+                    level
+                })
+            }
+        }
+
+        struct Recording(Arc<Mutex<Vec<QualityLevel>>>);
+        impl LiveSource for Recording {
+            fn size(&self) -> Size<u32> {
+                Size::new(64, 64)
+            }
+            fn request_keyframe(&mut self) {}
+            fn next(&mut self, timeout: Duration, _: bool) -> Result<Vec<LiveFrame>, FrameError> {
+                std::thread::sleep(timeout);
+                Ok(Vec::new())
+            }
+            fn set_quality(&mut self, level: QualityLevel) {
+                self.0.lock().unwrap().push(level);
+            }
+        }
+
+        let target = Arc::new(Policy {
+            fake: Fake::default(),
+            policy: Mutex::new(QualityPolicy::new(QualityLevel::Best)),
+            applied: Mutex::new(None),
+        });
+        *target.fake.sample.lock().unwrap() = BacklogSample { frames_in_flight: 9, unsent_bytes: 0 };
+        let levels: Arc<Mutex<Vec<QualityLevel>>> = Arc::default();
+        let pump = start(Box::new(Recording(Arc::clone(&levels))), Arc::clone(&target) as Arc<dyn GfxTarget>)
+            .unwrap();
+        std::thread::sleep(Duration::from_millis(400));
+        drop(pump);
+        let levels = levels.lock().unwrap();
+        assert_eq!(levels.first(), Some(&QualityLevel::Best), "the starting level is applied: {levels:?}");
+        assert_eq!(levels.get(1), Some(&QualityLevel::High), "one step down once backlogged: {levels:?}");
+        assert_eq!(levels.len(), 2, "and no second step within the hold: {levels:?}");
     }
 }

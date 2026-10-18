@@ -116,8 +116,9 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   `EXT-2-scroll-gestures`; the live Mac behaviour is a manual step in `docs/acceptance.md`.*
 - [ ] **EXT-3 Menu mirroring.** Host reads the frontmost app's menu bar through Accessibility;
   iPad shows it in the iPadOS 26 menu bar and chooses items remotely.
-- [ ] **EXT-4 Quality hints.** Host reports backlog and suggests a quality; a separate default
-  quality for devices away from the local network.
+- [✓] **EXT-4 Quality hints.** Host reports backlog and suggests a quality; a separate default
+  quality for devices away from the local network. *ADR `EXT-4-quality-hints`; a real slowed
+  link is a manual step in `docs/acceptance.md`.*
 - [ ] **EXT-5 HEVC and HDR.** After HOST-4 measures AVC444: a Drift extension codec (HEVC Main 10,
   4:4:4 where VideoToolbox allows it, HDR metadata) negotiated over the channel, encoded by
   VideoToolbox on the host and decoded on the client, with AVC444 as the fallback (ADR decision 2).

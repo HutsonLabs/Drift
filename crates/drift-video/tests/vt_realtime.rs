@@ -120,3 +120,30 @@ fn avc444_streams_decode_and_combine_to_the_source() {
     }
     assert!(checked >= 10, "most frames come out before the flush: {checked}");
 }
+
+/// EXT-4: a quality step lowers the bit rate of the running session, which keeps encoding.
+#[test]
+fn the_bit_rate_changes_on_a_running_session() {
+    let size = Size::new(640, 360);
+    let mut enc = VtEncoder::new(EncoderConfig::realtime(size, 60)).unwrap();
+    let t0 = Instant::now();
+    let mut frames = Vec::new();
+    for n in 0..20u32 {
+        if n == 10 {
+            enc.set_average_bitrate(1_500_000).unwrap();
+        }
+        let buf = PixelBuffer::new_bgra(size).unwrap();
+        let px = bgra_frame(size, n);
+        buf.fill_bgra(|x, y| {
+            let i = ((y * size.width + x) * 4) as usize;
+            [px[i], px[i + 1], px[i + 2], px[i + 3]]
+        })
+        .unwrap();
+        frames.extend(enc.encode(&buf, t0 + Duration::from_millis(u64::from(n) * 16)).unwrap());
+    }
+    frames.extend(enc.flush().unwrap());
+    assert_eq!(frames.len(), 20);
+    assert_eq!(enc.config().average_bitrate, 1_500_000);
+    let mut avc444 = Avc444Encoder::new(Size::new(640, 368), 60).unwrap();
+    avc444.set_average_bitrate(1_500_000).unwrap();
+}

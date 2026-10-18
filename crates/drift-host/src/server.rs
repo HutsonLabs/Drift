@@ -22,6 +22,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use drift_core::Size;
 use drift_ext::channel::{DriftMacServer, Link};
 use drift_ext::gestures::GestureResponder;
+use drift_ext::status::{HostStatus, StatusHost};
 use drift_ext::wire::Capabilities;
 use drift_transport::quic::{QuicError, QuicHost};
 use drift_transport::stream::TransportStream;
@@ -136,6 +137,10 @@ pub struct HostStats {
     pub quic_sessions: u32,
     /// Sessions served over TCP.
     pub tcp_sessions: u32,
+    /// The quality level in use (EXT-4).
+    pub quality: crate::quality::QualityLevel,
+    /// The client's cap on it (EXT-4).
+    pub quality_max: crate::quality::QualityLevel,
 }
 
 type SharedStats = Arc<Mutex<HostStats>>;
@@ -245,6 +250,9 @@ impl Host {
                 keyframe_wanted: AtomicBool::new(false),
                 probe: Mutex::new(None),
                 last_pointer: Mutex::new(None),
+                quality: Mutex::new(crate::quality::QualityPolicy::new(crate::quality::QualityLevel::Best)),
+                applied_quality: Mutex::new(None),
+                drift_mac: Arc::clone(&thread_mac),
             });
             let input: SharedSink = Arc::new(Mutex::new(input));
             // `RdpServer` holds non-`Send` parts, so it is built on this thread.
@@ -268,6 +276,7 @@ impl Host {
                 .with_sound_factory(sound.map(|s| Box::new(s) as Box<dyn ironrdp_server::SoundServerFactory>))
                 .build();
             server.add_dvc_factory(Box::new(DriftMacFactory {
+                gfx: Arc::clone(&gfx),
                 link: thread_mac,
                 pairing: pairing.clone(),
                 host_fingerprint: *identity.fingerprint().as_bytes(),
@@ -665,9 +674,49 @@ struct GfxShared {
     probe: Mutex<Option<crate::link::SocketProbe>>,
     /// The last pointer position or hide sent, repeated as the idle heartbeat (HOST-7).
     last_pointer: Mutex<Option<DisplayUpdate>>,
+    /// The current connection's quality ladder (EXT-4).
+    quality: Mutex<crate::quality::QualityPolicy>,
+    /// The level the live source was last switched to.
+    applied_quality: Mutex<Option<crate::quality::QualityLevel>>,
+    /// The latest `Drift::Mac::v1` link, to send the host's status on (EXT-4).
+    drift_mac: Arc<Mutex<Option<Link>>>,
 }
 
 impl GfxShared {
+    /// The host's status at `level` (EXT-4): the backlog, the level, and what it means for the
+    /// encoder at the current size.
+    fn status(&self, level: crate::quality::QualityLevel) -> HostStatus {
+        let size = *lock(&self.size);
+        let q = crate::quality::settings_for(level, drift_video::encode::realtime_bitrate(size, 60), 60);
+        let backlog = match lock(&self.stats).backlog {
+            crate::link::Backlog::Clear => drift_ext::status::Backlog::Clear,
+            crate::link::Backlog::Building => drift_ext::status::Backlog::Building,
+            crate::link::Backlog::Backlogged => drift_ext::status::Backlog::Backlogged,
+        };
+        HostStatus {
+            backlog,
+            quality: level,
+            bitrate_kbps: q.bitrate / 1000,
+            fps: u8::try_from(q.fps).unwrap_or(u8::MAX),
+        }
+    }
+
+    /// Sends `status` to the client on `Drift::Mac::v1`, when it agreed on host status.
+    fn send_status(&self, status: HostStatus) {
+        let Some(link) = lock(&self.drift_mac).clone() else { return };
+        let agreed = link.negotiated().is_some_and(|n| n.capabilities.contains(Capabilities::STATUS));
+        let (Some(channel), true) = (link.channel_id(), agreed) else { return };
+        let frame = match drift_ext::wire::encode(&status.to_message()) {
+            Ok(bytes) => drift_ext::channel::RawFrame(bytes),
+            Err(e) => {
+                tracing::warn!(error = %e, "could not encode the host status");
+                return;
+            }
+        };
+        let messages: Vec<ironrdp_dvc::DvcMessage> = vec![Box::new(frame)];
+        self.forward(encode_dvc_messages(channel, messages, ChannelFlags::empty()));
+    }
+
     /// Makes this connection's live picture; its size, or `None` without one.
     fn open_live(&self) -> Option<Size<u32>> {
         drop(lock(&self.pump).take());
@@ -913,6 +962,8 @@ struct DriftMacFactory {
     current: Arc<Mutex<ConnectionAuth>>,
     /// Where precise scrolls and gestures go (EXT-2), like the rest of the input.
     input: SharedSink,
+    /// The quality ladder the client's preference caps (EXT-4).
+    gfx: Arc<GfxShared>,
 }
 
 impl DvcServerFactory for DriftMacFactory {
@@ -929,15 +980,37 @@ impl DvcServerFactory for DriftMacFactory {
                 }
             }))
         };
-        let input_caps = Capabilities::SCROLL | Capabilities::GESTURES;
+        // EXT-4: a new connection starts at the best quality; its preference may cap it, and the
+        // answer is the host's status.
+        *lock(&self.gfx.quality) = crate::quality::QualityPolicy::new(crate::quality::QualityLevel::Best);
+        *lock(&self.gfx.applied_quality) = None;
+        let status = {
+            let gfx = Arc::clone(&self.gfx);
+            Box::new(StatusHost::new(move |preference| {
+                let level = {
+                    let mut policy = lock(&gfx.quality);
+                    policy.set_max(preference.max);
+                    policy.level()
+                };
+                {
+                    let mut stats = lock(&gfx.stats);
+                    stats.quality_max = preference.max;
+                    stats.quality = level;
+                }
+                tracing::info!(max = ?preference.max, away = preference.away, ?level, "quality preference");
+                Some(gfx.status(level))
+            }))
+        };
+        let input_caps = Capabilities::SCROLL | Capabilities::GESTURES | Capabilities::STATUS;
         let channel = match &self.pairing {
             Some(pairing) => {
                 let auth = lock(&self.current).clone();
                 DriftMacServer::new(link, Capabilities::PAIRING | input_caps)
                     .with_responder(pairing.responder(self.host_fingerprint, auth))
                     .with_responder(gestures)
+                    .with_responder(status)
             }
-            None => DriftMacServer::new(link, input_caps).with_responder(gestures),
+            None => DriftMacServer::new(link, input_caps).with_responder(gestures).with_responder(status),
         };
         dvc.with_dynamic_channel(channel)
     }
@@ -1039,5 +1112,22 @@ impl GfxTarget for GfxShared {
 
     fn take_keyframe_request(&self) -> bool {
         self.keyframe_wanted.swap(false, Ordering::Relaxed)
+    }
+
+    fn quality(&self, backlog: crate::link::Backlog) -> Option<crate::quality::QualityLevel> {
+        let (changed, level) = {
+            let mut policy = lock(&self.quality);
+            let changed = policy.update(backlog, std::time::Instant::now());
+            (changed, policy.level())
+        };
+        if changed.is_some() {
+            lock(&self.stats).quality = level;
+            self.send_status(self.status(level));
+        }
+        let mut applied = lock(&self.applied_quality);
+        (*applied != Some(level)).then(|| {
+            *applied = Some(level);
+            level
+        })
     }
 }
