@@ -50,7 +50,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 
 ## HOST — Drift Host (Mac)
 
-- [ ] **HOST-1 Server spike.** `ironrdp-server` with `egfx` streams a static AVC420 frame to
+- [✓] **HOST-1 Server spike.** `ironrdp-server` with `egfx` streams a static AVC420 frame to
   Drift's own client on loopback. Record what the server lacks for AVC444, DISP and CLIPRDR
   (ADR open question 4).
 - [ ] **HOST-12 UDP transport.** Runs straight after HOST-1 (ADR decision 6). Measure

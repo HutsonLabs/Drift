@@ -1723,6 +1723,7 @@ dependencies = [
 name = "drift-testkit"
 version = "0.2.0"
 dependencies = [
+ "async-trait",
  "drift-core",
  "drift-ext",
  "drift-gfx",
@@ -3121,6 +3122,7 @@ dependencies = [
  "ironrdp-displaycontrol",
  "ironrdp-dvc",
  "ironrdp-echo",
+ "ironrdp-egfx",
  "ironrdp-error",
  "ironrdp-graphics",
  "ironrdp-pdu",
