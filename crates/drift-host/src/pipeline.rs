@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use drift_capture::rect::Damage;
 use drift_core::{Nv12Planes, Size};
 use drift_video::avc444::Avc444Encoder;
-use drift_video::encode::{EncoderConfig, PixelBuffer, VtEncoder};
+use drift_video::encode::{EncoderConfig, PixelBuffer, VtEncoder, realtime_bitrate};
 use ironrdp_egfx::pdu::Avc420Region;
 
 use crate::frames::FrameError;
@@ -68,6 +68,50 @@ pub fn decide(backpressure: bool, has_damage: bool, keyframe_due: bool) -> Step 
     } else {
         Step::Wait
     }
+}
+
+/// Keeps a frame-rate cap (EXT-4's lower quality levels): a frame is taken only once the
+/// interval since the last one has passed; until then the capture mailbox merges what changed.
+#[derive(Debug, Clone, Copy)]
+pub struct Pacer {
+    interval: Duration,
+    last: Option<Instant>,
+}
+
+impl Pacer {
+    /// No cap beyond `fps`.
+    pub fn new(fps: u32) -> Self {
+        Self { interval: Self::interval_for(fps), last: None }
+    }
+
+    fn interval_for(fps: u32) -> Duration {
+        Duration::from_secs(1) / fps.max(1)
+    }
+
+    /// Caps the rate at `fps`.
+    pub fn set_fps(&mut self, fps: u32) {
+        self.interval = Self::interval_for(fps);
+    }
+
+    /// The wait before the next frame may be taken at `now` (zero when it may).
+    pub fn wait(&self, now: Instant) -> Duration {
+        self.last.map_or(Duration::ZERO, |t| (t + self.interval).saturating_duration_since(now))
+    }
+
+    /// A frame was taken at `now`.
+    pub fn taken(&mut self, now: Instant) {
+        self.last = Some(now);
+    }
+}
+
+/// Waits out `pacer` within `timeout`; `true` when a frame may be taken now.
+fn paced(pacer: &Pacer, timeout: Duration) -> bool {
+    let wait = pacer.wait(Instant::now());
+    if wait.is_zero() {
+        return true;
+    }
+    std::thread::sleep(wait.min(timeout));
+    false
 }
 
 /// What a live source should capture and how to encode it (the glue between HOST-10's virtual
@@ -132,12 +176,18 @@ pub trait LiveSource: Send {
     fn avc444(&self) -> bool {
         false
     }
+    /// Applies a quality level (EXT-4): bit rate and frame-rate cap.
+    fn set_quality(&mut self, level: crate::quality::QualityLevel) {
+        let _ = level;
+    }
 }
 
 /// [`RawFrames`] through HOST-4's real-time encoder.
 pub struct LiveEncoder<R> {
     raw: R,
     encoder: VtEncoder,
+    fps: u32,
+    pacer: Pacer,
     /// Regions of pictures submitted but not yet out of the encoder, in order (no reordering).
     pending: VecDeque<Vec<Avc420Region>>,
     keyframe_due: bool,
@@ -156,7 +206,15 @@ impl<R: RawFrames> LiveEncoder<R> {
     pub fn new(raw: R, fps: u32) -> Result<Self, FrameError> {
         let encoder = VtEncoder::new(EncoderConfig::realtime(raw.size(), fps))
             .map_err(|e| FrameError(e.to_string()))?;
-        Ok(Self { raw, encoder, pending: VecDeque::new(), keyframe_due: true, last: None })
+        Ok(Self {
+            raw,
+            encoder,
+            fps,
+            pacer: Pacer::new(fps),
+            pending: VecDeque::new(),
+            keyframe_due: true,
+            last: None,
+        })
     }
 
     fn encode(
@@ -199,8 +257,12 @@ impl<R: RawFrames> LiveSource for LiveEncoder<R> {
             std::thread::sleep(timeout.min(Duration::from_millis(4)));
             return Ok(Vec::new());
         }
+        if !self.keyframe_due && !paced(&self.pacer, timeout) {
+            return Ok(Vec::new());
+        }
         match self.raw.next(timeout) {
             Some(RawFrame { buffer, damage }) => {
+                self.pacer.taken(Instant::now());
                 let step = decide(false, damage != Damage::None, self.keyframe_due);
                 let out = match step {
                     Step::Encode { keyframe } => self.encode(&buffer, &damage, keyframe)?,
@@ -219,6 +281,14 @@ impl<R: RawFrames> LiveSource for LiveEncoder<R> {
     fn pointer(&mut self) -> Vec<drift_capture::cursor::CursorEvent> {
         self.raw.pointer()
     }
+
+    fn set_quality(&mut self, level: crate::quality::QualityLevel) {
+        let q = crate::quality::settings_for(level, realtime_bitrate(self.raw.size(), self.fps), self.fps);
+        if let Err(e) = self.encoder.set_average_bitrate(q.bitrate) {
+            tracing::warn!(error = %e, "could not change the bit rate");
+        }
+        self.pacer.set_fps(q.fps);
+    }
 }
 
 /// BGRA [`RawFrames`] through HOST-4's two-view AVC444 encoder (ADR `AVC444-client`): full
@@ -227,6 +297,8 @@ impl<R: RawFrames> LiveSource for LiveEncoder<R> {
 pub struct LiveAvc444Encoder<R> {
     raw: R,
     encoder: Avc444Encoder,
+    fps: u32,
+    pacer: Pacer,
     pending: VecDeque<Vec<Avc420Region>>,
     keyframe_due: bool,
     last: Option<PixelBuffer>,
@@ -236,7 +308,15 @@ impl<R: RawFrames> LiveAvc444Encoder<R> {
     /// Two real-time encoders for `raw`'s size at `fps`; `raw` must deliver BGRA frames.
     pub fn new(raw: R, fps: u32) -> Result<Self, FrameError> {
         let encoder = Avc444Encoder::new(raw.size(), fps).map_err(|e| FrameError(e.to_string()))?;
-        Ok(Self { raw, encoder, pending: VecDeque::new(), keyframe_due: true, last: None })
+        Ok(Self {
+            raw,
+            encoder,
+            fps,
+            pacer: Pacer::new(fps),
+            pending: VecDeque::new(),
+            keyframe_due: true,
+            last: None,
+        })
     }
 
     fn encode(
@@ -286,8 +366,12 @@ impl<R: RawFrames> LiveSource for LiveAvc444Encoder<R> {
             std::thread::sleep(timeout.min(Duration::from_millis(4)));
             return Ok(Vec::new());
         }
+        if !self.keyframe_due && !paced(&self.pacer, timeout) {
+            return Ok(Vec::new());
+        }
         match self.raw.next(timeout) {
             Some(RawFrame { buffer, damage }) => {
+                self.pacer.taken(Instant::now());
                 let out = match decide(false, damage != Damage::None, self.keyframe_due) {
                     Step::Encode { keyframe } => self.encode(&buffer, &damage, keyframe)?,
                     Step::Wait => Vec::new(),
@@ -308,6 +392,14 @@ impl<R: RawFrames> LiveSource for LiveAvc444Encoder<R> {
 
     fn avc444(&self) -> bool {
         true
+    }
+
+    fn set_quality(&mut self, level: crate::quality::QualityLevel) {
+        let q = crate::quality::settings_for(level, realtime_bitrate(self.raw.size(), self.fps), self.fps);
+        if let Err(e) = self.encoder.set_average_bitrate(q.bitrate) {
+            tracing::warn!(error = %e, "could not change the bit rate");
+        }
+        self.pacer.set_fps(q.fps);
     }
 }
 

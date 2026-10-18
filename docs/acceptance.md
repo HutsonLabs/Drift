@@ -652,3 +652,13 @@ Needs Drift Host on a Mac with Accessibility granted, and Drift for Mac or iPad 
       gestures in System Settings › Trackpad first, or it keeps them).
 - [ ] **Pinch:** pinching out in Safari zooms in one step per quarter of a spread.
 - [ ] **GNOME:** the same Mac client against the GNOME host scrolls exactly as before.
+
+### EXT-4 — Quality hints (ADR `EXT-4-quality-hints`)
+
+- [ ] **Slow link:** with Drift Host streaming a busy screen (a video), throttle the link to
+      5 Mbit/s (Network Link Conditioner on the client Mac). Within a few seconds the HUD shows
+      the quality dropping (`high`, then `medium`) and the picture keeps moving instead of
+      stalling; remove the throttle and it climbs back one step every ten seconds or so.
+- [ ] **Away:** connect to the host by a public name or through Tailscale: the HUD shows
+      `medium quality` from the start; on the same Wi-Fi by its `.local` name it shows `best`.
+

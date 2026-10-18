@@ -368,6 +368,12 @@ impl Avc444Encoder {
         })
     }
 
+    /// Changes both views' average bit rate (EXT-4).
+    pub fn set_average_bitrate(&mut self, bitrate: u32) -> Result<(), EncodeError> {
+        self.main.set_average_bitrate(bitrate)?;
+        self.aux.set_average_bitrate(bitrate)
+    }
+
     /// Asks both views for a keyframe on the next frame.
     pub fn request_keyframe(&mut self) {
         self.main.request_keyframe();

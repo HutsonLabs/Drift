@@ -92,6 +92,9 @@ pub(crate) fn spawn(
     let seed = options.reconnect_seed.unwrap_or_else(random_seed);
     let policy = ReconnectPolicy::new(options.reconnect, seed);
     let resize = ResizeDriver::new(profile.mode, profile.display);
+    let status = drift_ext::status::StatusClient::new(options.quality.unwrap_or_else(|| {
+        drift_ext::status::QualityPreference::default_for(drift_ext::status::away_from_host(&profile.host))
+    }));
     let actor = Actor {
         graphics: Graphics::new(frame_sink, Arc::clone(&clock)),
         clock,
@@ -111,6 +114,7 @@ pub(crate) fn spawn(
         scale: 100,
         profile,
         secrets,
+        status,
         options,
     };
     tokio::spawn(actor.run());
@@ -246,6 +250,8 @@ struct Actor {
     scale: u32,
     /// The host's menu bar as mirrored (EXT-3); reset with every leg.
     menus: drift_ext::menus::MenuMirror,
+    /// The quality preference sent to a Drift Host and its status (EXT-4); kept across legs.
+    status: drift_ext::status::StatusClient,
 }
 
 impl Actor {
@@ -515,11 +521,12 @@ impl Actor {
         self.graphics.channels_for_leg(
             display_control,
             Some(cliprdr),
-            self.options.drift_mac.as_ref().map(|link| graphics::DriftMacOffer {
-                link,
+            graphics::DriftMacLeg {
+                link: self.options.drift_mac.as_ref(),
                 pairing: self.options.pairing.as_ref(),
+                status: &self.status,
                 menus: self.options.menus,
-            }),
+            },
             self.options.gfx_caps,
             sound,
         )
@@ -736,7 +743,8 @@ impl Actor {
         }
         leg.stats.frames(self.graphics.take_presented_frames());
         leg.stats.frame_latencies(self.graphics.take_frame_latencies());
-        if let Some(stats) = leg.stats.sample(now, Graphics::unacked_frames(&leg.stage)) {
+        if let Some(mut stats) = leg.stats.sample(now, Graphics::unacked_frames(&leg.stage)) {
+            stats.host_quality = self.status.host_status().map(|s| s.quality);
             self.io.emit(SessionEvent::Stats(stats));
         }
         None

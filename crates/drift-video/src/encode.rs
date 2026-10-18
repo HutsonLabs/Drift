@@ -373,6 +373,23 @@ impl VtEncoder {
         self.force_keyframe = true;
     }
 
+    /// Changes the average bit rate, on the running session and any later one (EXT-4's quality
+    /// steps).
+    pub fn set_average_bitrate(&mut self, bitrate: u32) -> Result<(), EncodeError> {
+        self.config.average_bitrate = bitrate;
+        let Some(session) = &self.session else { return Ok(()) };
+        let value = CFNumber::new_i32(i32::try_from(bitrate).unwrap_or(i32::MAX));
+        // SAFETY: a valid session, a constant key and a CFNumber value.
+        let status = unsafe {
+            VTSessionSetProperty(
+                &session.session,
+                kVTCompressionPropertyKey_AverageBitRate,
+                Some(value.as_ref()),
+            )
+        };
+        os("VTSessionSetProperty", status)
+    }
+
     /// Whether the current session runs VideoToolbox's low-latency rate control (the
     /// real-time profile asks for it; a VideoToolbox without it falls back to the normal one).
     pub fn is_low_latency(&self) -> bool {

@@ -44,6 +44,8 @@ pub enum LinkState {
 struct Inner {
     state: LinkState,
     inbox: Vec<Message>,
+    /// The DVC channel id while open, for an end that sends on its own (EXT-4's host status).
+    channel_id: Option<u32>,
 }
 
 /// The session-facing side of one end: its state and the messages waiting for their task.
@@ -68,7 +70,7 @@ impl Default for Link {
 impl Link {
     /// A link in [`LinkState::Absent`].
     pub fn new() -> Self {
-        Self(Arc::new(Mutex::new(Inner { state: LinkState::Absent, inbox: Vec::new() })))
+        Self(Arc::new(Mutex::new(Inner { state: LinkState::Absent, inbox: Vec::new(), channel_id: None })))
     }
 
     fn inner(&self) -> std::sync::MutexGuard<'_, Inner> {
@@ -88,6 +90,11 @@ impl Link {
         }
     }
 
+    /// The DVC channel id while the channel is open.
+    pub fn channel_id(&self) -> Option<u32> {
+        self.inner().channel_id
+    }
+
     /// Takes every message received since the last call.
     pub fn take_inbox(&self) -> Vec<Message> {
         std::mem::take(&mut self.inner().inbox)
@@ -98,6 +105,7 @@ impl Link {
         let mut inner = self.inner();
         inner.state = LinkState::Absent;
         inner.inbox.clear();
+        inner.channel_id = None;
     }
 
     /// Takes the queued messages `keep` selects, leaving the others for their task.
@@ -264,12 +272,10 @@ impl Endpoint {
                 }
                 Err(e) => self.fail(e.to_string()),
             },
-            other if self.link.negotiated().is_some() => {
-                match self.responders.on_message(&other) {
-                    Some(replies) => return self.frames(replies),
-                    None => self.link.push(other),
-                }
-            }
+            other if self.link.negotiated().is_some() => match self.responders.on_message(&other) {
+                Some(replies) => return self.frames(replies),
+                None => self.link.push(other),
+            },
             other => self.fail(format!("{:?} before the hello", other.kind())),
         }
         Vec::new()
@@ -307,8 +313,10 @@ impl DvcProcessor for DriftMacClient {
         CHANNEL_NAME
     }
 
-    fn start(&mut self, _channel_id: u32) -> PduResult<Vec<DvcMessage>> {
-        Ok(self.0.start())
+    fn start(&mut self, channel_id: u32) -> PduResult<Vec<DvcMessage>> {
+        let messages = self.0.start();
+        self.0.link.inner().channel_id = Some(channel_id);
+        Ok(messages)
     }
 
     fn process(&mut self, _channel_id: u32, payload: &[u8]) -> PduResult<Vec<DvcMessage>> {
@@ -348,8 +356,10 @@ impl DvcProcessor for DriftMacServer {
         CHANNEL_NAME
     }
 
-    fn start(&mut self, _channel_id: u32) -> PduResult<Vec<DvcMessage>> {
-        Ok(self.0.start())
+    fn start(&mut self, channel_id: u32) -> PduResult<Vec<DvcMessage>> {
+        let messages = self.0.start();
+        self.0.link.inner().channel_id = Some(channel_id);
+        Ok(messages)
     }
 
     fn process(&mut self, _channel_id: u32, payload: &[u8]) -> PduResult<Vec<DvcMessage>> {
