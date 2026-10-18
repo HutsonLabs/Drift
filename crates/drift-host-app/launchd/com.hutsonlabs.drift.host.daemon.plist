@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- HOST-13: the root broker. Listens for devices, hands each connection to the console's agent,
+     owns the pairing store. Registered with SMAppService.daemon(plistName:). -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.hutsonlabs.drift.host.daemon</string>
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/drift-host</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>drift-host</string>
+		<string>daemon</string>
+	</array>
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>com.hutsonlabs.drift.host</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ProcessType</key>
+	<string>Interactive</string>
+</dict>
+</plist>

@@ -28,24 +28,36 @@
 //! | [`display`] | the display manager: a virtual display for the client, or the physical one | HOST-10 |
 //! | `cg_virtual` | the private `CGVirtualDisplay` API, isolated, with a launch self-test | HOST-10 |
 //! | [`pairing`] | the pairing code, the paired devices and each connection's authentication | HOST-8 |
+//! | [`broker`] | which agent serves a connection; which agents the daemon admits (pure) | HOST-13 |
+//! | [`ipc`] | daemon ↔ agent messages (pure framing) | HOST-13 |
+//! | [`fdpass`] | sockets across a Unix socket (`SCM_RIGHTS`), the peer's uid | HOST-13 |
+//! | [`console`] | who is at the console (`SCDynamicStoreCopyConsoleUser`) | HOST-13 |
+//! | [`daemon`] | the root broker: port, routing, pairing store; never reads client bytes | HOST-13 |
+//! | [`agent`] | an agent's link to the daemon: handed connections, brokered pairing writes | HOST-13 |
 //! | [`server`] | the listener, the connection loop, EGFX and Display Control wiring | HOST-2 |
 //!
 //! Pure modules are unit tested; [`server`] is covered by a loopback test against `drift-rdp`.
 
 pub mod advert;
+pub mod agent;
 pub mod audio;
+pub mod broker;
 pub mod capture;
 #[cfg(target_os = "macos")]
 pub mod cg_virtual;
 pub mod clipboard;
 pub mod codec;
 pub mod config;
+pub mod console;
+pub mod daemon;
 pub mod display;
+pub mod fdpass;
 pub mod frames;
 pub mod gate;
 pub mod identity;
 pub mod inject;
 pub mod input;
+pub mod ipc;
 pub mod launch;
 pub mod layout;
 pub mod link;

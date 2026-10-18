@@ -27,6 +27,19 @@ fn the_bundle_holds_the_app_and_the_command_line_host() {
                 "/repo/target/release/drift-host".to_owned(),
                 "/repo/target/release/bundle/Drift Host.app/Contents/MacOS/drift-host".to_owned()
             ),
+            // HOST-13: launchd services registered through SMAppService.
+            (
+                "/repo/crates/drift-host-app/launchd/com.hutsonlabs.drift.host.daemon.plist".to_owned(),
+                "/repo/target/release/bundle/Drift Host.app/Contents/Library/LaunchDaemons/com.hutsonlabs.drift.host.daemon.plist".to_owned()
+            ),
+            (
+                "/repo/crates/drift-host-app/launchd/com.hutsonlabs.drift.host.agent.plist".to_owned(),
+                "/repo/target/release/bundle/Drift Host.app/Contents/Library/LaunchAgents/com.hutsonlabs.drift.host.agent.plist".to_owned()
+            ),
+            (
+                "/repo/crates/drift-host-app/launchd/com.hutsonlabs.drift.host.loginwindow.plist".to_owned(),
+                "/repo/target/release/bundle/Drift Host.app/Contents/Library/LaunchAgents/com.hutsonlabs.drift.host.loginwindow.plist".to_owned()
+            ),
         ]
     );
     assert_eq!(p.build_args, ["build", "--release", "-p", "drift-host-app", "-p", "drift-host", "--locked"]);

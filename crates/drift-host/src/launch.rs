@@ -10,11 +10,15 @@ use drift_core::{SecretRole, SystemClock};
 use uuid::Uuid;
 
 use crate::advert::{HostAnnouncement, local_host_name};
+use crate::agent::AgentLink;
+use crate::broker::{AgentPolicy, SessionKind};
 use crate::config::HostConfig;
+use crate::daemon::{Daemon, DaemonOptions};
 use crate::frames::TestPattern;
 use crate::identity::HostIdentity;
+use crate::pairing::DeviceSaver;
 use crate::pairing::{DeviceStore, Pairing};
-use crate::server::{Host, HostOptions};
+use crate::server::{Host, HostOptions, Incoming};
 
 /// Keychain service of the host's own items (not the client's `com.hutsonlabs.drift`).
 pub const KEYCHAIN_SERVICE: &str = "com.hutsonlabs.drift.host";
@@ -89,6 +93,93 @@ pub fn load_config(dir: &Path, listen: Option<SocketAddr>) -> Result<HostConfig,
 /// Loads `dir`'s configuration, the password, the identity and the paired devices, starts
 /// listening (beyond loopback only with pairing on, HOST-8) and advertises the host.
 pub fn start(dir: &Path, listen: Option<SocketAddr>) -> Result<Launched, String> {
+    start_with(dir, listen, Incoming::Bind, None, true)
+}
+
+/// Starts an agent (HOST-13): it registers with the daemon at `socket` and serves the
+/// connections the daemon hands it, from the shared store `dir`. It neither listens nor
+/// advertises (the daemon does both), and pairing writes go through the daemon.
+pub fn start_agent(
+    dir: &Path,
+    socket: &Path,
+    kind: SessionKind,
+) -> Result<(Launched, Arc<AgentLink>), String> {
+    let link = Arc::new(
+        AgentLink::connect(socket, kind)
+            .map_err(|e| format!("cannot register with the daemon at {}: {e}", socket.display()))?,
+    );
+    let launched = start_with(dir, None, link.incoming(), Some(link.saver()), false)?;
+    Ok((launched, link))
+}
+
+/// Starts the root broker daemon (HOST-13) on the shared store `dir`: it creates the host's
+/// identity and configuration there (readable by the `admin` group, so agents can load them),
+/// listens, hands connections to agents over `socket`, and advertises the host.
+pub fn start_daemon(
+    dir: &Path,
+    listen: Option<SocketAddr>,
+    socket: &Path,
+) -> Result<(Daemon, Option<drift_apple::bonjour::Advertisement>), String> {
+    let config = load_config(dir, listen)?;
+    let identity = HostIdentity::load_or_create(dir).map_err(|e| e.to_string())?;
+    share_store(dir);
+    let daemon = Daemon::start(DaemonOptions {
+        listen: config.effective_listen(),
+        socket: socket.to_owned(),
+        store_dir: dir.to_owned(),
+        policy: AgentPolicy::system(),
+        console: Box::new(crate::console::console_state),
+        wait_for_agent: AGENT_WAIT,
+    })
+    .map_err(|e| format!("cannot start the broker on {}: {e}", config.listen))?;
+    let host_name = local_host_name();
+    let name = if config.name.trim().is_empty() {
+        host_name.trim_end_matches(".local").to_owned()
+    } else {
+        config.name.clone()
+    };
+    let announcement = HostAnnouncement {
+        host_id: config.host_id,
+        name,
+        host: host_name,
+        port: daemon.addr().port(),
+        fingerprint: identity.fingerprint(),
+    };
+    let advert = config.pairing.then(|| announcement.advertise()).flatten();
+    Ok((daemon, advert))
+}
+
+/// How long a connection waits for the console's agent (it may be starting after a login).
+pub const AGENT_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// The `admin` group's gid on macOS.
+const ADMIN_GID: u32 = 80;
+
+/// Makes the store readable by agents in the `admin` group: the directory 0750, the private key
+/// 0640, both group `admin` (only when running as root; otherwise a no-op, e.g. in tests).
+fn share_store(dir: &Path) {
+    use std::os::unix::fs::PermissionsExt as _;
+    // SAFETY: geteuid has no preconditions.
+    if unsafe { libc::geteuid() } != 0 {
+        return;
+    }
+    for (path, mode) in [(dir.to_owned(), 0o750), (dir.join(crate::identity::KEY_FILE), 0o640)] {
+        if let Err(e) = std::os::unix::fs::chown(&path, Some(0), Some(ADMIN_GID))
+            .and_then(|()| std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)))
+        {
+            tracing::warn!(path = %path.display(), error = %e, "could not share the store with agents");
+        }
+    }
+}
+
+/// [`start`] with where connections come from, where pairing writes go and whether to advertise.
+fn start_with(
+    dir: &Path,
+    listen: Option<SocketAddr>,
+    incoming: Incoming,
+    saver: Option<DeviceSaver>,
+    advertise: bool,
+) -> Result<Launched, String> {
     let config = load_config(dir, listen)?;
     let password = keychain()
         .get(ACCOUNT_ID, SecretRole::RdpUser)
@@ -103,23 +194,30 @@ pub fn start(dir: &Path, listen: Option<SocketAddr>) -> Result<Launched, String>
         tracing::warn!(listen = %config.listen, "pairing is off: listening on loopback only");
     }
     let store = DeviceStore::load(dir).map_err(|e| e.to_string())?;
+    let store = match saver {
+        Some(saver) => store.with_saver(saver),
+        None => store,
+    };
     let pairing = config.pairing.then(|| Pairing::new(store, Arc::new(SystemClock)));
-    let host = Host::start(HostOptions {
-        listen: config.effective_listen(),
-        identity: identity.clone(),
-        username: config.username.clone(),
-        password,
-        desktop: config.desktop,
-        frames: Box::new(|| Box::new(TestPattern::new())),
-        live: live.map(|l| l.0),
-        input,
-        // HOST-11: the Mac's pasteboard over CLIPRDR, its system audio over rdpsnd.
-        clipboard: Some(Box::new(|| Box::new(drift_clipboard::pasteboard::NsPasteboard::general()))),
-        audio: Some(Box::new(|| Box::new(crate::audio::SystemAudio::default()))),
-        displays: display_manager(&config),
-        pairing: pairing.clone(),
-        menus: menus_for(&config),
-    })
+    let host = Host::start_with(
+        HostOptions {
+            listen: config.effective_listen(),
+            identity: identity.clone(),
+            username: config.username.clone(),
+            password,
+            desktop: config.desktop,
+            frames: Box::new(|| Box::new(TestPattern::new())),
+            live: live.map(|l| l.0),
+            input,
+            // HOST-11: the Mac's pasteboard over CLIPRDR, its system audio over rdpsnd.
+            clipboard: Some(Box::new(|| Box::new(drift_clipboard::pasteboard::NsPasteboard::general()))),
+            audio: Some(Box::new(|| Box::new(crate::audio::SystemAudio::default()))),
+            displays: display_manager(&config),
+            pairing: pairing.clone(),
+            menus: menus_for(&config),
+        },
+        incoming,
+    )
     .map_err(|e| format!("cannot listen on {}: {e}", config.listen))?;
     let host_name = local_host_name();
     let name = if config.name.trim().is_empty() {
@@ -135,7 +233,7 @@ pub fn start(dir: &Path, listen: Option<SocketAddr>) -> Result<Launched, String>
         fingerprint: identity.fingerprint(),
     };
     // Discovery only makes sense where devices may connect: with pairing.
-    let advert = pairing.as_ref().and_then(|_| announcement.advertise());
+    let advert = pairing.as_ref().filter(|_| advertise).and_then(|_| announcement.advertise());
     Ok(Launched { host, config, fingerprint: identity.fingerprint(), pairing, announcement, advert })
 }
 

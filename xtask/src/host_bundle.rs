@@ -30,10 +30,21 @@ pub fn plan(root: &Path, profile: &str) -> BundlePlan {
         build_args.push("--release".to_owned());
     }
     build_args.extend(["-p", "drift-host-app", "-p", "drift-host", "--locked"].map(str::to_owned));
-    let copies = vec![
+    let mut copies = vec![
         (root.join("crates/drift-host-app/Info.plist"), contents.join("Info.plist")),
         (target.join("drift-host-app"), contents.join("MacOS/drift-host-app")),
         (target.join("drift-host"), contents.join("MacOS/drift-host")),
     ];
+    // HOST-13: the launchd services the app registers (or an administrator installs).
+    for (name, folder) in [
+        ("com.hutsonlabs.drift.host.daemon.plist", "LaunchDaemons"),
+        ("com.hutsonlabs.drift.host.agent.plist", "LaunchAgents"),
+        ("com.hutsonlabs.drift.host.loginwindow.plist", "LaunchAgents"),
+    ] {
+        copies.push((
+            root.join("crates/drift-host-app/launchd").join(name),
+            contents.join("Library").join(folder).join(name),
+        ));
+    }
     BundlePlan { app, build_args, copies }
 }

@@ -102,8 +102,12 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   (ADR `HOST-11-clipboard-and-audio`); the client plays it through `AVAudioEngine`. Live system
   audio needs Screen Recording and the real pasteboard a person: manual steps in
   `docs/acceptance.md`.*
-- [ ] **HOST-13 Login window.** LaunchDaemon + per-session LaunchAgent + LoginWindow agent, so a
-  paired device reaches the Mac after a restart.
+- [~] **HOST-13 Login window.** LaunchDaemon + per-session LaunchAgent + LoginWindow agent, so a
+  paired device reaches the Mac after a restart. *Daemon (broker, root), agents, routing, IPC
+  with socket hand-off and the shared store are built and tested on loopback (ADR
+  `HOST-13-login-window`). No public API captures the login window on macOS 15+, so the
+  login-window agent shows the test pattern unless ScreenCaptureKit works there; installing the
+  services and a real restart are manual steps.*
 - [ ] **HOST-14 Extra paths.** USB cable link and peer-to-peer Wi-Fi alongside the LAN; remote
   access over the user's own VPN.
 

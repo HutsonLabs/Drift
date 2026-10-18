@@ -66,6 +66,7 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `HOST-11-clipboard-and-audio` | host runs the client's `ClipboardSync` on a clipboard thread; 16-bit stereo PCM rdpsnd from ScreenCaptureKit; `AVAudioEngine` player with a 200 ms cap; sound for every session |
 | `HOST-9-menu-bar` | Drift Host menu-bar app in Rust/AppKit (`drift-host-app`): pure menu model, permissions guidance, first-run alert, `SMAppService` login item, `cargo xtask host-bundle` |
 | `HOST-10-virtual-display` | private `CGVirtualDisplay` isolated in `cg_virtual` with a launch self-test, pure `ModePlan` (640×480…5K, HiDPI from 150 %), `DisplayManager` seam, physical fallback |
+| `HOST-13-login-window` | root daemon only brokers (accept, route, `SCM_RIGHTS` hand-off, store writes); Aqua and LoginWindow agents serve; `getpeereid` admission; shared store group `admin`; no public login-window capture |
 | `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility |
 
 ## Commands

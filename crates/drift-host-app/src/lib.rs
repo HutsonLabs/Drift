@@ -11,12 +11,14 @@
 //! | `status_item` | the `NSStatusItem` and `NSMenu` (humble object) |
 //! | `permissions` | Screen Recording / Accessibility checks and prompts, Settings links |
 //! | `login` | Start at Login through `SMAppService` |
+//! | [`services`] | the daemon and agents for reaching the Mac after a restart (HOST-13) |
 
 #[cfg(target_os = "macos")]
 pub mod login;
 pub mod model;
 #[cfg(target_os = "macos")]
 pub mod permissions;
+pub mod services;
 #[cfg(target_os = "macos")]
 pub mod status_item;
 
