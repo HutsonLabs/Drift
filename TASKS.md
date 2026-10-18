@@ -135,7 +135,11 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   record for `com.hutsonlabs.drift`, which does not exist yet. `cargo xtask review-risk` finds
   one private key (`drawsBackground`, from wry's transparent webview); the native-overlay plan is
   in ADR `STORE-2-review-risk`, and iOS drops the key (STORE-3).*
-- [ ] **STORE-3 iOS App Store packaging.** `NSLocalNetworkUsageDescription`,
-  `NSBonjourServices`, privacy manifest, TestFlight build.
+- [~] **STORE-3 iOS App Store packaging.** `NSLocalNetworkUsageDescription`,
+  `NSBonjourServices`, privacy manifest, TestFlight build. *Usage strings, privacy manifest and
+  App Store export options are in, iOS no longer carries wry's private transparency key, and the
+  900 MB `libapp.a` is no longer bundled (ADR `STORE-3-ios-app-store`). Archive and validation
+  need a development team, an iOS App Store profile and an App Store Connect record for
+  `com.hutsonlabs.drift`; TestFlight is out of scope (validate only).*
 - [ ] **STORE-4 Drift Host release.** Developer ID signing, notarization and DMG through the
   M9-5 release path; Hardened Runtime without the App Sandbox.

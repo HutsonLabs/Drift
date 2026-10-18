@@ -105,10 +105,12 @@ fn a_clean_binary_has_no_review_risks() {
 const REQUIRED_REASONS: &[(&str, &str)] = &[
     // Rust std / tokio read file metadata (`stat`, `fstat`) for files in the app container.
     ("NSPrivacyAccessedAPICategoryFileTimestamp", "C617.1"),
-    // `Instant` (mach_absolute_time / CLOCK_UPTIME_RAW) measures elapsed time only.
+    // `systemUptime` / `Instant`: elapsed time only (event timestamps, frame pacing).
     ("NSPrivacyAccessedAPICategorySystemBootTime", "35F9.1"),
-    // WebKit-hosted settings of the app's own (`NSUserDefaults` standard defaults).
+    // The app's own standard defaults (`standardUserDefaults`).
     ("NSPrivacyAccessedAPICategoryUserDefaults", "CA92.1"),
+    // `activeInputModes`: the UI adapts to the active keyboard (text input over the picture).
+    ("NSPrivacyAccessedAPICategoryActiveKeyboards", "54BD.1"),
 ];
 
 #[test]

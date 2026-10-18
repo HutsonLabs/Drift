@@ -67,6 +67,7 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `HOST-10-virtual-display` | private `CGVirtualDisplay` isolated in `cg_virtual` with a launch self-test, pure `ModePlan` (640×480…5K, HiDPI from 150 %), `DisplayManager` seam, physical fallback |
 | `STORE-1-mac-app-store` | `tauri.mas.conf.json` + `entitlements.mas.plist`, universal build, `cargo xtask mas-package`, what the account still lacks, export compliance |
 | `STORE-2-review-risk` | `drawsBackground` is wry's private transparency key (macOS and iOS); iOS uses public transparency; native overlays for the MAS build if review rejects; `cargo xtask review-risk` |
+| `STORE-3-ios-app-store` | privacy manifest from a scan of the built app, export options that never upload, `macos-private-api` via `drift-macos` only, `libapp.a` linked not bundled |
 | `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility |
 
 ## Commands
