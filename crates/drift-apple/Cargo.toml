@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 drift-core.workspace = true
+libc.workspace = true
 drift-ext.workspace = true
 tracing.workspace = true
 ironrdp-graphics.workspace = true

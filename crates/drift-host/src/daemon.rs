@@ -101,6 +101,11 @@ impl Daemon {
     pub fn start(options: DaemonOptions) -> io::Result<Self> {
         let tcp = std::net::TcpListener::bind(options.listen)?;
         tcp.set_nonblocking(true)?;
+        if !options.listen.ip().is_loopback() {
+            use std::os::fd::AsRawFd as _;
+            // HOST-14: peer-to-peer Wi-Fi too.
+            let _ = crate::link::allow_peer_to_peer(tcp.as_raw_fd());
+        }
         let addr = tcp.local_addr()?;
         // A stale socket from a previous run would make bind fail.
         let _ = std::fs::remove_file(&options.socket);
