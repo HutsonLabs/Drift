@@ -257,6 +257,13 @@ impl Host {
             Incoming::Bind => {
                 let listener = std::net::TcpListener::bind(listen)?;
                 listener.set_nonblocking(true)?;
+                // HOST-14: beyond loopback, devices may also come over peer-to-peer Wi-Fi.
+                if !listen.ip().is_loopback() {
+                    use std::os::fd::AsRawFd as _;
+                    if let Err(e) = crate::link::allow_peer_to_peer(listener.as_raw_fd()) {
+                        tracing::warn!(error = %e, "no peer-to-peer connections");
+                    }
+                }
                 let addr = listener.local_addr()?;
                 (Ok(listener), addr)
             }

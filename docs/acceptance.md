@@ -612,3 +612,14 @@ Needs the signed `Drift Host.app` (STORE-4) and an administrator. Never done on 
 - [ ] **After a restart, nobody logged in:** the iPad connects; record what the login-window agent
       shows (ScreenCaptureKit picture, or the test pattern). Typing the password from the iPad is
       only possible if a picture appears.
+
+### HOST-14 — Extra paths (ADR `HOST-14-extra-paths`)
+
+- [ ] **Peer-to-peer Wi-Fi:** Mac on one Wi-Fi network, iPad on none (Wi-Fi on, not joined).
+      Drift on the iPad lists the Mac under "Pair a Mac"; pairing and connecting work; the
+      client log shows the path `PeerToPeer { awdl0 }`.
+- [ ] **VPN:** with the iPad away (cellular) and the user's VPN (WireGuard, Tailscale or the
+      Mac's own) up, connect to the Mac's VPN address: pins match, the path is `Vpn`, and EXT-4's
+      away quality applies.
+- [ ] **No VPN, away:** connecting to the Mac's LAN address from cellular fails with the usual
+      unreachable error (there is no NAT traversal).

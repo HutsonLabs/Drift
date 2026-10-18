@@ -41,8 +41,14 @@ fn the_lan_the_vpn_and_loopback_are_told_apart() {
 fn link_local_addresses_follow_their_scope() {
     let t = table();
     // A Bonjour result over AWDL carries the awdl0 scope.
-    assert_eq!(classify(ip("fe80::99"), Some("awdl0"), &t), NetworkPath::PeerToPeer { interface: "awdl0".into() });
-    assert_eq!(classify(ip("fe80::99"), Some("llw0"), &t), NetworkPath::PeerToPeer { interface: "llw0".into() });
+    assert_eq!(
+        classify(ip("fe80::99"), Some("awdl0"), &t),
+        NetworkPath::PeerToPeer { interface: "awdl0".into() }
+    );
+    assert_eq!(
+        classify(ip("fe80::99"), Some("llw0"), &t),
+        NetworkPath::PeerToPeer { interface: "llw0".into() }
+    );
     assert_eq!(classify(ip("fe80::99"), Some("en0"), &t), NetworkPath::Lan { interface: "en0".into() });
     // Without a scope a link-local address cannot be placed.
     assert_eq!(classify(ip("fe80::99"), None, &t), NetworkPath::Remote);

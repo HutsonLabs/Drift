@@ -108,8 +108,11 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   `HOST-13-login-window`). No public API captures the login window on macOS 15+, so the
   login-window agent shows the test pattern unless ScreenCaptureKit works there; installing the
   services and a real restart are manual steps.*
-- [ ] **HOST-14 Extra paths.** USB cable link and peer-to-peer Wi-Fi alongside the LAN; remote
-  access over the user's own VPN.
+- [~] **HOST-14 Extra paths.** USB cable link and peer-to-peer Wi-Fi alongside the LAN; remote
+  access over the user's own VPN. *Peer-to-peer Wi-Fi (Bonjour with P2P, `SO_RECV_ANYIF`
+  listeners) and VPN reachability with path classification (`drift_apple::paths`, "away" for
+  EXT-4) are built (ADR `HOST-14-extra-paths`). A USB cable link has no public API on either end
+  and is not built.*
 
 ## EXT — `Drift::Mac::v1` channel
 

@@ -42,6 +42,21 @@ pub fn set_service_class(fd: RawFd, class: libc::c_int) -> io::Result<()> {
     set_int(fd, SO_NET_SERVICE_TYPE, class)
 }
 
+/// `SO_RECV_ANYIF` (`<sys/socket.h>`, private but stable): a listener also accepts
+/// connections arriving on interfaces BSD sockets skip by default, such as peer-to-peer Wi-Fi
+/// (AWDL), HOST-14.
+pub const SO_RECV_ANYIF: libc::c_int = 0x1104;
+
+/// Lets a listener accept connections over peer-to-peer Wi-Fi.
+pub fn allow_peer_to_peer(fd: RawFd) -> io::Result<()> {
+    set_int(fd, SO_RECV_ANYIF, 1)
+}
+
+/// Whether [`allow_peer_to_peer`] is on.
+pub fn peer_to_peer_allowed(fd: RawFd) -> io::Result<bool> {
+    get_int(fd, SO_RECV_ANYIF).map(|v| v != 0)
+}
+
 /// The socket's network service type.
 pub fn service_class(fd: RawFd) -> io::Result<libc::c_int> {
     get_int(fd, SO_NET_SERVICE_TYPE)
