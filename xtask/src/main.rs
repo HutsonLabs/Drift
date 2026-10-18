@@ -178,10 +178,15 @@ fn host_bundle(root: &Path, profile: &str) -> Result<()> {
 
 fn review_risk(path: &Path) -> Result<()> {
     let macos = path.join("Contents/MacOS");
-    let files: Vec<PathBuf> = if macos.is_dir() {
-        std::fs::read_dir(&macos)?.filter_map(|e| e.ok().map(|e| e.path())).collect()
-    } else {
-        vec![path.to_owned()]
+    // A Mac app keeps its executables in Contents/MacOS; an iOS app is flat, so every Mach-O
+    // file at its top level is scanned.
+    let dir = if macos.is_dir() { Some(macos) } else { path.is_dir().then(|| path.to_owned()) };
+    let files: Vec<PathBuf> = match dir {
+        Some(dir) => std::fs::read_dir(&dir)?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.is_file() && is_mach_o(p))
+            .collect(),
+        None => vec![path.to_owned()],
     };
     let mut found = 0;
     for file in files {
@@ -193,6 +198,14 @@ fn review_risk(path: &Path) -> Result<()> {
     }
     println!("{found} review risk(s)");
     Ok(())
+}
+
+/// Whether `path` starts with a Mach-O or universal ("fat") magic number.
+fn is_mach_o(path: &Path) -> bool {
+    use std::io::Read as _;
+    let mut magic = [0_u8; 4];
+    std::fs::File::open(path).and_then(|mut f| f.read_exact(&mut magic)).is_ok()
+        && matches!(u32::from_be_bytes(magic), 0xFEED_FACF | 0xCFFA_EDFE | 0xCAFE_BABE | 0xBEBA_FECA)
 }
 
 fn mas_package(root: &Path, profile: Option<&Path>) -> Result<()> {

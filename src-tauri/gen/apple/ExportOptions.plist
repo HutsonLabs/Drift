@@ -3,6 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>method</key>
-    <string>debugging</string>
+    <string>app-store-connect</string>
+    <!-- Validate only (STORE-3): export the .ipa locally, never upload from xcodebuild. -->
+    <key>destination</key>
+    <string>export</string>
+    <key>teamID</key>
+    <string>M9Z3N2R97A</string>
+    <key>signingStyle</key>
+    <string>manual</string>
 </dict>
 </plist>

@@ -122,11 +122,17 @@ fn the_ios_app_ships_a_privacy_manifest_without_tracking() {
         let reasons = entry.split("</array>").next().unwrap_or_default();
         assert!(reasons.contains(&format!("<string>{reason}</string>")), "{category} lacks reason {reason}");
     }
-    let spec = read("src-tauri/gen/apple/project.yml");
-    assert!(spec.contains("drift-app_iOS/PrivacyInfo.xcprivacy"), "project.yml must bundle the manifest");
-    assert!(
-        read("src-tauri/gen/apple/drift-app.xcodeproj/project.pbxproj").contains("PrivacyInfo.xcprivacy")
-    );
+    let pbxproj = read("src-tauri/gen/apple/drift-app.xcodeproj/project.pbxproj");
+    assert!(pbxproj.contains("PrivacyInfo.xcprivacy in Resources"), "the app must bundle the manifest");
+}
+
+#[test]
+fn the_rust_static_library_is_linked_not_bundled() {
+    // xcodegen bundled `Externals/*/libapp.a` (900 MB) as a resource whenever the project was
+    // regenerated after a build.
+    let pbxproj = read("src-tauri/gen/apple/drift-app.xcodeproj/project.pbxproj");
+    assert!(pbxproj.contains("libapp.a in Frameworks"));
+    assert!(!pbxproj.contains("libapp.a in Resources"), "libapp.a is copied into the app bundle");
 }
 
 #[test]
@@ -144,8 +150,12 @@ fn the_private_transparency_key_is_a_macos_only_feature() {
     let manifest = read("src-tauri/Cargo.toml").parse::<toml::Table>().unwrap();
     let common = manifest["dependencies"]["tauri"]["features"].as_array().unwrap();
     assert!(!common.iter().any(|f| f.as_str() == Some("macos-private-api")), "{common:?}");
-    let mac = manifest["target"]["cfg(target_os = \"macos\")"]["dependencies"]["tauri"]["features"]
-        .as_array()
-        .expect("tauri features under the macOS target table");
-    assert!(mac.iter().any(|f| f.as_str() == Some("macos-private-api")));
+    // drift-macos, a macOS-only dependency of the app, turns it on through its `tauri` feature.
+    let mac_deps = &manifest["target"]["cfg(target_os = \"macos\")"]["dependencies"];
+    assert!(
+        mac_deps["drift-macos"]["features"].as_array().unwrap().iter().any(|f| f.as_str() == Some("tauri"))
+    );
+    let platform = read("crates/drift-macos/Cargo.toml").parse::<toml::Table>().unwrap();
+    let features = platform["dependencies"]["tauri"]["features"].as_array().unwrap();
+    assert!(features.iter().any(|f| f.as_str() == Some("macos-private-api")));
 }

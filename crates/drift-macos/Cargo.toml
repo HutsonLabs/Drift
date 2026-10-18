@@ -29,7 +29,11 @@ dispatch2 = "0.3.1"
 objc2-foundation.workspace = true
 objc2-quartz-core = { workspace = true, features = ["objc2-core-foundation"] }
 objc2-core-foundation.workspace = true
-tauri = { workspace = true, optional = true }
+# `macos-private-api`: the transparent page over the live picture (ADR M7-3) needs wry's
+# private `drawsBackground` key, which only macOS needs. Enabling it here, in the macOS-only
+# platform crate, keeps it out of iOS builds (ADR STORE-2); tauri-build only checks drift-app's
+# own `tauri` entry.
+tauri = { workspace = true, optional = true, features = ["macos-private-api"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit.workspace = true
