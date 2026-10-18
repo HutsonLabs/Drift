@@ -14,6 +14,7 @@
 //! fakes in `tests/platform_services.rs`, without AppKit, Tauri or a real actor. The only
 //! untested glue left is `PlatformServices::start` itself: three constructor calls.
 
+#[cfg(target_os = "macos")]
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -22,6 +23,9 @@ use std::time::Duration;
 
 use drift_clipboard::poll::{LocalChange, PasteboardPort, PasteboardWatcher};
 use drift_core::{ClipboardPrefs, Clock, SystemClock, TriggerAction};
+#[cfg(target_os = "ios")]
+use drift_ios::ReconnectTriggers;
+#[cfg(target_os = "macos")]
 use drift_macos::ReconnectTriggers;
 use drift_rdp::SessionCommand;
 use tauri::{AppHandle, Runtime};
@@ -268,6 +272,7 @@ impl PollTimer {
 
 // ---- production wiring -------------------------------------------------------------------------
 
+#[cfg(target_os = "macos")]
 thread_local! {
     /// The main thread's pasteboard pump. `NsPasteboard` is not `Send`, and plan M5-3 requires
     /// the poll to happen on the main thread, so the pump lives here and the timer thread only
@@ -277,6 +282,7 @@ thread_local! {
 }
 
 /// Polls the general pasteboard once. Must be called on the main thread.
+#[cfg(target_os = "macos")]
 fn pump_once(sessions: &dyn SessionFanout) -> usize {
     let told = PUMP.with_borrow_mut(|pump| {
         pump.get_or_insert_with(|| ClipboardPump::new(drift_clipboard::pasteboard::NsPasteboard::general()))
@@ -291,6 +297,9 @@ fn pump_once(sessions: &dyn SessionFanout) -> usize {
 /// The app's platform services. Dropping it stops both.
 #[derive(Debug)]
 pub struct PlatformServices {
+    /// macOS only: iOS shows a paste prompt whenever an app reads the pasteboard on its own, so
+    /// the iOS client never polls (IOS-10).
+    #[cfg(target_os = "macos")]
     _clipboard: PollTimer,
     _triggers: ReconnectTriggers,
 }
@@ -311,7 +320,11 @@ impl PlatformServices {
         clock: Arc<dyn Clock>,
     ) -> Self {
         let triggers = ReconnectTriggers::start(clock, trigger_sink(sessions.clone()));
+        #[cfg(target_os = "ios")]
+        let _ = app;
+        #[cfg(target_os = "macos")]
         let app = app.clone();
+        #[cfg(target_os = "macos")]
         let clipboard = PollTimer::start(CLIPBOARD_POLL_INTERVAL, move || {
             let sessions = sessions.clone();
             // `on_main` blocks until the main thread has polled, so ticks cannot pile up.
@@ -323,9 +336,14 @@ impl PlatformServices {
         });
         tracing::debug!(
             poll_interval = ?CLIPBOARD_POLL_INTERVAL,
+            clipboard_poll = cfg!(target_os = "macos"),
             online = triggers.feed().is_online(),
             "platform services started"
         );
-        Self { _clipboard: clipboard, _triggers: triggers }
+        Self {
+            #[cfg(target_os = "macos")]
+            _clipboard: clipboard,
+            _triggers: triggers,
+        }
     }
 }

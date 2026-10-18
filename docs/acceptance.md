@@ -362,3 +362,84 @@ Install the signed `Drift.app`, then confirm on that build:
 - [ ] **Config:** the profile list is written to
       `~/Library/Containers/com.hutsonlabs.drift/Data/Library/Application Support/com.hutsonlabs.drift/`
       and survives a relaunch; nothing is written outside the container.
+
+## IOS — Drift for iPhone and iPad
+
+Build and run in a simulator (ADR `IOS-5-ios-app-shell`):
+
+```text
+cd src-tauri && cargo tauri ios build --target aarch64-sim --debug --features smoke-env
+xcrun simctl install <device> gen/apple/build/arm64-sim/Drift.app
+cargo run -p drift-testkit --example fake_host -- "$(xcrun simctl get_app_container <device> com.hutsonlabs.drift data)/Library/DriftSmoke"
+SIMCTL_CHILD_DRIFT_CONFIG_DIR=<that dir> SIMCTL_CHILD_DRIFT_AUTOCONNECT="Fake host" \
+  SIMCTL_CHILD_DRIFT_SMOKE_SECRET=<printed by fake_host> xcrun simctl launch <device> com.hutsonlabs.drift
+```
+
+Done in an iPad Pro 13-inch (M5) simulator, iOS 27, on 2026-10-18 against `fake_host`: live
+moving picture, the session survives 40 s in the background, and with
+`FAKE_HOST_CLOSE_AFTER=25` the host's close is followed by a reconnect within a second while the
+app is in the background. Still to do by hand:
+
+- [ ] **IOS-5 first light on a device:** a real iPad (signed with a development team) connects to
+      the GNOME test host in Headless mode, shows the live desktop at the iPad's native size, and
+      after 5 minutes in the background (long enough for iOS to suspend it) reconnects on return.
+      The GNOME host (10.1.2.40) was down when IOS-5 landed.
+- [ ] **Local Network prompt on iOS:** the first LAN connection shows iOS's prompt with Drift's
+      usage text; denying it shows the errno 65 screen, whose button opens Drift's page in
+      Settings.
+- [ ] **ProMotion:** on a 120 Hz iPad Pro or iPhone Pro, Quartz Debug-style frame-rate overlay
+      (Xcode ▸ Debug ▸ View Debugging ▸ Rendering) shows up to 120 Hz while the picture moves and
+      a drop to the system rate when Connections is in front.
+- [ ] **IOS-6 keyboard:** on an iPad with a Magic Keyboard, typing, modifiers, arrows, F-keys and
+      Cmd chords reach the remote (Cmd as Super by default); the shortcuts listed in ADR `IOS-6`
+      stay with iPadOS; switching to Connections and back leaves no key stuck.
+- [ ] **IOS-6 pointer:** without lock, the pointer moves the remote pointer, click and
+      secondary click work, two-finger trackpad and wheel scroll scroll the remote. With the
+      session full screen, the pointer locks (system pointer disappears) and mouse motion,
+      buttons and wheel still work; check the wheel's direction.
+- [ ] **IOS-6 Pencil:** hovering an Apple Pencil (M2 iPad or later) moves the remote pointer.
+- [ ] **IOS-7 touch:** on an iPhone (trackpad by default) a drag moves the pointer, a tap clicks,
+      tap-and-drag drags a window, two fingers scroll and a two-finger tap opens a context menu;
+      a pinch zooms the picture and taps still land under the finger. On an iPad (direct by
+      default) a tap clicks where you touch, a long press right-clicks, a drag drags. Switching the
+      profile's "Touch on iPhone and iPad" changes the next session.
+- [ ] **IOS-8 iPhone layout:** on an iPhone, portrait shows the picture on top, the trackpad and
+      the key row; ctrl+c with the latched key copies on the remote; the keyboard button brings up
+      the iOS keyboard and typing (including emoji and Return) reaches the remote. Turning to
+      landscape gives a full-screen picture whose key row hides after 4 s and comes back from a
+      touch at the bottom edge. (Checked by screenshot in the simulator on 2026-10-18; keys and
+      touches need a device.)
+- [ ] **H.264 on a device:** `headless_motion.h264` decodes without `-8969` (it fails only in the
+      simulator's software decoder, ADR `IOS-0` open question 3).
+- [ ] **IOS-10 paste button:** with a live session, copy text in Notes, tap the paste button in
+      the picture's bottom-right corner: no "Drift would like to paste" prompt appears, and the
+      text is typed into the remote's focused text field (Ctrl+V). Repeat with a copied photo
+      and a "Text and images" profile. Copy on the remote, then paste in Notes. Switch the
+      profile's clipboard off: the button disappears.
+- [ ] **IOS-11 switcher:** on an iPhone with two sessions, tap the round button at the top left
+      of a session: the menu lists Connections and both sessions with their status, the current
+      one checked; choosing another session shows it, choosing Connections shows the gallery.
+      On iPad, do the same, then close a session's window from the app switcher (swipe it up):
+      its session ends and its card in Connections goes back to idle. Close the Connections
+      window the same way, then choose Connections from a session's menu: it comes back.
+      Simulator runs can script this with `DRIFT_SMOKE_SCRIPT="wait:8;connect:Fake host 2;wait:8;pick:session-0"`
+      (`fake_host` with `FAKE_HOST_PROFILES=2`).
+
+### IOS-9 — Pairing (ADR `IOS-9-pairing`)
+
+Done in an iPad simulator on 2026-10-18 with `cargo run -p drift-apple --example advertise_host`
+on the Mac: the "Pair a Mac" sheet lists the advertised host, and a `drift-pair:` link
+(`DRIFT_SMOKE_PAIRING_LINK` with the `smoke-env` build) fills the code and names the host. Still
+to do by hand:
+
+- [ ] **Camera:** on a device, Scan Code asks for the camera once, reads the QR code printed by
+      `advertise_host` (any QR generator), fills the link and closes; Cancel closes without a
+      code; with the camera denied, the sheet says so.
+- [ ] **System Camera app:** scanning the same QR code with the Camera app offers to open Drift,
+      which opens "Pair a Mac" with the link (warm and cold launch).
+- [ ] **Local Network prompt:** the first discovery on a device shows iOS's Local Network prompt;
+      after denying it the list stays empty and pairing by link still works.
+- [ ] **Pair and connect:** pair with a typed code and an account; the new card shows Trusted;
+      connecting it reaches the pin check (a wrong certificate fails before credentials are sent).
+- [ ] **After HOST-8:** the Mac accepts the code and lists the device; a wrong code is refused
+      with "The Mac did not accept the code."

@@ -42,6 +42,14 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `M4-2-session-actor-channels` | resize debounce, CLIPRDR glue, suppress/ack policy, reconnect resume, greeter typing, FakeServer channels, real-host e2e findings |
 | `UI-tabs-connection-manager` | Connection Manager / Session tabs: hidden AppKit tab bar, HTML strip webview per window, full screen, focus, main-queue dispatch (superseded in most part by `UI-windows-gallery`) |
 | `UI-windows-gallery` | Connections gallery window + one window per session: no tabbing, title-bar webview, frames, thumbnails, Dock menu, menus, IPC contract |
+| `IOS-3-drift-apple-split` | `drift-apple` (Keychain, `NWPathMonitor`, LNP) shared by `drift-macos` and `drift-ios`; foreground as the iOS wake trigger; Settings link |
+| `IOS-5-ios-app-shell` | the app on iOS: `windows_ios.rs` shell, one window (scene on iPad) per connection, tracked Xcode project, `smoke-env`, `fake_host` |
+| `IOS-9-pairing` | client half of Mac pairing: `_drift-host._tcp` TXT, Damm-checked code, `drift-pair:` QR link, `paired_host` profiles, Keychain device key and pins |
+| `IOS-10-clipboard-on-ios` | UIPasteboard adapter, no polling, writes for the front window, `UIPasteControl` paste = clipboard + remote Ctrl+V |
+| `IOS-11-session-switcher` | native switcher button over session windows, own-scene activation (tao `set_focus` bug), closed scenes close sessions, `DRIFT_SMOKE_SCRIPT` |
+| `IOS-6-ios-input` | iPad input in Rust (not a Swift plugin): HID table, `Pointer`, `GCKeyboard`/`GCMouse`, hover, pointer lock per view controller, shortcuts iPadOS keeps |
+| `IOS-7-touch-modes` | trackpad and direct touch, two-finger scroll and right click, `ConnectionProfile::touch`, iPhone pinch zoom as a view transform |
+| `IOS-8-iphone-layout` | iPhone portrait (picture, trackpad, key row) and landscape (full screen, auto-hiding key row); web key row with `send_keys`/`type_text`/`set_touch_mode`; `ResizeWatcher` |
 | `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility |
 
 ## Commands
@@ -52,7 +60,8 @@ another JS package manager.
 | Command | What it does |
 |---|---|
 | `cargo xtask check` | fast loop: `cargo fmt --check`, clippy `-D warnings`, nextest |
-| `cargo xtask ci` | the merge gate: npm-ban, secret-scan, workflow audit, `bun install --frozen-lockfile`, `bun test`, `bun run typecheck`, `bun run build`, bindings freshness, fmt, clippy `--all-features --all-targets`, the vendored IronRDP fork's fmt + tests, nextest under llvm-cov + coverage gate, `cargo deny`. The step list lives in `xtask/src/ci_plan.rs` and is asserted by `xtask/tests/ci_plan.rs` (ADR `M0-6-ci-gate-coverage`) |
+| `cargo xtask ci` | the merge gate: npm-ban, secret-scan, workflow audit, `bun install --frozen-lockfile`, `bun test`, `bun run typecheck`, `bun run build`, bindings freshness, fmt, clippy `--all-features --all-targets`, the vendored IronRDP fork's fmt + tests, nextest under llvm-cov + coverage gate, `cargo deny`, and the iOS crates linted for
+`aarch64-apple-ios` and `aarch64-apple-ios-sim` with their simulator tests linked (IOS-2). The step list lives in `xtask/src/ci_plan.rs` and is asserted by `xtask/tests/ci_plan.rs` (ADR `M0-6-ci-gate-coverage`) |
 | `cargo xtask ci --no-coverage` | same, without instrumentation (faster locally) |
 | `cargo xtask bindings` | regenerate `ui/src/bindings.ts` after changing IPC commands/types |
 | `cargo xtask npm-ban` / `secret-scan` / `workflows` | the individual hygiene checks |
@@ -76,11 +85,14 @@ and poll. Other agents build in parallel on the same machine.
 
 ## Code rules
 
-- Pure logic in pure crates with unit/property tests; FFI crates (`drift-macos`, `drift-video`,
-  `drift-render`) are humble objects with smoke tests.
+- Pure logic in pure crates with unit/property tests; FFI crates (`drift-apple`, `drift-macos`,
+  `drift-ios`, `drift-video`, `drift-render`) are humble objects with smoke tests. `drift-ios`'s
+  tests run in a simulator: `xcrun simctl spawn <device> target/aarch64-apple-ios-sim/debug/deps/<test>`.
 - No `unwrap`/`expect` on network data (clippy `unwrap_used` is an error outside tests); every
   `unsafe` block has a `// SAFETY:` comment; public items are documented (`missing_docs`).
-- macOS only: no `cfg(target_os)` branches for other platforms.
+- Apple platforms only (ADR `IOS-0`): `cfg(target_os = "macos")` / `"ios"` gates, nothing for
+  other platforms. AppKit (`objc2-app-kit`) is only ever a
+  `[target.'cfg(target_os = "macos")'.dependencies]` entry; `xtask/tests/ci_plan.rs` checks it.
 - Shared contracts (plan §3) live in `drift-core` (+ `FrameSink` in `drift-gfx`, the session
   interface in `drift-rdp::session`). Changing them is a cross-stream change: update the ADR.
 - IronRDP changes: separate commits touching only `third_party/ironrdp/`, exported to

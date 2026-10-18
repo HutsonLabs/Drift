@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use drift_core::{
     CertFingerprint, ConnectMode, ConnectionProfile, DisconnectReason, ErrorExplanation, ProfileIssue,
-    explain_disconnect,
+    TouchMode, explain_disconnect,
 };
 use serde::Serialize;
 use tauri::State;
@@ -20,6 +20,7 @@ use uuid::Uuid;
 use crate::connections::{Connections, ConnectionsIntent, WindowIdentity};
 use crate::frames::{FrameStore, profile_key};
 use crate::manager::SessionManager;
+use crate::pairing::{HostsDiscovered, PairHostRequest, PairingInput, PairingService};
 use crate::profiles::{CommandError, ProfileEntry, ProfileService, SecretsUpdate};
 
 /// Shared state managed by Tauri.
@@ -31,6 +32,12 @@ pub struct AppState {
     pub sessions: SessionManager,
     /// Remembered window frames (`window-frames.json`).
     pub frames: FrameStore,
+    /// Pairing with Mac hosts (IOS-9).
+    pub pairing: PairingService,
+    /// The Bonjour browser while the pairing sheet is open.
+    discovery: Mutex<Option<drift_apple::bonjour::HostBrowser>>,
+    /// A `drift-pair:` link the app was opened with, until the Connections page takes it.
+    pairing_link: Mutex<Option<String>>,
     next_window: AtomicU64,
     /// The profile of every session window from the moment it is built until it closes.
     window_profiles: Mutex<HashMap<String, ConnectionProfile>>,
@@ -40,11 +47,19 @@ pub struct AppState {
 
 impl AppState {
     /// The state for a running app.
-    pub fn new(profiles: Arc<ProfileService>, sessions: SessionManager, frames: FrameStore) -> Self {
+    pub fn new(
+        profiles: Arc<ProfileService>,
+        sessions: SessionManager,
+        frames: FrameStore,
+        pairing: PairingService,
+    ) -> Self {
         Self {
             profiles,
             sessions,
             frames,
+            pairing,
+            discovery: Mutex::new(None),
+            pairing_link: Mutex::new(None),
             next_window: AtomicU64::new(0),
             window_profiles: Mutex::new(HashMap::new()),
             closing: Mutex::new(HashSet::new()),
@@ -188,15 +203,90 @@ pub fn explain(reason: DisconnectReason, mode: ConnectMode) -> ErrorExplanation 
 #[tauri::command]
 #[specta::specta]
 pub fn open_local_network_settings() -> Result<(), CommandError> {
-    crate::platform::open_url(drift_core::messages::LOCAL_NETWORK_SETTINGS_URL)
+    crate::platform::open_local_network_settings()
 }
 
 /// Connects `profile_id`: opens a session window for it, or brings its window forward if it
 /// already has one (from any window).
 #[tauri::command]
 #[specta::specta]
-pub fn connect(app: tauri::AppHandle, profile_id: Uuid) -> Result<(), CommandError> {
+pub fn connect(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    profile_id: Uuid,
+) -> Result<(), CommandError> {
+    // A paired Mac only connects while its pin matches the pairing record (IOS-9).
+    state.pairing.check_before_connect(profile_id)?;
     crate::windows::connect_profile(&app, profile_id)
+}
+
+impl AppState {
+    /// Keeps a `drift-pair:` link for the Connections page (it may not have loaded yet).
+    pub(crate) fn set_pairing_link(&self, link: String) {
+        *self.pairing_link.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(link);
+    }
+}
+
+/// The `drift-pair:` link the app was opened with, once (IOS-9).
+#[tauri::command]
+#[specta::specta]
+pub fn take_pairing_link(state: State<'_, AppState>) -> Option<String> {
+    state.pairing_link.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take()
+}
+
+/// Recognises a scanned, pasted or typed pairing code (IOS-9).
+#[tauri::command]
+#[specta::specta]
+pub fn read_pairing_code(text: String) -> Result<PairingInput, CommandError> {
+    PairingService::read_code(&text)
+}
+
+/// Pairs a Mac running Drift Host and saves its connection (IOS-9).
+#[tauri::command]
+#[specta::specta]
+pub fn pair_host(state: State<'_, AppState>, request: PairHostRequest) -> Result<ProfileEntry, CommandError> {
+    state.pairing.pair(request)
+}
+
+/// Starts browsing for Drift Hosts; [`HostsDiscovered`] goes to the Connections page.
+#[tauri::command]
+#[specta::specta]
+pub fn start_host_discovery(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), CommandError> {
+    use tauri_specta::Event as _;
+    let mut discovery =
+        state.discovery.lock().map_err(|e| CommandError::Platform { message: e.to_string() })?;
+    if discovery.is_some() {
+        return Ok(());
+    }
+    let browser = drift_apple::bonjour::HostBrowser::start(move |hosts| {
+        let target = tauri::EventTarget::webview_window(crate::connections::CONNECTIONS_WINDOW);
+        if let Err(e) = HostsDiscovered(hosts).emit_to(&app, target) {
+            tracing::warn!(error = %e, "could not emit the discovered hosts");
+        }
+    })
+    .ok_or_else(|| CommandError::Platform {
+        message: "Drift could not look for Macs on the network.".into(),
+    })?;
+    *discovery = Some(browser);
+    Ok(())
+}
+
+/// Stops browsing for Drift Hosts.
+#[tauri::command]
+#[specta::specta]
+pub fn stop_host_discovery(state: State<'_, AppState>) -> Result<(), CommandError> {
+    let browser =
+        state.discovery.lock().map_err(|e| CommandError::Platform { message: e.to_string() })?.take();
+    drop(browser);
+    Ok(())
+}
+
+/// Scans a pairing QR code with the camera and returns its text (iOS; on a Mac the code is
+/// typed or pasted instead).
+#[tauri::command]
+#[specta::specta]
+pub async fn scan_pairing_qr(window: tauri::WebviewWindow) -> Result<String, CommandError> {
+    crate::platform::scan_qr(&window).await
 }
 
 /// Trusts the prompted certificate (`pin` = remember it for this profile).
@@ -314,6 +404,61 @@ pub fn window_identity(app: tauri::AppHandle, window: tauri::Window) -> Result<W
 #[specta::specta]
 pub fn toggle_stats(state: State<'_, AppState>, window: tauri::Window) -> Result<(), CommandError> {
     state.sessions.toggle_stats(window.label())
+}
+
+/// iPhone key row (IOS-8): presses `keys` as one chord in the calling window's session.
+/// Names are `phone::SoftKey` names plus single letters and digits.
+#[tauri::command]
+#[specta::specta]
+pub fn send_keys(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    window: tauri::Window,
+    keys: Vec<String>,
+) -> Result<(), CommandError> {
+    let events = crate::phone::named_chord_events(&keys)
+        .ok_or_else(|| CommandError::Platform { message: format!("unknown key in {keys:?}") })?;
+    for event in events {
+        state.sessions.send(window.label(), drift_rdp::SessionCommand::Input(event))?;
+    }
+    crate::windows::controls_used(&app, window.label());
+    Ok(())
+}
+
+/// iPhone (IOS-8): text typed on the iOS keyboard, sent to the calling window's session.
+#[tauri::command]
+#[specta::specta]
+pub fn type_text(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    window: tauri::Window,
+    text: String,
+) -> Result<(), CommandError> {
+    for event in crate::phone::text_events(&text) {
+        state.sessions.send(window.label(), drift_rdp::SessionCommand::Input(event))?;
+    }
+    crate::windows::controls_used(&app, window.label());
+    Ok(())
+}
+
+/// iPhone (IOS-8): what the calling window's page should show of the controls; `None` on the
+/// Mac and iPad. The page asks once when it loads, in case it missed `PhoneControlsChanged`.
+#[tauri::command]
+#[specta::specta]
+pub fn phone_controls(window: tauri::Window) -> Option<crate::phone::PhoneControls> {
+    crate::windows::phone_controls(window.label())
+}
+
+/// iPhone and iPad (IOS-7/IOS-8): switches the calling window's touch mode for this session.
+#[tauri::command]
+#[specta::specta]
+pub fn set_touch_mode(
+    app: tauri::AppHandle,
+    window: tauri::Window,
+    mode: TouchMode,
+) -> Result<(), CommandError> {
+    crate::windows::set_touch_mode(&app, window.label(), mode);
+    Ok(())
 }
 
 /// Gives the keyboard back to the calling window's page or live picture (the title bar never

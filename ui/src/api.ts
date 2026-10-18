@@ -14,6 +14,7 @@ export function describeError(e: CommandError): string {
       return "This connection no longer exists.";
     case "storage":
     case "platform":
+    case "pairing":
       return e.message;
     case "no-session":
       return "This window is not connected.";

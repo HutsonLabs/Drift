@@ -1,0 +1,30 @@
+[package]
+name = "drift-apple"
+description = "Apple platform services shared by Drift's macOS and iOS layers: Keychain, NWPathMonitor, Local Network detection."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+drift-core.workspace = true
+tracing.workspace = true
+ironrdp-graphics.workspace = true
+ironrdp-pdu.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+zeroize.workspace = true
+block2.workspace = true
+objc2.workspace = true
+dispatch2 = "0.3.1"
+security-framework = "3.7"
+# P-256 device key for pairing (IOS-9); already in the tree through rustls.
+ring = "0.17"
+
+[dev-dependencies]
+drift-testkit.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,117 @@
+name: drift-app
+options:
+  bundleIdPrefix: com.hutsonlabs.drift
+  deploymentTarget:
+    iOS: 17.0
+fileGroups: [../../src]
+configs:
+  debug: debug
+  release: release
+settingGroups:
+  app:
+    base:
+      PRODUCT_NAME: Drift
+      PRODUCT_BUNDLE_IDENTIFIER: com.hutsonlabs.drift
+targetTemplates:
+  app:
+    type: application
+    sources:
+      - path: Sources
+    scheme:
+      environmentVariables:
+        RUST_BACKTRACE: full
+        RUST_LOG: info
+    settings:
+      groups: [app]
+targets:
+  drift-app_iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Assets.xcassets
+      - path: Externals
+      - path: drift-app_iOS
+      - path: assets
+        buildPhase: resources
+        type: folder
+      - path: LaunchScreen.storyboard
+    info:
+      path: drift-app_iOS/Info.plist
+      properties:
+        LSRequiresIPhoneOS: true
+        UILaunchStoryboardName: LaunchScreen
+        UIRequiredDeviceCapabilities: [arm64, metal]
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Drift connects to hosts on the local network (ADR IOS-0 decision 9).
+        NSLocalNetworkUsageDescription: "Drift connects to remote desktops on your local network: GNOME Remote Desktop and Macs running Drift Host."
+        # Pairing (IOS-9): browse Drift Hosts with Bonjour and scan their QR codes.
+        NSBonjourServices: [_drift-host._tcp]
+        # The Mac's QR code is a drift-pair: link; the Camera app opens Drift with it.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.hutsonlabs.drift.pair
+            CFBundleURLSchemes: [drift-pair]
+        NSCameraUsageDescription: "Drift uses the camera to scan the pairing code shown on your Mac."
+        # One scene per session window on iPad (IOS-1, IOS-11); iPhone stays single-scene.
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+        # iPad pointer clicks arrive as pointer touches, not finger touches (IOS-6).
+        UIApplicationSupportsIndirectInputEvents: true
+        # ProMotion iPhones only go above 60 Hz with this (IOS-4).
+        CADisableMinimumFrameDurationOnPhone: true
+        CFBundleShortVersionString: 0.2.0
+        CFBundleVersion: "0.2.0"
+    entitlements:
+      path: drift-app_iOS/drift-app_iOS.entitlements
+    scheme:
+      environmentVariables:
+        RUST_BACKTRACE: full
+        RUST_LOG: info
+    settings:
+      base:
+        ENABLE_BITCODE: false
+        ARCHS: [arm64]
+        VALID_ARCHS: arm64 
+        LIBRARY_SEARCH_PATHS[arch=x86_64]: $(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)
+        LIBRARY_SEARCH_PATHS[arch=arm64]: $(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)
+        ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: true
+        EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
+      groups: [app]
+    dependencies:
+      - framework: libapp.a
+        embed: false
+      - sdk: CoreGraphics.framework
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+      - sdk: QuartzCore.framework
+      - sdk: Security.framework
+      - sdk: UIKit.framework
+      - sdk: WebKit.framework
+      # Drift's Rust crates link these; a static library does not carry its link directives
+      # (drift-video: VideoToolbox, CoreMedia, CoreVideo, IOSurface; drift-apple: Network;
+      # flate2 in the PNG and clipboard paths: libz).
+      - sdk: VideoToolbox.framework
+      - sdk: CoreMedia.framework
+      - sdk: CoreVideo.framework
+      - sdk: IOSurface.framework
+      - sdk: Network.framework
+      # drift-ios: GCKeyboard and GCMouse (IOS-6).
+      - sdk: GameController.framework
+      - sdk: libz.tbd
+      # drift-ios: the pairing QR scanner (IOS-9).
+      - sdk: AVFoundation.framework
+    preBuildScripts:
+      - script: cargo tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
+        name: Build Rust Code
+        basedOnDependencyAnalysis: false
+        outputFiles:
+          - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a
+          - $(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a

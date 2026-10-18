@@ -242,3 +242,153 @@ fn declared_features_skips_default() {
     assert!(ci_plan::declared_features("[package]\nname = \"x\"\n").is_empty());
     assert!(ci_plan::declared_features("not toml {{{").is_empty());
 }
+
+// --- IOS-2: the platform-neutral and Apple-framework crates keep building for iOS ---
+
+/// The crates ADR `IOS-0` decision 8 requires to build for iOS.
+/// IOS-3 adds the shared Apple layer and the UIKit layer; IOS-10 the clipboard (UIPasteboard).
+const IOS_CRATES: &[&str] = &[
+    "drift-core",
+    "drift-rdp",
+    "drift-gfx",
+    "drift-codec",
+    "drift-input",
+    "drift-video",
+    "drift-render",
+    "drift-apple",
+    "drift-ios",
+    "drift-clipboard",
+];
+
+#[test]
+fn the_gate_lints_the_ios_crates_for_both_ios_targets() {
+    assert_eq!(ci_plan::IOS_TARGETS, ["aarch64-apple-ios", "aarch64-apple-ios-sim"]);
+    for crate_name in IOS_CRATES {
+        assert!(ci_plan::IOS_CRATES.contains(crate_name), "{crate_name} is not in ci_plan::IOS_CRATES");
+    }
+    for steps in [ci_plan::ci(Options::default()), ci_plan::ci(Options { coverage: false, deny: false })] {
+        for target in ci_plan::IOS_TARGETS {
+            let step = steps
+                .iter()
+                .find(|s| s.is_cargo_with(&["clippy", "--target", target, "--all-targets"]))
+                .unwrap_or_else(|| panic!("no clippy step for {target}"));
+            let line = step.command_line().unwrap_or_default();
+            assert!(line.contains("-D warnings"), "`{line}` must deny warnings");
+            for crate_name in IOS_CRATES {
+                assert!(line.contains(&format!("-p {crate_name}")), "`{line}` does not lint {crate_name}");
+            }
+        }
+    }
+}
+
+#[test]
+fn the_gate_links_the_ios_crates_tests_for_the_simulator() {
+    // clippy never links, so a stray `-framework AppKit` only shows up when a binary is linked.
+    let steps = ci_plan::ci(Options::default());
+    let step = steps
+        .iter()
+        .find(|s| s.is_cargo_with(&["test", "--no-run", "--target", "aarch64-apple-ios-sim"]))
+        .expect("no step links test binaries for aarch64-apple-ios-sim");
+    let line = step.command_line().unwrap_or_default();
+    for crate_name in IOS_CRATES {
+        assert!(line.contains(&format!("-p {crate_name}")), "`{line}` does not link {crate_name}");
+    }
+}
+
+#[test]
+fn the_toolchain_file_installs_the_ios_targets() {
+    let toolchain = read("rust-toolchain.toml").parse::<toml::Table>().expect("rust-toolchain.toml parses");
+    let targets: Vec<&str> = toolchain["toolchain"]["targets"]
+        .as_array()
+        .expect("toolchain.targets")
+        .iter()
+        .filter_map(toml::Value::as_str)
+        .collect();
+    for target in ci_plan::IOS_TARGETS {
+        assert!(targets.contains(target), "rust-toolchain.toml does not install {target}: {targets:?}");
+    }
+}
+
+#[test]
+fn appkit_is_only_a_macos_target_dependency() {
+    // ADR IOS-0 decision 8: every AppKit use is gated on `target_os = "macos"`, starting with
+    // the manifests, so no iOS build ever links AppKit.
+    for (name, text) in workspace_manifests() {
+        let manifest = text.parse::<toml::Table>().expect("manifest parses");
+        for table in ["dependencies", "dev-dependencies", "build-dependencies"] {
+            let deps = manifest.get(table).and_then(toml::Value::as_table);
+            assert!(
+                deps.is_none_or(|d| !d.contains_key("objc2-app-kit")),
+                "{name}: objc2-app-kit must live under [target.'cfg(target_os = \"macos\")'.{table}]"
+            );
+        }
+        if let Some(targets) = manifest.get("target").and_then(toml::Value::as_table) {
+            for (cfg, spec) in targets {
+                let has_appkit = ["dependencies", "dev-dependencies"].iter().any(|t| {
+                    spec.get(t)
+                        .and_then(toml::Value::as_table)
+                        .is_some_and(|d| d.contains_key("objc2-app-kit"))
+                });
+                assert!(
+                    !has_appkit || cfg == "cfg(target_os = \"macos\")",
+                    "{name}: objc2-app-kit is declared under `{cfg}`"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn uikit_is_only_an_ios_target_dependency() {
+    // IOS-3: the mirror image of the AppKit rule; UIKit (`objc2-ui-kit`) never reaches macOS.
+    for (name, text) in workspace_manifests() {
+        let manifest = text.parse::<toml::Table>().expect("manifest parses");
+        for table in ["dependencies", "dev-dependencies", "build-dependencies"] {
+            let deps = manifest.get(table).and_then(toml::Value::as_table);
+            assert!(
+                deps.is_none_or(|d| !d.contains_key("objc2-ui-kit")),
+                "{name}: objc2-ui-kit must live under [target.'cfg(target_os = \"ios\")'.{table}]"
+            );
+        }
+        if let Some(targets) = manifest.get("target").and_then(toml::Value::as_table) {
+            for (cfg, spec) in targets {
+                let has_uikit = spec
+                    .get("dependencies")
+                    .and_then(toml::Value::as_table)
+                    .is_some_and(|d| d.contains_key("objc2-ui-kit"));
+                assert!(
+                    !has_uikit || cfg == "cfg(target_os = \"ios\")",
+                    "{name}: objc2-ui-kit under `{cfg}`"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn drift_ios_uses_uikit_and_drift_apple_does_not() {
+    let by_name: std::collections::BTreeMap<String, String> = workspace_manifests().into_iter().collect();
+    let ios = by_name.get("drift-ios").expect("drift-ios is a workspace member");
+    assert!(ios.contains("objc2-ui-kit"), "drift-ios is the UIKit layer");
+    let apple = by_name.get("drift-apple").expect("drift-apple is a workspace member");
+    for framework in ["objc2-ui-kit", "objc2-app-kit"] {
+        assert!(!apple.contains(framework), "drift-apple is shared by macOS and iOS; no {framework}");
+    }
+    let macos = by_name.get("drift-macos").expect("drift-macos");
+    assert!(macos.contains("drift-apple"), "drift-macos builds on drift-apple");
+}
+
+#[test]
+fn the_gate_lints_the_app_library_for_both_ios_targets() {
+    // IOS-5: the Tauri app itself (the static library Xcode links) keeps building for iOS.
+    let steps = ci_plan::ci(Options::default());
+    for target in ci_plan::IOS_TARGETS {
+        let step = steps
+            .iter()
+            .find(|s| s.is_cargo_with(&["clippy", "--target", target, "-p drift-app", "--lib"]))
+            .unwrap_or_else(|| panic!("no drift-app clippy step for {target}"));
+        let line = step.command_line().unwrap_or_default();
+        assert!(line.contains("--features smoke-env"), "`{line}` must also lint the simulator smoke path");
+        assert!(line.contains("-D warnings"), "`{line}` must deny warnings");
+    }
+}

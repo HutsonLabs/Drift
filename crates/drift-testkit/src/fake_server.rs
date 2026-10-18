@@ -166,6 +166,14 @@ pub enum ServerAction {
     HoldClipboardResponses(bool),
     /// Send `ResetGraphics` with a new surface of this size on the graphics channel.
     GfxReset(u32, u32),
+    /// Fill `rect` (`left, top, right, bottom`) of the newest surface with an RGB colour, in
+    /// one frame (a moving picture for the iOS first-light host, IOS-5).
+    GfxFill {
+        /// `left, top, right, bottom` in surface pixels (right/bottom exclusive).
+        rect: (u16, u16, u16, u16),
+        /// `r, g, b`.
+        color: [u8; 3],
+    },
     /// Send these bytes verbatim on the graphics channel: a damaged `RDP_SEGMENTED_DATA`
     /// frame, which the client must reject as `ProtocolError` (M9-2).
     GfxRaw(Vec<u8>),
@@ -553,6 +561,12 @@ async fn serve_leg(
                     }
                 }
                 ServerAction::GfxReset(w, h) => active.gfx_reset(&mut framed, w, h).await?,
+                ServerAction::GfxFill { rect, color } => {
+                    let message =
+                        fake_channels::gfx_message(&fake_channels::fill_pdus(&active.state, rect, color))
+                            .map_err(|e| err("encode gfx", e))?;
+                    active.gfx_send(&mut framed, message).await?;
+                }
                 ServerAction::GfxRaw(bytes) => {
                     active.gfx_send(&mut framed, fake_channels::gfx_raw_message(bytes)).await?
                 }

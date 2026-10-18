@@ -105,6 +105,7 @@ pub(crate) struct ChannelState {
     pub(crate) gfx_frame_acks: Vec<u32>,
     pub(crate) gfx_suspend_acks: u32,
     pub(crate) gfx_resets_sent: Vec<(u32, u32)>,
+    pub(crate) gfx_fills_sent: u32,
     /// Clipboard backend events not yet handled by the loop.
     pub(crate) clip_events: Vec<ClipEvent>,
 }
@@ -257,6 +258,30 @@ pub(crate) fn redraw_pdus(state: &SharedState, width: u32, height: u32) -> Vec<G
             surface_id,
             fill_pixel: Color { b: 0x20, g: 0x40, r: 0x60, xa: 0xFF },
             rectangles: vec![ExclusiveRectangle { left: 0, top: 0, right: w16, bottom: h16 }],
+        }),
+        GfxPdu::EndFrame(EndFramePdu { frame_id }),
+    ]
+}
+
+/// One frame filling `rect` of the newest surface (see [`redraw_pdus`]) with `color`.
+pub(crate) fn fill_pdus(state: &SharedState, rect: (u16, u16, u16, u16), color: [u8; 3]) -> Vec<GfxPdu> {
+    let (surface_id, frame_id) = {
+        let mut s = lock(state);
+        s.gfx_fills_sent += 1;
+        let surface = u16::try_from(s.gfx_resets_sent.len()).unwrap_or(u16::MAX);
+        (surface, 0x1_0000 + s.gfx_fills_sent)
+    };
+    let (left, top, right, bottom) = rect;
+    let [r, g, b] = color;
+    vec![
+        GfxPdu::StartFrame(StartFramePdu {
+            timestamp: Timestamp { milliseconds: 0, seconds: 0, minutes: 0, hours: 0 },
+            frame_id,
+        }),
+        GfxPdu::SolidFill(SolidFillPdu {
+            surface_id,
+            fill_pixel: Color { b, g, r, xa: 0xFF },
+            rectangles: vec![ExclusiveRectangle { left, top, right, bottom }],
         }),
         GfxPdu::EndFrame(EndFramePdu { frame_id }),
     ]

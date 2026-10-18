@@ -16,6 +16,9 @@ mod host;
 pub mod manager;
 pub mod menu;
 mod options;
+pub mod pairing;
+pub mod paste;
+pub mod phone;
 pub mod platform;
 pub mod present;
 pub mod profiles;
@@ -23,7 +26,13 @@ pub mod profiles;
 pub mod recording;
 pub mod secrets;
 pub mod services;
+pub mod smoke;
+pub mod switcher;
 pub mod view;
+#[cfg(target_os = "macos")]
+pub mod windows;
+#[cfg(target_os = "ios")]
+#[path = "windows_ios.rs"]
 pub mod windows;
 
 pub use options::RunOptions;
@@ -61,6 +70,16 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::new_connection,
             commands::window_identity,
             commands::toggle_stats,
+            commands::read_pairing_code,
+            commands::take_pairing_link,
+            commands::pair_host,
+            commands::start_host_discovery,
+            commands::stop_host_discovery,
+            commands::scan_pairing_qr,
+            commands::send_keys,
+            commands::type_text,
+            commands::set_touch_mode,
+            commands::phone_controls,
         ])
         .events(tauri_specta::collect_events![
             view::SessionViewChanged,
@@ -68,6 +87,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             connections::ThumbnailUpdated,
             connections::ConnectionsIntentRequested,
             connections::WindowIdentityChanged,
+            pairing::HostsDiscovered,
+            phone::PhoneControlsChanged,
         ])
         .typ::<drift_core::ConnectionProfile>()
         .typ::<drift_core::SessionState>()
@@ -96,7 +117,14 @@ pub fn run_with(options: RunOptions) {
     let RunOptions { config_dir, memory_secrets, secrets: secret_store, autoconnect, on_ready } = options;
     let builder = specta_builder();
     let on_ready = std::sync::Mutex::new(on_ready);
-    let app = tauri::Builder::default()
+    let app = tauri::Builder::default();
+    #[cfg(target_os = "macos")]
+    let app = app.on_menu_event(|app, event| {
+        if let Some(action) = menu::MenuAction::from_id(&event.id().0) {
+            windows::run_menu_action(app, action);
+        }
+    });
+    let app = app
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
@@ -105,11 +133,17 @@ pub fn run_with(options: RunOptions) {
                 Some(dir) => dir.clone(),
                 None => app.path().app_config_dir()?,
             };
-            // Passwords live in the Keychain (drift-macos, M3-2); tests use memory.
+            // Passwords live in the Keychain (drift-apple, M3-2); tests use memory.
+            // Pairing items (IOS-9) follow the passwords: Keychain in production, memory otherwise.
+            let pairing_store: Arc<dyn pairing::PairingStore> = if secret_store.is_some() || memory_secrets {
+                Arc::new(pairing::MemoryPairingStore::new())
+            } else {
+                Arc::new(pairing::KeychainPairingStore::new(drift_apple::Keychain::new()))
+            };
             let secrets: Arc<dyn secrets::SecretStore> = match (&secret_store, memory_secrets) {
                 (Some(store), _) => Arc::clone(store),
                 (None, true) => Arc::new(secrets::MemorySecretStore::new()),
-                (None, false) => Arc::new(secrets::KeychainSecretStore::new(drift_macos::Keychain::new())),
+                (None, false) => Arc::new(secrets::KeychainSecretStore::new(drift_apple::Keychain::new())),
             };
             let profiles =
                 Arc::new(profiles::ProfileService::open(profiles::ProfileFile::in_dir(&dir), secrets)?);
@@ -121,9 +155,22 @@ pub fn run_with(options: RunOptions) {
             // so they belong to the app, not to one window. Managed state keeps them alive.
             app.manage(services::PlatformServices::start(&handle, sessions.clone()));
             let frames = frames::FrameStore::in_dir(&dir);
-            app.manage(commands::AppState::new(profiles.clone(), sessions, frames));
-            app.set_menu(windows::build_menu(&handle, &menu::menu_spec(&[], None))?)?;
-            windows::install_dock(&handle);
+            let pairing = pairing::PairingService::new(profiles.clone(), pairing_store);
+            app.manage(commands::AppState::new(profiles.clone(), sessions, frames, pairing));
+            // Simulator smoke builds only: stand in for the Camera app opening a drift-pair:
+            // link, which a headless simulator cannot confirm (IOS-9).
+            #[cfg(feature = "smoke-env")]
+            if let Ok(link) = std::env::var("DRIFT_SMOKE_PAIRING_LINK")
+                && let Some(link) = pairing::pairing_link(std::iter::once(link.as_str()))
+            {
+                app.state::<commands::AppState>().set_pairing_link(link);
+            }
+            // iOS has no menu bar and no Dock (IOS-5).
+            #[cfg(target_os = "macos")]
+            {
+                app.set_menu(windows::build_menu(&handle, &menu::menu_spec(&[], None))?)?;
+                windows::install_dock(&handle);
+            }
             windows::start_thumbnails(&handle);
             let first_profile = autoconnect.as_deref().and_then(|name| {
                 let all = profiles.profiles().unwrap_or_default();
@@ -137,11 +184,6 @@ pub fn run_with(options: RunOptions) {
                 ready(handle);
             }
             Ok(())
-        })
-        .on_menu_event(|app, event| {
-            if let Some(action) = menu::MenuAction::from_id(&event.id().0) {
-                windows::run_menu_action(app, action);
-            }
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -162,10 +204,18 @@ pub fn run_with(options: RunOptions) {
         // Closing the last window leaves Drift running, like other Mac apps; Cmd+Q exits.
         tauri::RunEvent::ExitRequested { code, api, .. } if code.is_none() => api.prevent_exit(),
         // A click on the Dock icon with nothing on screen brings Connections back.
+        #[cfg(target_os = "macos")]
         tauri::RunEvent::Reopen { has_visible_windows, .. } if !has_visible_windows => {
             windows::show_connections(handle, None);
         }
         tauri::RunEvent::Exit => windows::shutdown_blocking(handle),
+        // A `drift-pair:` link (the Mac's QR code through the Camera app, IOS-9).
+        tauri::RunEvent::Opened { urls } => {
+            if let Some(uri) = pairing::pairing_link(urls.iter().map(tauri::Url::as_str)) {
+                handle.state::<commands::AppState>().set_pairing_link(uri.clone());
+                windows::show_connections(handle, Some(connections::ConnectionsIntent::Pair { uri }));
+            }
+        }
         _ => {}
     });
 }
@@ -190,7 +240,33 @@ fn init_logging() {
         .try_init();
 }
 
-/// Runs the application (called from `main`).
+/// Runs the application (called from `main` on macOS, from the Xcode project's `main.mm`
+/// through `start_app` on iOS).
 pub fn run() {
-    run_with(RunOptions::from_env());
+    #[allow(unused_mut)]
+    let mut options = RunOptions::from_env();
+    // Simulator smoke builds only (IOS-5): there is no example binary on iOS.
+    #[cfg(feature = "smoke-env")]
+    {
+        options.secrets = Some(smoke::secrets_from(std::env::vars()) as Arc<dyn secrets::SecretStore>);
+        #[cfg(target_os = "ios")]
+        if let Ok(script) = std::env::var("DRIFT_SMOKE_SCRIPT") {
+            match smoke::parse_script(&script) {
+                Ok(steps) => options.on_ready = Some(Box::new(move |app| smoke::run_script(app, steps))),
+                Err(e) => tracing::warn!(error = %e, "DRIFT_SMOKE_SCRIPT ignored"),
+            }
+        }
+    }
+    run_with(options);
+}
+
+/// The iOS entry point: `tauri::mobile_entry_point` emits the `start_app` symbol that the Xcode
+/// project's `main.mm` calls (IOS-5).
+#[cfg(mobile)]
+#[allow(missing_docs)] // the macro's generated FFI function has no doc comment
+mod mobile {
+    #[tauri::mobile_entry_point]
+    fn main() {
+        super::run();
+    }
 }

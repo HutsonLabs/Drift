@@ -3,7 +3,7 @@
 
 use std::io;
 
-use drift_macos::lnp::{EHOSTUNREACH, is_local_network_denied, local_network_settings_url};
+use drift_apple::lnp::{EHOSTUNREACH, is_local_network_denied, local_network_settings_url};
 
 #[test]
 fn errno_65_is_local_network_denied() {

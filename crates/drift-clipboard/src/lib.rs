@@ -8,14 +8,17 @@
 //! | [`formats`] | M5-1: pure format mapping/conversion (UTF-16/CRLF, PNG/TIFF/DIB, 32 MiB cap) |
 //! | [`sync`] | pure CLIPRDR sync state (initial list, echo suppression, newest-wins, focus) used by the M5-2 actor glue |
 //! | [`poll`] | M5-3: pure pasteboard polling ([`poll::PasteboardWatcher`], [`poll::PasteboardPort`]) |
-//! | `pasteboard` (feature `macos`) | M5-3: NSPasteboard adapter |
+//! | `pasteboard` (feature `macos`, macOS only) | M5-3: NSPasteboard adapter |
+//! | `uipasteboard` (iOS only) | IOS-10: UIPasteboard adapter; read only on an explicit paste |
 
 pub mod contents;
 pub mod formats;
-#[cfg(feature = "macos")]
+#[cfg(all(feature = "macos", target_os = "macos"))]
 pub mod pasteboard;
 pub mod poll;
 pub mod sync;
+#[cfg(target_os = "ios")]
+pub mod uipasteboard;
 
 pub use contents::{ClipboardContents, ClipboardItem};
 pub use formats::{ClipError, ClipFormat, FormatKind};

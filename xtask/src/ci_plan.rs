@@ -165,6 +165,23 @@ fn check(name: &str, c: Check) -> Step {
 pub const VENDORED_TEST_PACKAGES: &[&str] =
     &["ironrdp-testsuite-core", "ironrdp-cliprdr", "ironrdp-connector", "ironrdp-pdu", "ironrdp-session"];
 
+/// The iOS targets the iOS crates must build for (ADR `IOS-0`, decision 8).
+pub const IOS_TARGETS: &[&str] = &["aarch64-apple-ios", "aarch64-apple-ios-sim"];
+
+/// The crates that build for iOS: platform-neutral ones plus the Apple-framework ones.
+pub const IOS_CRATES: &[&str] = &[
+    "drift-core",
+    "drift-rdp",
+    "drift-gfx",
+    "drift-codec",
+    "drift-input",
+    "drift-video",
+    "drift-render",
+    "drift-apple",
+    "drift-ios",
+    "drift-clipboard",
+];
+
 /// The lint pass: formatting and clippy over every target and every feature.
 ///
 /// `--all-features` rather than a hand-maintained list: a new cargo feature is then covered by
@@ -179,6 +196,50 @@ fn lint_steps() -> Vec<Step> {
             &["clippy", "--workspace", "--all-targets", "--all-features", "--locked", "--", "-D", "warnings"],
         ),
     ]
+}
+
+/// The iOS crates for each iOS target: clippy over every target, then the simulator's test
+/// binaries are linked (clippy never links, and a stray `-framework AppKit` only fails there).
+///
+/// The tests are not run: that needs a booted simulator, which the gate does not assume.
+fn ios_steps() -> Vec<Step> {
+    let packages: Vec<&str> = IOS_CRATES.iter().flat_map(|p| ["-p", p]).collect();
+    let mut steps: Vec<Step> = IOS_TARGETS
+        .iter()
+        .map(|target| {
+            let mut args = vec!["clippy", "--target", target, "--all-targets", "--locked"];
+            args.extend(&packages);
+            args.extend(["--", "-D", "warnings"]);
+            run(&format!("cargo clippy -D warnings ({target})"), Program::Cargo, "", &args)
+        })
+        .collect();
+    // The app library Xcode links on iOS (IOS-5), with the simulator smoke path; its tests and
+    // examples are macOS-only.
+    for target in IOS_TARGETS {
+        steps.push(run(
+            &format!("cargo clippy -D warnings (drift-app, {target})"),
+            Program::Cargo,
+            "",
+            &[
+                "clippy",
+                "--target",
+                target,
+                "-p",
+                "drift-app",
+                "--lib",
+                "--features",
+                "smoke-env",
+                "--locked",
+                "--",
+                "-D",
+                "warnings",
+            ],
+        ));
+    }
+    let mut args = vec!["test", "--no-run", "--target", "aarch64-apple-ios-sim", "--locked"];
+    args.extend(&packages);
+    steps.push(run("link the iOS crates' tests (aarch64-apple-ios-sim)", Program::Cargo, "", &args));
+    steps
 }
 
 /// The vendored IronRDP workspace: format check plus the fork's own tests (plan M0-2).
@@ -215,6 +276,7 @@ pub fn ci(options: Options) -> Vec<Step> {
         check("bindings freshness", Check::BindingsFresh),
     ];
     steps.extend(lint_steps());
+    steps.extend(ios_steps());
     steps.extend(vendored_steps());
     if options.coverage {
         steps.push(run(

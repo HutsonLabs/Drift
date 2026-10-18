@@ -13,19 +13,31 @@
 //! | [`scroll`] | M2-3: precise-delta → fractional wheel-unit accumulator |
 //! | [`coords`] | M2-3: `view_to_desktop` (1:1, fit/letterbox, Retina) |
 //! | [`shortcuts`] | M2-4: `performKeyEquivalent:` allow-list |
+//! | [`hid`] | IOS-6: HID keyboard usages (iPad `GCKeyboard`) → set-1 scancodes, held keys |
+//! | [`touch`] | IOS-7: trackpad and direct touch modes, two-finger scroll and right click, pinch |
+//! | [`zoom`] | IOS-7: local pinch zoom of the picture on iPhone |
+//! | [`pointer`] | IOS-6: absolute and relative (pointer lock, trackpad) pointer with buttons and scroll |
 
 pub mod coords;
+pub mod hid;
 pub mod keyboard;
 pub mod keymap;
 pub mod modifiers;
+pub mod pointer;
 pub mod scroll;
 pub mod shortcuts;
+pub mod touch;
 pub mod unicode;
+pub mod zoom;
 
 pub use coords::{ScaleMode, Viewport, view_to_desktop};
+pub use hid::{HidKeyboard, scancode_for_hid};
 pub use keyboard::{KeyDown, Keyboard};
 pub use keymap::{KeyboardType, Scancode};
 pub use modifiers::ModifierFlags;
+pub use pointer::Pointer;
 pub use scroll::{ScrollAccumulator, ScrollConfig, ScrollDelta};
 pub use shortcuts::{MenuShortcut, menu_shortcut};
+pub use touch::{Mode as TouchInputMode, TouchOutput, Touches};
 pub use unicode::KeyRoute;
+pub use zoom::{Zoom, ZoomChange};

@@ -8,9 +8,10 @@ const root = document.getElementById("app");
 if (root) {
   const app = new ConnectionsApp(root, commands);
   const here = getCurrentWebviewWindow();
-  // All three are emitted to the `connections` window only.
+  // All four are emitted to the `connections` window only.
   void events.connectionsChanged(here).listen((e) => app.onConnections(e.payload));
   void events.thumbnailUpdated(here).listen((e) => app.onThumbnail(e.payload));
   void events.connectionsIntentRequested(here).listen((e) => void app.onIntent(e.payload));
+  void events.hostsDiscovered(here).listen((e) => app.onHostsDiscovered(e.payload));
   void app.start();
 }

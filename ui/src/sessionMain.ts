@@ -9,5 +9,6 @@ if (root) {
   const app = new SessionApp(root, commands);
   // Session views are emitted to this window only (SessionManager → emit_to(window)).
   void events.sessionViewChanged(getCurrentWebviewWindow()).listen((e) => app.onSessionView(e.payload));
+  void events.phoneControlsChanged(getCurrentWebviewWindow()).listen((e) => app.onPhoneControls(e.payload));
   void app.start();
 }

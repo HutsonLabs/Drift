@@ -1455,3 +1455,14 @@ pub(crate) fn write_pasteboard<R: Runtime>(
         }
     });
 }
+
+/// The iPhone controls were used (IOS-8); the Mac has none.
+pub(crate) fn controls_used<R: Runtime>(_app: &AppHandle<R>, _label: &str) {}
+
+/// The touch mode only matters on iPhone and iPad (IOS-7).
+pub(crate) fn set_touch_mode<R: Runtime>(_app: &AppHandle<R>, _label: &str, _mode: drift_core::TouchMode) {}
+
+/// The iPhone controls of window `label` (IOS-8); none on the Mac.
+pub(crate) fn phone_controls(_label: &str) -> Option<crate::phone::PhoneControls> {
+    None
+}

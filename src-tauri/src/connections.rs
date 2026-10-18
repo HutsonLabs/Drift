@@ -93,7 +93,7 @@ impl std::fmt::Debug for Thumbnail {
 }
 
 /// What the Connections page should open when Rust brings it forward.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum ConnectionsIntent {
     /// The New Connection sheet (Cmd+N, Dock ▸ New Connection…).
@@ -102,6 +102,11 @@ pub enum ConnectionsIntent {
     Edit {
         /// The profile to edit.
         profile_id: Uuid,
+    },
+    /// "Pair a Mac" with a `drift-pair:` link the system opened Drift with (IOS-9).
+    Pair {
+        /// The link (a QR payload).
+        uri: String,
     },
 }
 

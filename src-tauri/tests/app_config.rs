@@ -93,3 +93,99 @@ fn the_webview_is_transparent_so_overlays_can_be_drawn_over_the_picture() {
         "the config flag alone does nothing; wry needs the cargo feature: {tauri_dep}"
     );
 }
+
+// ---- IOS-5: the iOS app project -------------------------------------------------------------
+
+/// The iOS `Info.plist` and the xcodegen spec that regenerates it carry the same keys: Local
+/// Network usage (else iOS denies LAN connections), multiple scenes (one per session window on
+/// iPad, IOS-1/IOS-11) and ProMotion above 60 Hz on iPhone (IOS-4).
+#[test]
+fn ios_info_plist_and_project_spec_declare_the_ios_keys() {
+    let plist = read("gen/apple/drift-app_iOS/Info.plist");
+    let spec = read("gen/apple/project.yml");
+    for key in [
+        "NSLocalNetworkUsageDescription",
+        "UIApplicationSupportsMultipleScenes",
+        "CADisableMinimumFrameDurationOnPhone",
+        // IOS-6: iPad pointer clicks arrive as indirect-pointer touches.
+        "UIApplicationSupportsIndirectInputEvents",
+    ] {
+        assert!(plist.contains(&format!("<key>{key}</key>")), "Info.plist lacks {key}");
+        assert!(spec.contains(&format!("{key}:")), "project.yml lacks {key}; xcodegen would drop it");
+    }
+}
+
+/// Xcode 27 rejects deployment targets below iOS 15 (IOS-1); Drift asks for 17 (scene
+/// activation requests).
+#[test]
+fn ios_minimum_system_version_is_17() {
+    let conf: serde_json::Value = serde_json::from_str(&read("tauri.conf.json")).unwrap();
+    assert_eq!(conf["bundle"]["iOS"]["minimumSystemVersion"], "17.0");
+    assert!(read("gen/apple/project.yml").contains("iOS: 17.0"));
+}
+
+/// A static library carries no link directives, so every framework Drift's crates need is listed
+/// in the Xcode project (the first iOS link failed on VideoToolbox, CoreMedia and libz).
+#[test]
+fn ios_project_links_the_frameworks_the_crates_need() {
+    let spec = read("gen/apple/project.yml");
+    for framework in [
+        "VideoToolbox.framework",
+        "CoreMedia.framework",
+        "CoreVideo.framework",
+        "IOSurface.framework",
+        "Network.framework",
+        "GameController.framework",
+        "Metal.framework",
+        "libz.tbd",
+        "AVFoundation.framework",
+    ] {
+        assert!(spec.contains(framework), "project.yml does not link {framework}");
+    }
+}
+
+/// IOS-9: Drift browses `_drift-host._tcp` (iOS refuses to browse a type the app did not
+/// declare) and scans pairing QR codes with the camera.
+#[test]
+fn ios_declares_bonjour_and_camera_use() {
+    let plist = read("gen/apple/drift-app_iOS/Info.plist");
+    let spec = read("gen/apple/project.yml");
+    assert!(
+        plist.contains("<key>NSBonjourServices</key>") && plist.contains("<string>_drift-host._tcp</string>")
+    );
+    assert!(spec.contains("NSBonjourServices:") && spec.contains("_drift-host._tcp"));
+    assert!(
+        plist.contains("<key>NSCameraUsageDescription</key>"),
+        "Info.plist lacks NSCameraUsageDescription"
+    );
+    assert!(spec.contains("NSCameraUsageDescription:"), "project.yml lacks NSCameraUsageDescription");
+    // macOS browses too (typed-code pairing): the Mac's Info.plist declares the same type.
+    assert!(read("Info.plist").contains("_drift-host._tcp"));
+}
+
+/// IOS-9: the Mac's QR code is a `drift-pair:` link, so the system Camera (or a click on a Mac)
+/// opens Drift straight into "Pair a Mac". Both apps register the scheme.
+#[test]
+fn both_apps_register_the_drift_pair_url_scheme() {
+    for file in ["Info.plist", "gen/apple/drift-app_iOS/Info.plist"] {
+        let plist = read(file);
+        assert!(
+            plist.contains("<key>CFBundleURLSchemes</key>") && plist.contains("<string>drift-pair</string>"),
+            "{file}"
+        );
+    }
+    assert!(read("gen/apple/project.yml").contains("CFBundleURLSchemes: [drift-pair]"));
+}
+
+/// The generated Xcode project links every SDK `project.yml` lists. xcodegen can fail without
+/// rewriting it (a missing `assets` folder), which once left GameController out of the link
+/// after a merge (IOS-6 + IOS-9).
+#[test]
+fn xcode_project_is_regenerated_from_project_spec() {
+    let spec = read("gen/apple/project.yml");
+    let pbxproj = read("gen/apple/drift-app.xcodeproj/project.pbxproj");
+    for line in spec.lines() {
+        let Some(sdk) = line.trim().strip_prefix("- sdk: ") else { continue };
+        assert!(pbxproj.contains(sdk), "project.pbxproj lacks {sdk}; run `xcodegen generate` in gen/apple");
+    }
+}

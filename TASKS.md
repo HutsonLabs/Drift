@@ -13,33 +13,39 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 
 ## IOS — Drift for iPhone and iPad (client)
 
-- [ ] **IOS-1 Tauri mobile spike.** `tauri ios init` on a throwaway branch. Answer the ADR's open
+- [✓] **IOS-1 Tauri mobile spike.** `tauri ios init` on a throwaway branch. Answer the ADR's open
   questions 1–2: can a plugin set `prefersPointerLocked` on the root view controller, and does
   Tauri mobile support more than one window or scene? Write the answers into the ADR.
-- [ ] **IOS-2 Platform gating.** `cfg(target_os)` gates on every AppKit use. `drift-core`,
+- [✓] **IOS-2 Platform gating.** `cfg(target_os)` gates on every AppKit use. `drift-core`,
   `drift-rdp`, `drift-gfx`, `drift-codec`, `drift-input`, `drift-video` and `drift-render` build
   for `aarch64-apple-ios` and `aarch64-apple-ios-sim`. Add both targets to `cargo xtask ci`.
-- [ ] **IOS-3 Split `drift-macos`.** New `drift-apple` (Keychain, `NWPathMonitor`, Local Network
+- [✓] **IOS-3 Split `drift-macos`.** New `drift-apple` (Keychain, `NWPathMonitor`, Local Network
   detection) shared by `drift-macos` (AppKit) and a new `drift-ios` (UIKit). No behaviour change
   on macOS.
-- [ ] **IOS-4 Remote view on iOS.** `drift-ios` hosts the `CAMetalLayer` in a `UIView` under the
+- [✓] **IOS-4 Remote view on iOS.** `drift-ios` hosts the `CAMetalLayer` in a `UIView` under the
   `WKWebView` (M7-3 layering). Drawable size tracks the view and the screen scale; ProMotion
   pacing at up to 120 Hz.
-- [ ] **IOS-5 First light on iPad.** The iOS app connects to the GNOME test host (headless
-  mode), shows a live desktop, and reconnects after backgrounding.
-- [ ] **IOS-6 Input plugin.** Swift Tauri plugin: `GCKeyboard` raw key codes, `GCMouse` deltas
+- [~] **IOS-5 First light on iPad.** The iOS app connects to the GNOME test host (headless
+  mode), shows a live desktop, and reconnects after backgrounding. *Done in the iPad simulator
+  against `fake_host` (live picture, reconnect while backgrounded); the GNOME host was down, so
+  the device run is in `docs/acceptance.md`.*
+- [~] **IOS-6 Input plugin.** Swift Tauri plugin: `GCKeyboard` raw key codes, `GCMouse` deltas
   with pointer lock, `UIPointerInteraction`, and Apple Pencil hover as pointer movement, all fed to
-  `drift-input`. Document which system shortcuts iPadOS keeps for itself.
-- [ ] **IOS-7 Touch modes.** Trackpad mode (relative pointer, two-finger scroll, tap to click,
+  `drift-input`. Document which system shortcuts iPadOS keeps for itself. *Done in Rust in
+  `drift-ios` instead of Swift (ADR `IOS-6-ios-input`); smoke-tested in the simulator, which
+  cannot synthesize a keyboard, mouse or Pencil, so those checks are in `docs/acceptance.md`.*
+- [✓] **IOS-7 Touch modes.** Trackpad mode (relative pointer, two-finger scroll, tap to click,
   two-finger tap for right click) and direct mode (tap where you touch). Pinch zooms the viewport
   on iPhone.
-- [ ] **IOS-8 iPhone layout.** Portrait: picture on top, trackpad and key row below. Landscape:
+- [✓] **IOS-8 iPhone layout.** Portrait: picture on top, trackpad and key row below. Landscape:
   full screen with auto-hiding controls.
-- [ ] **IOS-9 Pairing UI.** Bonjour list of Drift Hosts, QR scan or typed code, pinned host key
-  stored in the Keychain (pairs with HOST-8).
-- [ ] **IOS-10 Clipboard on iOS.** UIPasteboard backend for `drift-clipboard`; paste only on an
+- [~] **IOS-9 Pairing UI.** Bonjour list of Drift Hosts, QR scan or typed code, pinned host key
+  stored in the Keychain (pairs with HOST-8). *Client half done (ADR `IOS-9-pairing`): discovery,
+  code and `drift-pair:` link, QR scanner, paired profiles, Keychain device key and pins. The
+  host checking the code and storing the device key waits for HOST-8 and EXT-1.*
+- [✓] **IOS-10 Clipboard on iOS.** UIPasteboard backend for `drift-clipboard`; paste only on an
   explicit user action, so iOS never shows its paste prompt unasked.
-- [ ] **IOS-11 Session switcher.** On iOS, the UI-windows "one window per connection" becomes an
+- [✓] **IOS-11 Session switcher.** On iOS, the UI-windows "one window per connection" becomes an
   in-app switcher (or scenes, if IOS-1 says Tauri allows them).
 
 ## HOST — Drift Host (Mac)
