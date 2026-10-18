@@ -11,8 +11,9 @@ publish.workspace = true
 # `macos` is on by default so the workspace build (clippy, nextest, coverage) always compiles
 # and smoke-tests the NSPasteboard adapter. Pure-only consumers can use
 # `default-features = false`. See docs/adr/M5-1-clipboard-format-mapping.md.
+# The adapter's dependencies are macOS-only, so the feature is a no-op on iOS (IOS-2).
 default = ["macos"]
-## NSPasteboard adapter (task M5-3).
+## NSPasteboard adapter (task M5-3); macOS targets only.
 macos = ["dep:objc2", "dep:objc2-foundation", "dep:objc2-app-kit"]
 
 [dependencies]
@@ -20,6 +21,8 @@ drift-core.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 image = { version = "0.25.10", default-features = false, features = ["png", "bmp"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { workspace = true, optional = true }
 objc2-foundation = { workspace = true, optional = true, features = ["NSString", "NSData", "NSArray", "NSDictionary"] }
 objc2-app-kit = { workspace = true, optional = true, features = ["NSPasteboard", "NSBitmapImageRep", "NSImageRep"] }

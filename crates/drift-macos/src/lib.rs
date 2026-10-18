@@ -19,6 +19,9 @@
 //! Decision logic lives in pure code (`drift-input`, `drift-core`, and the pure modules
 //! [`input`], [`cursor`]); the AppKit-facing code only extracts plain
 //! values and applies results. Every `unsafe` block has a `// SAFETY:` comment.
+//!
+//! AppKit exists only on macOS, so the crate is empty on every other target (IOS-2).
+#![cfg(target_os = "macos")]
 
 pub mod alert;
 pub mod cursor;
