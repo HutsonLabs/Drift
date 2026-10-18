@@ -392,6 +392,11 @@ app is in the background. Still to do by hand:
       a drop to the system rate when Connections is in front.
 - [ ] **H.264 on a device:** `headless_motion.h264` decodes without `-8969` (it fails only in the
       simulator's software decoder, ADR `IOS-0` open question 3).
+- [ ] **IOS-10 paste button:** with a live session, copy text in Notes, tap the paste button in
+      the picture's bottom-right corner: no "Drift would like to paste" prompt appears, and the
+      text is typed into the remote's focused text field (Ctrl+V). Repeat with a copied photo
+      and a "Text and images" profile. Copy on the remote, then paste in Notes. Switch the
+      profile's clipboard off: the button disappears.
 
 ### IOS-9 — Pairing (ADR `IOS-9-pairing`)
 

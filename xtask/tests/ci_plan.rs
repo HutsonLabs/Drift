@@ -246,7 +246,7 @@ fn declared_features_skips_default() {
 // --- IOS-2: the platform-neutral and Apple-framework crates keep building for iOS ---
 
 /// The crates ADR `IOS-0` decision 8 requires to build for iOS.
-/// IOS-3 adds the shared Apple layer and the UIKit layer.
+/// IOS-3 adds the shared Apple layer and the UIKit layer; IOS-10 the clipboard (UIPasteboard).
 const IOS_CRATES: &[&str] = &[
     "drift-core",
     "drift-rdp",
@@ -257,6 +257,7 @@ const IOS_CRATES: &[&str] = &[
     "drift-render",
     "drift-apple",
     "drift-ios",
+    "drift-clipboard",
 ];
 
 #[test]

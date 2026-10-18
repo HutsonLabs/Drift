@@ -31,6 +31,26 @@ impl ClipboardContents {
         self.items.is_empty()
     }
 
+    /// What one explicit paste on iOS offers the session (IOS-10): the pasted text and/or PNG,
+    /// filtered by the profile's clipboard preference as `PasteboardPort::read` does on macOS.
+    /// Empty representations are dropped and CRLF becomes LF.
+    pub fn from_paste(text: Option<String>, png: Option<Vec<u8>>, level: drift_core::ClipboardPrefs) -> Self {
+        use drift_core::ClipboardPrefs;
+        let mut items = Vec::new();
+        if level == ClipboardPrefs::Off {
+            return Self { items };
+        }
+        if let Some(text) = text.filter(|t| !t.is_empty()) {
+            items.push(ClipboardItem::Text(text.replace("\r\n", "\n")));
+        }
+        if level == ClipboardPrefs::TextAndImages
+            && let Some(png) = png.filter(|p| !p.is_empty())
+        {
+            items.push(ClipboardItem::Png(png));
+        }
+        Self { items }
+    }
+
     /// The text representation, if any.
     pub fn text(&self) -> Option<&str> {
         self.items.iter().find_map(|i| match i {

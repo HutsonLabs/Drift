@@ -16,13 +16,18 @@
 //!
 //! With `FAKE_HOST_CLOSE_AFTER=<seconds>`, every connection is closed by the host after that
 //! long, which sends the client through its reconnect path (M7, IOS-5).
+//!
+//! With `FAKE_HOST_COPY_TEXT=<text>`, the host copies that text two seconds after connecting
+//! and asks for the client's text clipboard every five seconds, so both clipboard directions can
+//! be checked (IOS-10). Stop it with SIGINT to print what each connection received.
 #![allow(missing_docs, clippy::print_stdout, clippy::unwrap_used, clippy::expect_used)]
 
 use std::time::Duration;
 
 use drift_core::{ConnectMode, ConnectionProfile, ProfileStore};
-use drift_testkit::Channels;
 use drift_testkit::fake_server::{FakeServer, LegScript, ServerAction, TestCert};
+use drift_testkit::{Channels, ServerClipFormat};
+use ironrdp_pdu::input::fast_path::FastPathInputEvent;
 
 /// Connections served before the host stops answering.
 const LEGS: usize = 20;
@@ -34,10 +39,18 @@ const FRAMES: u32 = 30 * 600;
 const SIZE: (u16, u16) = (1280, 800);
 const SQUARE: u16 = 120;
 
-fn leg(cert: &TestCert, close_after: Option<u32>) -> LegScript {
+/// `CF_UNICODETEXT`.
+const CF_UNICODETEXT: u32 = 13;
+
+fn leg(cert: &TestCert, close_after: Option<u32>, copy_text: Option<&str>) -> LegScript {
     let mut leg = LegScript::nla(cert.clone(), USER, PASSWORD)
         .with_channels(Channels::all())
         .then(ServerAction::GfxReset(u32::from(SIZE.0), u32::from(SIZE.1)));
+    if let Some(text) = copy_text {
+        leg = leg
+            .then(ServerAction::Wait(Duration::from_secs(2)))
+            .then(ServerAction::ClipboardCopy(vec![ServerClipFormat::unicode_text(text)]));
+    }
     let (mut x, mut y, mut dx, mut dy) = (0_i32, 0_i32, 9_i32, 6_i32);
     let frames = close_after.map_or(FRAMES, |secs| secs * 30);
     for frame in 0..frames {
@@ -51,6 +64,9 @@ fn leg(cert: &TestCert, close_after: Option<u32>) -> LegScript {
         if y < 0 || y + i32::from(SQUARE) > i32::from(SIZE.1) {
             dy = -dy;
             y += 2 * dy;
+        }
+        if copy_text.is_some() && frame % 150 == 149 {
+            leg = leg.then(ServerAction::ClipboardPaste(CF_UNICODETEXT));
         }
         let shade = u8::try_from(frame % 200).unwrap_or(0) + 40;
         leg = leg
@@ -75,7 +91,8 @@ async fn main() {
     let dir = std::env::args().nth(1).expect("usage: fake_host <config dir>");
     let cert = TestCert::generate("fake-host.local");
     let close_after = std::env::var("FAKE_HOST_CLOSE_AFTER").ok().and_then(|s| s.parse().ok());
-    let script = leg(&cert, close_after);
+    let copy_text = std::env::var("FAKE_HOST_COPY_TEXT").ok();
+    let script = leg(&cert, close_after, copy_text.as_deref());
     let server = FakeServer::start(vec![script; LEGS]).await.expect("listen on 127.0.0.1");
 
     let mut profile = ConnectionProfile::new("Fake host", "127.0.0.1", ConnectMode::Headless);
@@ -93,6 +110,24 @@ async fn main() {
     println!("DRIFT_SMOKE_SECRET={}:rdp-user:{PASSWORD}", profile.id);
     tokio::signal::ctrl_c().await.ok();
     for (i, leg) in server.log().legs.iter().enumerate() {
-        println!("leg {i}: error={:?}", leg.error);
+        let keys = leg
+            .fast_path_events
+            .iter()
+            .filter(|e| matches!(e, FastPathInputEvent::KeyboardEvent(..)))
+            .count();
+        let texts: Vec<String> = leg
+            .client_data_responses
+            .iter()
+            .flatten()
+            .map(|d| {
+                String::from_utf16_lossy(
+                    &d.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect::<Vec<_>>(),
+                )
+            })
+            .collect();
+        println!(
+            "leg {i}: error={:?} format_lists={:?} key_events={keys} pasted_texts={texts:?}",
+            leg.error, leg.client_format_lists
+        );
     }
 }

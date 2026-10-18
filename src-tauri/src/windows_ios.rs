@@ -19,10 +19,14 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use drift_core::{ConnectionProfile, InputEvent, Size, ViewGeometry};
+use drift_clipboard::ClipboardContents;
+use drift_clipboard::poll::PasteboardPort as _;
+use drift_clipboard::uipasteboard::UiPasteboard;
+use drift_core::{ClipboardPrefs, ConnectionProfile, InputEvent, Size, ViewGeometry};
 use drift_gfx::FrameSink;
 use drift_ios::lifecycle::AppObserver;
 use drift_ios::pacing::FramePacing;
+use drift_ios::paste::{PasteButton, Pasted};
 use drift_ios::view::{RemoteView, RemoteViewHandler};
 use drift_rdp::{SessionCommand, SessionHandle};
 use drift_render::{Compositor, Gpu, LayerTarget, RenderThread};
@@ -72,6 +76,10 @@ struct WindowPlatform {
     surface: Surface,
     link: Rc<SessionLink>,
     render: Option<RenderThread<Compositor<LayerTarget>>>,
+    /// The paste button over the picture (IOS-10); `None` if it could not be added.
+    paste: Option<PasteButton>,
+    /// The profile's clipboard preference: no paste button when it is off.
+    clipboard: ClipboardPrefs,
 }
 
 /// App-wide main-thread state.
@@ -400,15 +408,30 @@ fn build_session_window<R: Runtime>(
         .map_err(tauri_error)?;
     let web = SendView(page_view_of(&window)?);
     let label2 = label.to_owned();
+    let clipboard = profile.clipboard;
     on_main(app, move |mtm| -> Result<(), CommandError> {
         let web = web.into_inner();
         let view = drift_ios::webview::attach_below(mtm, &web).map_err(|e| platform_error(e.to_string()))?;
         let link = SessionLink::new();
         view.set_handler(link.clone());
         view.setHidden(true);
+        let paste = {
+            let link = link.clone();
+            PasteButton::install(mtm, &view, move |pasted: Pasted| {
+                let contents = ClipboardContents::from_paste(pasted.text, pasted.png, clipboard);
+                for cmd in crate::paste::paste_commands(contents, clipboard) {
+                    link.send(cmd);
+                }
+            })
+        };
+        if paste.is_none() {
+            tracing::warn!("could not add the paste button");
+        }
+        let plat =
+            WindowPlatform { view, web, surface: Surface::Webview, link, render: None, paste, clipboard };
+        layout(&plat);
         PLATFORM.with(|p| {
-            p.borrow_mut()
-                .insert(label2, WindowPlatform { view, web, surface: Surface::Webview, link, render: None });
+            p.borrow_mut().insert(label2, plat);
         });
         Ok(())
     })??;
@@ -536,6 +559,11 @@ fn layout(plat: &WindowPlatform) {
     let Some((width, height)) = drift_ios::webview::container_size(&plat.web) else { return };
     plat.view.setHidden(plat.surface == Surface::Webview);
     plat.web.setHidden(plat.surface == Surface::Remote);
+    if let Some(paste) = &plat.paste {
+        paste.place(width, height);
+        let picture = matches!(plat.surface, Surface::Remote | Surface::Hud(_));
+        paste.set_visible(picture && plat.clipboard != ClipboardPrefs::Off);
+    }
     match plat.surface {
         Surface::Webview | Surface::Overlay | Surface::Remote => {
             drift_ios::webview::place_page(&plat.web, 0.0, 0.0, width, height, true);
@@ -685,11 +713,15 @@ fn refresh_shell<R: Runtime>(app: &AppHandle<R>) {
     push_connections(app);
 }
 
-/// Remote clipboard contents. The UIPasteboard backend arrives with IOS-10; until then the remote
-/// clipboard is not written on iOS.
-pub(crate) fn write_pasteboard<R: Runtime>(
-    _app: &AppHandle<R>,
-    _label: &str,
-    _contents: drift_clipboard::ClipboardContents,
-) {
+/// Writes remote clipboard contents to the general pasteboard, but only while the window is in
+/// front (plan M5-2: only the focused session syncs). Writing never shows a prompt on iOS.
+pub(crate) fn write_pasteboard<R: Runtime>(app: &AppHandle<R>, label: &str, contents: ClipboardContents) {
+    let label = label.to_owned();
+    let _ = on_main(app, move |_| {
+        let front = with_platform(&label, |plat| drift_ios::webview::is_front(&plat.web)).unwrap_or(false);
+        tracing::debug!(%label, front, "remote clipboard");
+        if front {
+            UiPasteboard::general().write(&contents);
+        }
+    });
 }

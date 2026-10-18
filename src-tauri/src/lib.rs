@@ -17,6 +17,7 @@ pub mod manager;
 pub mod menu;
 mod options;
 pub mod pairing;
+pub mod paste;
 pub mod platform;
 pub mod present;
 pub mod profiles;

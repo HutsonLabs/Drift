@@ -41,7 +41,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   stored in the Keychain (pairs with HOST-8). *Client half done (ADR `IOS-9-pairing`): discovery,
   code and `drift-pair:` link, QR scanner, paired profiles, Keychain device key and pins. The
   host checking the code and storing the device key waits for HOST-8 and EXT-1.*
-- [ ] **IOS-10 Clipboard on iOS.** UIPasteboard backend for `drift-clipboard`; paste only on an
+- [✓] **IOS-10 Clipboard on iOS.** UIPasteboard backend for `drift-clipboard`; paste only on an
   explicit user action, so iOS never shows its paste prompt unasked.
 - [ ] **IOS-11 Session switcher.** On iOS, the UI-windows "one window per connection" becomes an
   in-app switcher (or scenes, if IOS-1 says Tauri allows them).
