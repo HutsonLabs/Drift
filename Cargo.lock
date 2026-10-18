@@ -1582,6 +1582,7 @@ dependencies = [
  "dispatch2",
  "drift-apple",
  "drift-core",
+ "drift-input",
  "objc2",
  "objc2-core-foundation",
  "objc2-foundation",

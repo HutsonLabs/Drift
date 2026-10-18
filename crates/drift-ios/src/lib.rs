@@ -18,6 +18,7 @@
 
 pub mod lifecycle;
 pub mod pacing;
+pub mod pointer_lock;
 pub mod settings;
 pub mod view;
 pub mod webview;
