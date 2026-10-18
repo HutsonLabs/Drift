@@ -403,6 +403,12 @@ app is in the background. Still to do by hand:
       a pinch zooms the picture and taps still land under the finger. On an iPad (direct by
       default) a tap clicks where you touch, a long press right-clicks, a drag drags. Switching the
       profile's "Touch on iPhone and iPad" changes the next session.
+- [ ] **IOS-8 iPhone layout:** on an iPhone, portrait shows the picture on top, the trackpad and
+      the key row; ctrl+c with the latched key copies on the remote; the keyboard button brings up
+      the iOS keyboard and typing (including emoji and Return) reaches the remote. Turning to
+      landscape gives a full-screen picture whose key row hides after 4 s and comes back from a
+      touch at the bottom edge. (Checked by screenshot in the simulator on 2026-10-18; keys and
+      touches need a device.)
 - [ ] **H.264 on a device:** `headless_motion.h264` decodes without `-8969` (it fails only in the
       simulator's software decoder, ADR `IOS-0` open question 3).
 - [ ] **IOS-10 paste button:** with a live session, copy text in Notes, tap the paste button in

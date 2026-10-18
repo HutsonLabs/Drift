@@ -12,6 +12,7 @@ drift-apple.workspace = true
 drift-core.workspace = true
 drift-input.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 
 # UIKit exists only on iOS; the crate is empty elsewhere.
 [target.'cfg(target_os = "ios")'.dependencies]

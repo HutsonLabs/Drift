@@ -18,6 +18,7 @@ pub mod menu;
 mod options;
 pub mod pairing;
 pub mod paste;
+pub mod phone;
 pub mod platform;
 pub mod present;
 pub mod profiles;
@@ -75,6 +76,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::start_host_discovery,
             commands::stop_host_discovery,
             commands::scan_pairing_qr,
+            commands::send_keys,
+            commands::type_text,
+            commands::set_touch_mode,
+            commands::phone_controls,
         ])
         .events(tauri_specta::collect_events![
             view::SessionViewChanged,
@@ -83,6 +88,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             connections::ConnectionsIntentRequested,
             connections::WindowIdentityChanged,
             pairing::HostsDiscovered,
+            phone::PhoneControlsChanged,
         ])
         .typ::<drift_core::ConnectionProfile>()
         .typ::<drift_core::SessionState>()

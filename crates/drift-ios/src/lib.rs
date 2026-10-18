@@ -15,6 +15,7 @@
 //! | [`paste`] | `UIPasteControl` over the picture: the explicit, prompt-free paste | IOS-10 |
 //! | [`hardware`] | `GCKeyboard` keys and `GCMouse` deltas (under pointer lock) to the front session | IOS-6 |
 //! | [`pointer_lock`] | `prefersPointerLocked` on tao's root view controller, per instance | IOS-6 |
+//! | [`layout`] | `ResizeWatcher`: tells the iPhone layout when the root view rotates or resizes | IOS-8 |
 //! | [`pacing`] | `CADisplayLink` asking for up to 120 Hz while a session is visible | IOS-4 |
 //!
 //! UIKit exists only on iOS, so the crate is empty on every other target. Every `unsafe` block
@@ -22,6 +23,7 @@
 #![cfg(target_os = "ios")]
 
 pub mod hardware;
+pub mod layout;
 pub mod lifecycle;
 pub mod pacing;
 pub mod paste;
@@ -34,5 +36,8 @@ pub mod webview;
 
 pub use drift_apple::{Keychain, KeychainError, PathMonitor, PathStatus, TriggerFeed};
 pub use lifecycle::{AppObserver, ReconnectTriggers};
+/// Core Graphics geometry, for callers that place Drift's views (the app has no direct
+/// `objc2-core-foundation` dependency on iOS).
+pub use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 pub use pacing::FramePacing;
 pub use view::{RemoteView, RemoteViewHandler};

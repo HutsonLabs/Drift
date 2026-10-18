@@ -52,6 +52,15 @@ mod tests {
             ("direct_touch_clicks_on_the_picture", direct_touch_clicks_on_the_picture),
             ("trackpad_touch_moves_relatively", trackpad_touch_moves_relatively),
             ("pinch_transforms_the_view_on_phones", pinch_transforms_the_view_on_phones),
+            (
+                "trackpad_view_drives_the_picture_as_a_trackpad",
+                trackpad_view_drives_the_picture_as_a_trackpad,
+            ),
+            (
+                "bottom_strip_reveals_controls_instead_of_clicking",
+                bottom_strip_reveals_controls_instead_of_clicking,
+            ),
+            ("resize_watcher_reports_size_changes", resize_watcher_reports_size_changes),
         ])
     }
 
@@ -221,5 +230,56 @@ mod tests {
         assert!(t.a > 1.5, "zoomed in: {t:?}");
         view.reset_zoom();
         assert_eq!(view.transform().a, 1.0);
+    }
+
+    fn trackpad_view_drives_the_picture_as_a_trackpad() {
+        let (view, rec) = attached();
+        // Even when the picture itself is in direct mode, the pad below it is a trackpad.
+        view.set_touch(drift_core::TouchMode::Direct, true);
+        view.pointer_hover(Point::new(0.0, 0.0));
+        let pad = drift_ios::view::TrackpadView::new(mtm(), rect(400.0, 300.0), &view);
+        pad.finger_began(7, Point::new(100.0, 100.0), 0.0);
+        pad.finger_moved(7, Point::new(120.0, 100.0), 0.05);
+        assert_eq!(rec.events.borrow().last(), Some(&InputEvent::MouseMove { x: 60, y: 0 }));
+        pad.finger_ended(7, Point::new(120.0, 100.0), 0.5);
+        pad.finger_began(8, Point::new(100.0, 100.0), 1.0);
+        pad.finger_ended(8, Point::new(100.0, 100.0), 1.1);
+        assert_eq!(
+            rec.events.borrow().last(),
+            Some(&InputEvent::MouseButton { button: MouseButton::Left, down: false, x: 60, y: 0 }),
+            "a tap on the pad clicks where the pointer is"
+        );
+    }
+
+    fn bottom_strip_reveals_controls_instead_of_clicking() {
+        let (view, rec) = attached();
+        view.set_touch(drift_core::TouchMode::Direct, true);
+        let revealed = Rc::new(std::cell::Cell::new(0));
+        let r = revealed.clone();
+        view.set_reveal_strip(Some(40.0), Box::new(move || r.set(r.get() + 1)));
+        view.finger_began(1, Point::new(500.0, 480.0), 0.0);
+        view.finger_ended(1, Point::new(500.0, 480.0), 0.1);
+        assert_eq!(revealed.get(), 1);
+        assert!(rec.events.borrow().is_empty(), "{:?}", rec.events.borrow());
+        view.finger_began(2, Point::new(500.0, 100.0), 1.0);
+        view.finger_ended(2, Point::new(500.0, 100.0), 1.1);
+        assert_eq!(revealed.get(), 1);
+        assert!(!rec.events.borrow().is_empty(), "above the strip a tap clicks");
+    }
+
+    fn resize_watcher_reports_size_changes() {
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        let s = seen.clone();
+        let watcher = drift_ios::layout::ResizeWatcher::new(
+            mtm(),
+            rect(100.0, 50.0),
+            Box::new(move |w, h| s.borrow_mut().push((w, h))),
+        );
+        watcher.setFrame(rect(300.0, 200.0));
+        watcher.layoutIfNeeded();
+        watcher.layoutIfNeeded();
+        assert_eq!(seen.borrow().last(), Some(&(300.0, 200.0)));
+        assert_eq!(seen.borrow().iter().filter(|s| **s == (300.0, 200.0)).count(), 1);
+        assert!(!watcher.isUserInteractionEnabled(), "never takes touches");
     }
 }
