@@ -147,7 +147,9 @@ pub fn run_with(options: RunOptions) {
             };
             let profiles =
                 Arc::new(profiles::ProfileService::open(profiles::ProfileFile::in_dir(&dir), secrets)?);
-            let session_host = Arc::new(host::TauriHost::new(handle.clone(), profiles.clone()));
+            let pairing = pairing::PairingService::new(profiles.clone(), pairing_store);
+            let session_host =
+                Arc::new(host::TauriHost::new(handle.clone(), profiles.clone(), pairing.clone()));
             let sessions =
                 manager::SessionManager::new(session_host, tauri::async_runtime::handle().inner().clone());
             // The app-lifetime platform services: the 250 ms pasteboard poll (M5-3/M5-2) and
@@ -155,7 +157,6 @@ pub fn run_with(options: RunOptions) {
             // so they belong to the app, not to one window. Managed state keeps them alive.
             app.manage(services::PlatformServices::start(&handle, sessions.clone()));
             let frames = frames::FrameStore::in_dir(&dir);
-            let pairing = pairing::PairingService::new(profiles.clone(), pairing_store);
             app.manage(commands::AppState::new(profiles.clone(), sessions, frames, pairing));
             // Simulator smoke builds only: stand in for the Camera app opening a drift-pair:
             // link, which a headless simulator cannot confirm (IOS-9).

@@ -140,6 +140,7 @@ impl StatsMeter {
             frame_latency_p95_ms: self.frame_latency.percentile_ms(95),
             input_to_wire_p99_ms: self.input_latency.percentile_ms(99),
             unacked_frames,
+            host_quality: None,
         };
         self.restart(now);
         Some(stats)

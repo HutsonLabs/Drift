@@ -1,0 +1,146 @@
+From 928c8a47d1036d6d66e9ae120a49c49e3d3d9b4d Mon Sep 17 00:00:00 2001
+From: "Dr. Hutson" <dev@hutsonlabs.com>
+Date: Sun, 18 Oct 2026 12:21:34 -0500
+Subject: [PATCH] feat(ironrdp): ironrdp-egfx: private Drift HEVC codec id and
+ send_drift_hevc_frame
+
+---
+ crates/ironrdp-egfx/src/pdu/cmd.rs            |  5 ++
+ crates/ironrdp-egfx/src/server.rs             | 46 +++++++++++++++++++
+ .../tests/egfx/server.rs                      | 43 +++++++++++++++++
+ 3 files changed, 94 insertions(+)
+
+diff --git a/crates/ironrdp-egfx/src/pdu/cmd.rs b/crates/ironrdp-egfx/src/pdu/cmd.rs
+index 0b8de1e..5c957a1 100644
+--- a/crates/ironrdp-egfx/src/pdu/cmd.rs
++++ b/crates/ironrdp-egfx/src/pdu/cmd.rs
+@@ -2193,6 +2193,10 @@ pub enum Codec1Type {
+     Alpha = 0xc,
+     Avc444 = 0xe,
+     Avc444v2 = 0xf,
++    /// Drift's private HEVC codec (not part of MS-RDPEGFX): an `RFX_AVC420_METABLOCK` followed by
++    /// one HEVC Annex-B access unit. A Drift Host sends it only to a Drift client that negotiated
++    /// it on the `Drift::Mac::v1` channel; no other client ever receives it.
++    DriftHevc = 0xD001,
+ }
+ 
+ impl TryFrom<u16> for Codec1Type {
+@@ -2208,6 +2212,7 @@ impl TryFrom<u16> for Codec1Type {
+             0xc => Ok(Codec1Type::Alpha),
+             0xe => Ok(Codec1Type::Avc444),
+             0xf => Ok(Codec1Type::Avc444v2),
++            0xD001 => Ok(Codec1Type::DriftHevc),
+             _ => Err(invalid_field_err!("Codec1Type", "invalid codec type")),
+         }
+     }
+diff --git a/crates/ironrdp-egfx/src/server.rs b/crates/ironrdp-egfx/src/server.rs
+index e8b60d8..9624173 100644
+--- a/crates/ironrdp-egfx/src/server.rs
++++ b/crates/ironrdp-egfx/src/server.rs
+@@ -1479,6 +1479,52 @@ impl GraphicsPipelineServer {
+         Some(frame_id)
+     }
+ 
++    /// Queue a frame of Drift's private HEVC codec ([`Codec1Type::DriftHevc`]): the same
++    /// metablock as AVC420 followed by one HEVC Annex-B access unit.
++    ///
++    /// The caller must only use it with a client that negotiated the codec out of band (Drift's
++    /// `Drift::Mac::v1` channel); there is no capability set for it.
++    ///
++    /// Returns `Some(frame_id)` if queued, `None` if not ready or backpressured.
++    pub fn send_drift_hevc_frame(
++        &mut self,
++        surface_id: u16,
++        hevc_data: &[u8],
++        regions: &[Avc420Region],
++        timestamp_ms: u32,
++    ) -> Option<u32> {
++        if !self.is_ready() {
++            return None;
++        }
++        if self.should_backpressure() {
++            self.qoe.record_backpressure();
++            return None;
++        }
++
++        let surface = self.surfaces.get(surface_id)?;
++
++        let timestamp = Self::make_timestamp(timestamp_ms);
++        let frame_id = self.frames.begin_frame(timestamp);
++
++        let encoded_stream = encode_avc420_bitmap_stream(regions, hevc_data);
++        let target_rect = Self::compute_dest_rect(regions, surface.width, surface.height);
++
++        self.output_queue
++            .push_back(GfxPdu::StartFrame(StartFramePdu { timestamp, frame_id }));
++
++        self.output_queue.push_back(GfxPdu::WireToSurface1(WireToSurface1Pdu {
++            surface_id,
++            codec_id: Codec1Type::DriftHevc,
++            pixel_format: surface.pixel_format,
++            destination_rectangle: target_rect,
++            bitmap_data: encoded_stream,
++        }));
++
++        self.output_queue.push_back(GfxPdu::EndFrame(EndFramePdu { frame_id }));
++
++        Some(frame_id)
++    }
++
+     /// Queue an H.264 AVC444 frame for transmission
+     ///
+     /// AVC444 uses two streams: luma (Y) and chroma (UV). Set `chroma_data` to
+diff --git a/crates/ironrdp-testsuite-core/tests/egfx/server.rs b/crates/ironrdp-testsuite-core/tests/egfx/server.rs
+index 6bf6f5a..0eace12 100644
+--- a/crates/ironrdp-testsuite-core/tests/egfx/server.rs
++++ b/crates/ironrdp-testsuite-core/tests/egfx/server.rs
+@@ -853,3 +853,46 @@ fn test_a_suspending_acknowledgement_still_acknowledges_its_frame() {
+         "the suspending acknowledgement was not counted, so no round-trip sample exists"
+     );
+ }
++
++#[test]
++fn drift_hevc_sender_uses_the_private_codec_id_and_the_avc420_metablock() {
++    let handler = Box::new(TestHandler::new());
++    let mut server = GraphicsPipelineServer::new(handler);
++    let client_caps_pdu = GfxPdu::CapabilitiesAdvertise(CapabilitiesAdvertisePdu::from_typed(&[CapabilitySet::V8_1 {
++        flags: CapabilitiesV81Flags::AVC420_ENABLED,
++    }]));
++    server
++        .process(0, &encode_pdu(&client_caps_pdu))
++        .expect("process capabilities");
++    let surface_id = server.create_surface(64, 64).expect("create surface");
++    server.drain_output();
++
++    // An HEVC VPS NAL unit header (type 32) after the start code.
++    let data = [0x00, 0x00, 0x00, 0x01, 0x40, 0x01];
++    let regions = [Avc420Region::new(0, 0, 32, 16, 22, 100)];
++    server
++        .send_drift_hevc_frame(surface_id, &data, &regions, 7)
++        .expect("queue a Drift HEVC frame");
++
++    let output = server.drain_output();
++    let mut decompressor = Decompressor::new();
++    let encoded = encode_vec(output[1].as_ref()).expect("encode DVC message");
++    let mut decoded = Vec::new();
++    decompressor
++        .decompress(&encoded, &mut decoded)
++        .expect("decompress WireToSurface1");
++    let mut cursor = ReadCursor::new(&decoded);
++    let GfxPdu::WireToSurface1(wire) = GfxPdu::decode(&mut cursor).expect("decode WireToSurface1") else {
++        panic!("expected WireToSurface1");
++    };
++    assert_eq!(wire.codec_id, Codec1Type::DriftHevc);
++    assert_eq!(
++        u16::from(Codec1Type::DriftHevc),
++        0xD001,
++        "outside MS-RDPEGFX's 0x0000-0x000F"
++    );
++    let mut cursor = ReadCursor::new(&wire.bitmap_data);
++    let stream = ironrdp_egfx::pdu::Avc420BitmapStream::decode(&mut cursor).expect("decode the metablock");
++    assert_eq!(stream.data, &data);
++    assert_eq!(stream.rectangles[0].right, 32);
++}
+-- 
+2.54.0 (Apple Git-157)
+

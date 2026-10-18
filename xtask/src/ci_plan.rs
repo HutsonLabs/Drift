@@ -162,8 +162,18 @@ fn check(name: &str, c: Check) -> Step {
 /// not depend on them, and they do not build on a macOS host (libopus, wasm-bindgen). The whole
 /// vendored workspace cannot be tested for the same reason — see
 /// `docs/adr/M0-6-ci-gate-coverage.md`.
-pub const VENDORED_TEST_PACKAGES: &[&str] =
-    &["ironrdp-testsuite-core", "ironrdp-cliprdr", "ironrdp-connector", "ironrdp-pdu", "ironrdp-session"];
+///
+/// `ironrdp-server` joined with HOST-2's patch (`RdpServer::add_dvc_factory`), `ironrdp-egfx`
+/// with EXT-5's (`Codec1Type::DriftHevc`, `send_drift_hevc_frame`).
+pub const VENDORED_TEST_PACKAGES: &[&str] = &[
+    "ironrdp-testsuite-core",
+    "ironrdp-cliprdr",
+    "ironrdp-connector",
+    "ironrdp-pdu",
+    "ironrdp-session",
+    "ironrdp-server",
+    "ironrdp-egfx",
+];
 
 /// The iOS targets the iOS crates must build for (ADR `IOS-0`, decision 8).
 pub const IOS_TARGETS: &[&str] = &["aarch64-apple-ios", "aarch64-apple-ios-sim"];

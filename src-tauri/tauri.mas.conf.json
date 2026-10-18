@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": ["app"],
+    "macOS": {
+      "entitlements": "entitlements.mas.plist",
+      "signingIdentity": "732EB0D94375A915CFEDA49F2650594538D75E04"
+    }
+  }
+}

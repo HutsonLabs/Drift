@@ -259,3 +259,49 @@ fn scancode_event() {
         InputEvent::Key { scancode: 0x1E, extended: false, down: false }
     );
 }
+
+// ---- HOST-6: the inverse table (set-1 scancode → kVK_*) for the Mac host --------------------
+
+/// Every `kVK_*` that maps to a scancode maps back to itself, for each keyboard type: both
+/// directions come from the same table, so they cannot drift apart.
+#[test]
+fn kvk_for_round_trips_every_mapped_key() {
+    for keyboard in [KeyboardType::Ansi, KeyboardType::Iso, KeyboardType::Jis] {
+        for &(name, code) in ALL_KVK {
+            let Some(sc) = scancode_for(code, keyboard, CmdAs::Super) else { continue };
+            assert_eq!(kvk_for(sc, keyboard), Some(code), "{name} on {keyboard:?} via {sc:?}");
+        }
+    }
+}
+
+#[test]
+fn kvk_for_maps_windows_keys_to_command_and_keeps_control() {
+    assert_eq!(kvk_for(Scancode::ext(0x5B), KeyboardType::Ansi), Some(kvk::COMMAND));
+    assert_eq!(kvk_for(Scancode::ext(0x5C), KeyboardType::Ansi), Some(kvk::RIGHT_COMMAND));
+    assert_eq!(kvk_for(Scancode::new(0x1D), KeyboardType::Ansi), Some(kvk::CONTROL));
+    assert_eq!(kvk_for(Scancode::ext(0x1D), KeyboardType::Ansi), Some(kvk::RIGHT_CONTROL));
+}
+
+#[test]
+fn kvk_for_undoes_the_iso_swap_on_iso_hosts() {
+    // The key left of `1` (scancode 0x29) is kVK_ISO_Section on an ISO Mac, kVK_ANSI_Grave on ANSI.
+    assert_eq!(kvk_for(Scancode::new(0x29), KeyboardType::Iso), Some(kvk::ISO_SECTION));
+    assert_eq!(kvk_for(Scancode::new(0x56), KeyboardType::Iso), Some(kvk::ANSI_GRAVE));
+    assert_eq!(kvk_for(Scancode::new(0x29), KeyboardType::Ansi), Some(kvk::ANSI_GRAVE));
+    assert_eq!(kvk_for(Scancode::new(0x56), KeyboardType::Ansi), Some(kvk::ISO_SECTION));
+}
+
+#[test]
+fn kvk_for_has_no_answer_for_pc_only_keys() {
+    // Num Lock, Print Screen, Scroll Lock, Pause/Break (E1 sequence never reaches here) and
+    // unknown codes have no Mac key.
+    for sc in [
+        Scancode::new(0x45),
+        Scancode::ext(0x37),
+        Scancode::new(0x46),
+        Scancode::new(0x00),
+        Scancode::ext(0x7F),
+    ] {
+        assert_eq!(kvk_for(sc, KeyboardType::Ansi), None, "{sc:?}");
+    }
+}

@@ -1,0 +1,21 @@
+[package]
+name = "drift-inject"
+description = "Drift Host input injection: RDP fast-path input to macOS events (pure plan + CGEventPost poster)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+drift-core.workspace = true
+drift-ext.workspace = true
+drift-input.workspace = true
+ironrdp-pdu.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-core-foundation.workspace = true
+objc2-core-graphics = { workspace = true, features = ["CGEvent", "CGEventTypes", "CGRemoteOperation", "CGEventSource"] }
+
+[lints]
+workspace = true

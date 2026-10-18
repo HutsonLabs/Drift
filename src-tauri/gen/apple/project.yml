@@ -30,7 +30,11 @@ targets:
     sources:
       - path: Sources
       - path: Assets.xcassets
+      # Rust's static library is linked (`dependencies` below), never copied into the app; a
+      # plain source entry made xcodegen bundle the 900 MB `libapp.a` as a resource (STORE-3).
       - path: Externals
+        buildPhase: none
+      # Info.plist, entitlements and the privacy manifest (PrivacyInfo.xcprivacy, a resource).
       - path: drift-app_iOS
       - path: assets
         buildPhase: resources
@@ -108,6 +112,8 @@ targets:
       - sdk: libz.tbd
       # drift-ios: the pairing QR scanner (IOS-9).
       - sdk: AVFoundation.framework
+      # drift-apple: the session's sound through AVAudioEngine (HOST-11).
+      - sdk: AVFAudio.framework
     preBuildScripts:
       - script: cargo tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
         name: Build Rust Code

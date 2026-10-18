@@ -82,6 +82,28 @@ pub struct SessionOptions {
     pub reconnect: ReconnectConfig,
     /// Seed for the backoff jitter; `None` seeds from the system time (tests pin it).
     pub reconnect_seed: Option<u64>,
+    /// Report the `Drift::Mac::v1` extension channel here (EXT-1). With `None` the client does
+    /// not offer the channel at all; with a link it accepts it when a Drift Host opens it, and
+    /// the link stays `Absent` with any other server. Reset at every connection leg.
+    pub drift_mac: Option<drift_ext::channel::Link>,
+    /// The graphics capabilities to advertise: the verified V8.1 list for GNOME and every other
+    /// host, or V10 first for a paired Drift Host, which then may send AVC444 (ADR
+    /// `AVC444-client`).
+    pub gfx_caps: drift_gfx::GfxCaps,
+    /// Play the server's sound here (HOST-11). With `None` the client does not offer the sound
+    /// channel.
+    pub audio: Option<crate::audio::AudioOutput>,
+    /// Pair with, or authenticate to, a Drift Host over `Drift::Mac::v1` (HOST-8). Needs
+    /// [`Self::drift_mac`]. A host that refuses the device ends the session with
+    /// `DisconnectReason::PairingRefused` and no retry.
+    pub pairing: Option<drift_ext::pairing::ClientPairing>,
+    /// Mirror the host's menu bar (EXT-3): offer menus on `Drift::Mac::v1` and poll for the
+    /// frontmost Mac app's menus while the session is in front ([`SessionEvent::Menu`]). Needs
+    /// [`Self::drift_mac`]; only a Drift Host answers.
+    pub menus: bool,
+    /// The quality to ask a Drift Host for (EXT-4). `None` picks the default from the profile's
+    /// host: the best at home, a lower cap when the host is away from the local network.
+    pub quality: Option<drift_ext::status::QualityPreference>,
 }
 
 impl Default for SessionOptions {
@@ -92,6 +114,12 @@ impl Default for SessionOptions {
             connect_timeout: Duration::from_secs(15),
             reconnect: ReconnectConfig::default(),
             reconnect_seed: None,
+            drift_mac: None,
+            gfx_caps: drift_gfx::GfxCaps::Gnome,
+            audio: None,
+            pairing: None,
+            menus: false,
+            quality: None,
         }
     }
 }
@@ -135,6 +163,8 @@ pub enum SessionCommand {
     Cancel,
     /// Graceful shutdown (sends Shutdown Request at the greeter, M3-4), then the actor exits.
     Close,
+    /// Choose item `id` of the mirrored menu bar ([`SessionEvent::Menu`], EXT-3).
+    MenuPress(u32),
 }
 
 /// A remote pointer shape or position update (M2-5).
@@ -188,6 +218,8 @@ pub struct SessionStats {
     pub input_to_wire_p99_ms: f32,
     /// Frames awaiting acknowledgement.
     pub unacked_frames: u32,
+    /// The quality a Drift Host reports it uses (EXT-4); `None` for any other server.
+    pub host_quality: Option<drift_ext::status::QualityLevel>,
 }
 
 /// Events from the session actor to the app.
@@ -217,6 +249,8 @@ pub enum SessionEvent {
     ClipboardRemote(ClipboardContents),
     /// Statistics.
     Stats(SessionStats),
+    /// The host's frontmost app's menu bar changed; `None` when there is none to show (EXT-3).
+    Menu(Option<std::sync::Arc<drift_ext::menus::MenuSnapshot>>),
 }
 
 /// The actor has exited; the command was not delivered.

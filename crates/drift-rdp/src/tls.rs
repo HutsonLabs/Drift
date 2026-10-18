@@ -10,7 +10,6 @@
 use std::io;
 use std::sync::Arc;
 
-use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
 use tokio_rustls::client::TlsStream;
 use tokio_rustls::rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
@@ -73,10 +72,10 @@ fn client_config() -> Result<rustls::ClientConfig, rustls::Error> {
 }
 
 /// Performs the TLS handshake on `tcp`; returns the stream and the server's leaf DER.
-pub(crate) async fn upgrade(
-    tcp: TcpStream,
+pub(crate) async fn upgrade<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin>(
+    tcp: S,
     server_name: &str,
-) -> io::Result<(TlsStream<TcpStream>, Vec<u8>)> {
+) -> io::Result<(TlsStream<S>, Vec<u8>)> {
     let config = client_config().map_err(io::Error::other)?;
     let name = ServerName::try_from(server_name.to_owned())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;

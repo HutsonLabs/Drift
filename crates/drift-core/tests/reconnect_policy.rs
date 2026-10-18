@@ -88,7 +88,8 @@ fn expected_retryable(r: &DisconnectReason) -> bool {
         | DisconnectReason::RedirectLoop
         | DisconnectReason::UserClosed
         | DisconnectReason::LoggedOffRemotely
-        | DisconnectReason::LocalNetworkDenied => false,
+        | DisconnectReason::LocalNetworkDenied
+        | DisconnectReason::PairingRefused(_) => false,
     }
 }
 
@@ -107,6 +108,7 @@ fn classification_is_exhaustive() {
         DisconnectReason::UserClosed,
         DisconnectReason::LoggedOffRemotely,
         DisconnectReason::LocalNetworkDenied,
+        DisconnectReason::PairingRefused("x".into()),
     ];
     for reason in &all {
         let mut p = ReconnectPolicy::new(ReconnectConfig::default(), 1);

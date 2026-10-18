@@ -365,7 +365,12 @@ export type DisconnectReason =
 /**  The remote user logged off. */
 { kind: "logged-off-remotely" } | 
 /**  macOS Local Network Privacy denied the connection (`EHOSTUNREACH`, errno 65). */
-{ kind: "local-network-denied" };
+{ kind: "local-network-denied" } | 
+/**
+ *  A Drift Host refused this device: wrong or expired pairing code, or a device it does not
+ *  know (HOST-8). The text says which. Not retryable.
+ */
+{ kind: "pairing-refused"; detail: string };
 
 /**  Display preferences. */
 export type DisplayPrefs = {
@@ -416,6 +421,17 @@ export type HostAdvert = {
 	/**  SHA-256 of the host's TLS certificate. */
 	fingerprint: CertFingerprint,
 };
+
+/**  A Drift Host's quality step (EXT-4), as the HUD names it. */
+export type HostQuality = 
+/**  Full bit rate and frame rate. */
+"best" | 
+/**  A lower bit rate. */
+"high" | 
+/**  Lower again, half the frame rate. */
+"medium" | 
+/**  The lowest step. */
+"low";
 
 /**  Emitted to the `connections` page while discovery runs: every Drift Host currently found. */
 export type HostsDiscovered = HostAdvert[];
@@ -767,6 +783,8 @@ export type StatsView = {
 	latency_p95_tenths_ms: number,
 	/**  Frames awaiting acknowledgement. */
 	unacked_frames: number,
+	/**  The quality a Drift Host reports, or `None` for any other server (EXT-4). */
+	host_quality: HostQuality | null,
 };
 
 /**

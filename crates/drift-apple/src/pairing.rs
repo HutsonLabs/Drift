@@ -38,6 +38,15 @@ impl std::fmt::Debug for DeviceKey {
 }
 
 impl DeviceKey {
+    /// A new key held only in memory (tests, and the host's own checks); the app's key comes from
+    /// [`PairingKeychain::device_key`].
+    pub fn generate() -> Result<Self, KeychainError> {
+        let document =
+            EcdsaKeyPair::generate_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, &SystemRandom::new())
+                .map_err(|_| KeychainError { code: 0, message: "could not generate a device key".into() })?;
+        Self::from_pkcs8(document.as_ref())
+    }
+
     fn from_pkcs8(pkcs8: &[u8]) -> Result<Self, KeychainError> {
         let rng = SystemRandom::new();
         EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8, &rng)
@@ -59,6 +68,16 @@ impl DeviceKey {
             .sign(&SystemRandom::new(), message)
             .map(|s| s.as_ref().to_vec())
             .map_err(|_| KeychainError { code: 0, message: "signing failed".into() })
+    }
+}
+
+impl drift_ext::pairing::DeviceSigner for DeviceKey {
+    fn public_key(&self) -> Vec<u8> {
+        DeviceKey::public_key(self).to_vec()
+    }
+
+    fn sign(&self, message: &[u8]) -> Option<Vec<u8>> {
+        DeviceKey::sign(self, message).ok()
     }
 }
 

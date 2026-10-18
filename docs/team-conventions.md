@@ -46,10 +46,35 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `IOS-5-ios-app-shell` | the app on iOS: `windows_ios.rs` shell, one window (scene on iPad) per connection, tracked Xcode project, `smoke-env`, `fake_host` |
 | `IOS-9-pairing` | client half of Mac pairing: `_drift-host._tcp` TXT, Damm-checked code, `drift-pair:` QR link, `paired_host` profiles, Keychain device key and pins |
 | `IOS-10-clipboard-on-ios` | UIPasteboard adapter, no polling, writes for the front window, `UIPasteControl` paste = clipboard + remote Ctrl+V |
+| `HOST-3-capture` | `drift-capture`: one `SCStream` per display, NV12 (BGRA for AVC444), damage from dirty rects, pointer sampled separately (`currentSystemCursor`), permission preflight |
+| `HOST-5-frame-mailbox` | `drift_core::mailbox`: one slot, newest wins, drops counted, `post_merging` keeps damage, async `recv` |
 | `IOS-11-session-switcher` | native switcher button over session windows, own-scene activation (tao `set_focus` bug), closed scenes close sessions, `DRIFT_SMOKE_SCRIPT` |
 | `IOS-6-ios-input` | iPad input in Rust (not a Swift plugin): HID table, `Pointer`, `GCKeyboard`/`GCMouse`, hover, pointer lock per view controller, shortcuts iPadOS keeps |
 | `IOS-7-touch-modes` | trackpad and direct touch, two-finger scroll and right click, `ConnectionProfile::touch`, iPhone pinch zoom as a view transform |
 | `IOS-8-iphone-layout` | iPhone portrait (picture, trackpad, key row) and landscape (full screen, auto-hiding key row); web key row with `send_keys`/`type_text`/`set_touch_mode`; `ResizeWatcher` |
+| `HOST-6-input-injection` | `drift-inject`: `kvk_for` from the same table, injection plan (flags, drags, clicks, 40 px per notch), CGEventPost at the HID tap, Accessibility |
+| `EXT-3-menu-mirroring` | client polls `0x02xx` menu messages, strict bounded snapshots, lazy Accessibility reader, responder `Chain` with pairing, `UIMainMenuSystem` build handler, `UIAction` items, no Mac mirroring |
+| `EXT-1-channel-framing` | `drift-ext`: `DRFT` v1 header, types by task, Hello negotiation, fallback without DVC errors, `SessionOptions::drift_mac`, fuzz target |
+| `HOST-1-server-spike` | `ironrdp-server` + `egfx` on loopback: AVC420 bit-exact to Drift, DISP layouts reach the host, what is missing for AVC444 (client caps and decode, encoder) |
+| `HOST-8-pairing` | pairing on `Drift::Mac::v1` after TLS + NLA: challenge, signed pair/auth requests, nothing shown before authorization, `devices.toml`, loopback-only without pairing |
+| `HOST-12-quic-transport` | no lossy RDP-UDP; reliable RDP-UDP2 collapses under loss; QUIC (quinn, BBR, pinned host, stream per GFX frame) for Drift-to-Drift; QUIC-then-TCP order |
+| `EXT-5-hevc-hdr` | HEVC Main / 4:4:4 between paired Drift ends: `0x05xx` offer/select, `Codec1Type::DriftHevc` (0xD001), pixel transfer to 4:4:4/10-bit sources, low-latency RC ≤ 2560×1600, HDR tags only |
+| `AVC444-client` | V10 caps only for paired Drift Hosts (GNOME keeps V8.1: V10 makes g-r-d send AVC444v2), AVC444 v1 decode with two VT sessions + CPU combine to BGRA, `drift_host::codec::choose` |
+| `HOST-4-realtime-encoder` | real-time VideoToolbox profile (low-latency RC up to 2560×1600), NV12 input, AVC444 v1 split/combine with chroma filter, AVC420/444 stream writers, 4K measurements |
+| `HOST-2-host-skeleton` | `drift-host` crate + binary: loopback default listener, one NLA account (Keychain), self-signed identity, one session (extra refused), `FrameSource` test pattern, DISP resize, input counted only, `add_dvc_factory` for `Drift::Mac::v1` |
+| `HOST-pipeline` | live picture per connection (capture → mailbox → real-time AVC420, damage → regions, never encode under backpressure), pointer updates with a shape cache, automatic injection with Accessibility |
+| `HOST-7-link-hygiene` | `NET_SERVICE_TYPE_VI` on the session socket, idle heartbeat = last pointer update every 100 ms, backlog from frames in flight + `SO_NWRITE` with hysteresis |
+| `HOST-11-clipboard-and-audio` | host runs the client's `ClipboardSync` on a clipboard thread; 16-bit stereo PCM rdpsnd from ScreenCaptureKit; `AVAudioEngine` player with a 200 ms cap; sound for every session |
+| `HOST-9-menu-bar` | Drift Host menu-bar app in Rust/AppKit (`drift-host-app`): pure menu model, permissions guidance, first-run alert, `SMAppService` login item, `cargo xtask host-bundle` |
+| `HOST-10-virtual-display` | private `CGVirtualDisplay` isolated in `cg_virtual` with a launch self-test, pure `ModePlan` (640×480…5K, HiDPI from 150 %), `DisplayManager` seam, physical fallback |
+| `HOST-13-login-window` | root daemon only brokers (accept, route, `SCM_RIGHTS` hand-off, store writes); Aqua and LoginWindow agents serve; `getpeereid` admission; shared store group `admin`; no public login-window capture |
+| `HOST-14-extra-paths` | AWDL via Bonjour P2P flags and `SO_RECV_ANYIF`; VPN = any `utun`, no NAT traversal; `NetworkPath` + `is_away` for EXT-4; no USB link (usbmuxd is private) |
+| `EXT-2-scroll-gestures` | precise scroll carries its wheel fallback; gestures only with `GESTURES`; swipes → Mission Control/Spaces shortcuts, pinch → Command-=/-, several responders per channel end |
+| `EXT-4-quality-hints` | host steps a 4-level ladder from its backlog (down fast, up after 10 s clear), client caps it; away (non-private address or public name) defaults to Medium; status in the HUD |
+| `STORE-1-mac-app-store` | `tauri.mas.conf.json` + `entitlements.mas.plist`, universal build, `cargo xtask mas-package`, what the account still lacks, export compliance |
+| `STORE-2-review-risk` | `drawsBackground` is wry's private transparency key (macOS and iOS); iOS uses public transparency; native overlays for the MAS build if review rejects; `cargo xtask review-risk` |
+| `STORE-3-ios-app-store` | privacy manifest from a scan of the built app, export options that never upload, `macos-private-api` via `drift-macos` only, `libapp.a` linked not bundled |
+| `STORE-4-host-release` | `cargo xtask host-release [--notarize]`: Developer ID, inside-out signing, Hardened Runtime, no sandbox or entitlements, notarized and stapled DMG |
 | `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility |
 
 ## Commands
@@ -69,6 +94,9 @@ another JS package manager.
 | `cargo xtask import-fixtures [--staging DIR]` | sanitize + import `~/code/drift-spikes/fixtures-staging` into `fixtures/` (M0-3, ADR `M0-3-fixture-capture-and-sanitization`) |
 | `cargo xtask host-setup-check` | read-only check of the GNOME host over SSH (M0-4, `docs/gnome-host-setup.md`) |
 | `cargo xtask bundle` | M9-5 (stub until then) |
+| `cargo xtask review-risk <app>` | private-API strings App Review may flag in a built Mac or iOS app (STORE-2) |
+| `cargo xtask host-release [--notarize]` | Drift Host: Developer ID, DMG, notarization + stapling (STORE-4); never publishes |
+| `cargo xtask mas-package [--profile F]` | the Mac App Store `.pkg`: universal, sandboxed, Apple Distribution + installer signature (STORE-1) |
 | `cargo tauri dev` / `cargo tauri build` | run / bundle the app (UI is built by bun first) |
 
 `cargo tauri build` signs with the Developer ID identity pinned in `tauri.conf.json`

@@ -9,6 +9,8 @@ publish.workspace = true
 
 [dependencies]
 drift-core.workspace = true
+libc.workspace = true
+drift-ext.workspace = true
 tracing.workspace = true
 ironrdp-graphics.workspace = true
 ironrdp-pdu.workspace = true
@@ -19,6 +21,9 @@ block2.workspace = true
 objc2.workspace = true
 dispatch2 = "0.3.1"
 security-framework = "3.7"
+# Remote sound (HOST-11): AVAudioEngine on macOS and iOS.
+objc2-avf-audio = "0.3.2"
+objc2-foundation = { workspace = true, features = ["NSError", "NSString"] }
 # P-256 device key for pairing (IOS-9); already in the tree through rustls.
 ring = "0.17"
 

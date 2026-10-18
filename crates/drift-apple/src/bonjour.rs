@@ -26,6 +26,8 @@ unsafe extern "C" {
     -> *mut c_void;
     fn nw_browse_descriptor_set_include_txt_record(descriptor: *mut c_void, include: bool);
     fn nw_parameters_create() -> *mut c_void;
+    fn nw_parameters_set_include_peer_to_peer(parameters: *mut c_void, include: bool);
+    fn nw_parameters_get_include_peer_to_peer(parameters: *mut c_void) -> bool;
     fn nw_browser_create(descriptor: *mut c_void, parameters: *mut c_void) -> *mut c_void;
     fn nw_browser_set_queue(browser: *mut c_void, queue: NonNull<DispatchQueue>);
     fn nw_browser_set_browse_results_changed_handler(
@@ -155,8 +157,7 @@ impl HostBrowser {
         })?;
         // SAFETY: a live descriptor.
         unsafe { nw_browse_descriptor_set_include_txt_record(descriptor.as_ptr(), true) };
-        // SAFETY: as above.
-        let parameters = NwObject::new(unsafe { nw_parameters_create() })?;
+        let parameters = browse_parameters()?;
         // SAFETY: live descriptor and parameters; the browser retains both.
         let browser = NwObject::new(unsafe { nw_browser_create(descriptor.as_ptr(), parameters.as_ptr()) })?;
         let queue = DispatchQueue::new("com.hutsonlabs.drift.host-browser", None);
@@ -198,12 +199,31 @@ impl HostBrowser {
     }
 }
 
+/// Browser parameters: Drift Hosts are also found over peer-to-peer Wi-Fi (AWDL), HOST-14.
+fn browse_parameters() -> Option<NwObject> {
+    // SAFETY: a plain constructor; a +1 object or null.
+    let parameters = NwObject::new(unsafe { nw_parameters_create() })?;
+    // SAFETY: live parameters.
+    unsafe { nw_parameters_set_include_peer_to_peer(parameters.as_ptr(), true) };
+    Some(parameters)
+}
+
+/// Whether the browser's parameters include peer-to-peer interfaces (tests).
+pub fn browse_includes_peer_to_peer() -> bool {
+    // SAFETY: live parameters from `browse_parameters`.
+    browse_parameters().is_some_and(|p| unsafe { nw_parameters_get_include_peer_to_peer(p.as_ptr()) })
+}
+
 impl Drop for HostBrowser {
     fn drop(&mut self) {
         // SAFETY: a live browser; cancel stops future callbacks (the release follows in NwObject).
         unsafe { nw_browser_cancel(self.browser.as_ptr()) };
     }
 }
+
+/// `DNSServiceRegister` flags: `kDNSServiceFlagsIncludeP2P`, so the advert is also offered over
+/// peer-to-peer Wi-Fi (AWDL) to a device not on the Mac's network (HOST-14).
+pub const REGISTER_FLAGS: u32 = 0x0002_0000;
 
 /// A registered Bonjour service. Deregistered on drop.
 #[derive(Debug)]
@@ -239,7 +259,7 @@ impl Advertisement {
         let error = unsafe {
             DNSServiceRegister(
                 &raw mut sd_ref,
-                0,
+                REGISTER_FLAGS,
                 0,
                 name.as_ptr(),
                 kind.as_ptr(),

@@ -21,8 +21,8 @@ protocol is private, so a third-party client cannot speak it. Getting that exper
 means shipping **both ends**: a host on the Mac and a client on the device.
 
 Drift today is a sandboxed Tauri 2.11.6 app for macOS that speaks RDP to GNOME Remote Desktop.
-It already has the hard client half: the GFX pipeline including AVC420 and AVC444
-(`drift-gfx`, `drift-video`), CPU codecs (`drift-codec`), a Metal compositor (`drift-render`),
+It already has the hard client half: the GFX pipeline with AVC420 (`drift-gfx`, `drift-video`;
+AVC444 decoding was not there yet and came with ADR `AVC444-client`), CPU codecs (`drift-codec`), a Metal compositor (`drift-render`),
 keyboard/scroll translation (`drift-input`), CLIPRDR text + images (`drift-clipboard`),
 display-control resize (M4), and reconnect (M7). The vendored IronRDP tree also carries the
 server halves: `ironrdp-server` (TLS, fast-path input, bitmap updates; `egfx` optional),
@@ -63,8 +63,8 @@ sandboxed (decision 9).
 
 Drift Host speaks RDP, built on the vendored `ironrdp-server` + `ironrdp-egfx`. Reasons:
 
-- Drift's client pipeline (GFX, AVC444, CLIPRDR, DISP, reconnect) is reused unchanged against a
-  Mac, so one client serves GNOME and Mac hosts.
+- Drift's client pipeline (GFX, CLIPRDR, DISP, reconnect) is reused against a Mac, so one client
+  serves GNOME and Mac hosts. AVC444 decoding was added for Drift Hosts (ADR `AVC444-client`).
 - AVC444 gives full-chroma text with H.264 on hardware every Apple device can decode, which is
   the main visible quality gap in Sill.
 - Any RDP client (Microsoft's Windows App on iPad, `mstsc`) can test the host before Drift's iOS
@@ -74,6 +74,9 @@ HEVC and HDR are not part of RDP GFX, but Screen Sharing has both, so they are p
 left out: a Drift extension codec (HEVC Main 10, 4:4:4 where VideoToolbox allows it, HDR
 metadata) negotiated over the `Drift::Mac::v1` DVC between Drift ends (EXT-5). AVC444 stays the
 default and the fallback for every other client. EXT-5 starts once AVC444 is measured (HOST-4).
+*Update (EXT-5, ADR `EXT-5-hevc-hdr`): HEVC Main and 4:4:4 hold 4K60 on an M4 Pro and travel as
+`WireToSurface1` frames with a private codec id, only after negotiation between paired Drift ends;
+HDR is tagged by the encoder but not yet captured or shown.*
 
 ### 3. Mac-specific features ride a Drift dynamic virtual channel
 
@@ -271,7 +274,21 @@ wry 0.55.1), tauri-cli 2.11.4.
    `headless_motion.h264` fails there with `kVTVideoDecoderBadDataErr` (-8969); the simulator
    decodes in software, so this needs a check on a device before it counts as a bug.
 4. How complete is `ironrdp-server` with `egfx` for AVC420/AVC444 streaming? (HOST-1)
+   **Answered (ADR `HOST-1-server-spike`):** AVC420 works end to end against Drift's client, and
+   the decoded frame equals ffmpeg's. The server can pack AVC444, but Drift's client only offers
+   V8.1 and rejects AVC444 codec ids, and no encoder produces the two streams yet. DISP layouts
+   reach the host, which must resize the GFX surface itself; CLIPRDR's server role exists.
 5. Can VideoToolbox's real-time H.264 encoder produce AVC444's two streams at 60 fps on M1? (HOST-4)
+   **Answered for an M4 Pro, not M1** (ADR `HOST-4-realtime-encoder`): one 4K60 stream is fine
+   (p50 23 ms), but AVC444's two streams hold 60 fps only up to about 1080p, about 45 fps at
+   2560×1600 and about 25 fps at 4K; the media engine is the limit. M1, with a smaller media
+   engine, will do no better; measuring it is a manual step. Drift's client also does not decode
+   AVC444 yet (`drift-gfx` treats it as unsupported), contrary to this ADR's context.
 6. Is `ironrdp-rdpeudp`'s lossy mode usable for GFX, or do Drift-to-Drift sessions need the
-   QUIC fallback? (HOST-12)
-7. Does App Store review accept wry's transparent webview? (STORE-2)
+   QUIC fallback? (HOST-12) **Answered (ADR `HOST-12-quic-transport`): QUIC.** The vendored
+   crates have no lossy mode, and reliable RDP-UDP2 collapses at 0.5 % random loss (p95 1.5 s at
+   9.6 Mbit/s, 20 ms RTT). QUIC with BBR keeps p99 under 80 ms up to 2 % loss.
+7. Does App Store review accept wry's transparent webview? (STORE-2) *Still open: validation
+   needs an App Store Connect record that does not exist yet. The private key is
+   `drawsBackground`; iOS drops it, and ADR `STORE-2-review-risk` plans native overlays for the
+   Mac App Store build if review objects.*

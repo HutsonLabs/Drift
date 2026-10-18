@@ -187,6 +187,27 @@ pub fn write_nv12(pb: &CVPixelBuffer, planes: &Nv12Planes) -> Result<(), String>
     Ok(())
 }
 
+/// Copies a BGRA pixel buffer into CPU memory, tightly packed (`4 * width` bytes per row).
+pub fn read_bgra(pb: &CVPixelBuffer) -> Result<Vec<u8>, String> {
+    if format_of(pb) != BGRA {
+        return Err("not a BGRA buffer".into());
+    }
+    let size = size_of(pb);
+    let lock = Lock::new(pb, true).map_err(|s| format!("CVPixelBufferLockBaseAddress: {s}"))?;
+    let (base, stride, rows) = lock.base().ok_or("no base address")?;
+    let (w, h) = (size.width as usize, size.height as usize);
+    if stride < w * 4 || rows < h {
+        return Err("BGRA size mismatch".into());
+    }
+    let mut out = Vec::with_capacity(w * 4 * h);
+    for y in 0..h {
+        // SAFETY: the buffer is locked; row `y < rows` spans `stride >= 4 * w` bytes.
+        let line = unsafe { std::slice::from_raw_parts(base.as_ptr().add(y * stride), w * 4) };
+        out.extend_from_slice(line);
+    }
+    Ok(out)
+}
+
 /// Fills a BGRA pixel buffer: `f(x, y)` returns `[b, g, r, a]`.
 pub fn fill_bgra(pb: &CVPixelBuffer, f: impl Fn(u32, u32) -> [u8; 4]) -> Result<(), String> {
     let size = size_of(pb);

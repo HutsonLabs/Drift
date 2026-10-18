@@ -134,7 +134,7 @@ export function sessionView(
 
 /** A statistics sample, as `StatsView` serialises it. */
 export function stats(over: Partial<StatsView> = {}): StatsView {
-  return { fps_tenths: 589, mbit_tenths: 12, latency_p95_tenths_ms: 43, unacked_frames: 2, ...over };
+  return { fps_tenths: 589, mbit_tenths: 12, latency_p95_tenths_ms: 43, unacked_frames: 2, host_quality: null, ...over };
 }
 
 /** The homelab system daemon's real fingerprint, as `grdctl --system status` prints it. */

@@ -81,6 +81,15 @@ impl InputEncoder {
                 flags.set(SynchronizeFlags::NUM_LOCK, num);
                 vec![FastPathInputEvent::SyncEvent(flags)]
             }
+            // EXT-2: a server without `Drift::Mac::v1` gets the wheel units a precise scroll
+            // carries, and nothing for gestures (plain RDP has no equivalent).
+            InputEvent::PreciseScroll { wheel_v, wheel_h, .. } => {
+                drift_input::scroll::wheel_events(wheel_v, wheel_h)
+                    .into_iter()
+                    .flat_map(|e| self.encode(e))
+                    .collect()
+            }
+            InputEvent::Swipe { .. } | InputEvent::Pinch { .. } | InputEvent::SmartZoom => Vec::new(),
             InputEvent::ReleaseAll => {
                 let (x, y) = self.position;
                 let keys = std::mem::take(&mut self.keys).into_iter().map(|(sc, ext)| key(sc, ext, false));
@@ -220,6 +229,34 @@ mod tests {
                 x_position: 1,
                 y_position: 1
             })]
+        );
+    }
+
+    #[test]
+    fn precise_scroll_falls_back_to_its_wheel_units_and_gestures_to_nothing() {
+        use drift_core::{MomentumPhase, ScrollPhase, SwipeDirection};
+        let scroll = InputEvent::PreciseScroll {
+            dx: 900,
+            dy: -100,
+            phase: ScrollPhase::Changed,
+            momentum: MomentumPhase::None,
+            wheel_v: -300,
+            wheel_h: 0,
+        };
+        assert_eq!(
+            enc(&[scroll]),
+            enc(&[
+                InputEvent::Wheel { horizontal: false, units: -255 },
+                InputEvent::Wheel { horizontal: false, units: -45 },
+            ])
+        );
+        assert!(
+            enc(&[
+                InputEvent::Swipe { direction: SwipeDirection::Up, fingers: 3 },
+                InputEvent::Pinch { magnification: 40, phase: ScrollPhase::Changed },
+                InputEvent::SmartZoom,
+            ])
+            .is_empty()
         );
     }
 }

@@ -20,7 +20,10 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use drift_core::{CmdAs, DesktopSize, InputEvent, MouseButton, Point, Size, TouchMode, ViewGeometry};
+use drift_core::{
+    CmdAs, DesktopSize, InputEvent, MomentumPhase, MouseButton, Point, ScrollPhase, Size, TouchMode,
+    ViewGeometry,
+};
 use drift_input::{
     HidKeyboard, Pointer, ScaleMode, ScrollConfig, ScrollDelta, TouchInputMode, TouchOutput, Touches, Zoom,
 };
@@ -138,8 +141,14 @@ define_class!(
         fn drift_scroll(&self, recognizer: &UIPanGestureRecognizer) {
             let t = recognizer.translationInView(Some(self));
             recognizer.setTranslation_inView(CGPoint { x: 0.0, y: 0.0 }, Some(self));
-            let began = recognizer.state() == UIGestureRecognizerState::Began;
-            self.pointer_scroll(ScrollDelta::Precise { dx: t.x, dy: t.y }, began);
+            // EXT-2: the recognizer's state is the scroll's phase for a Drift Host.
+            let phase = match recognizer.state() {
+                UIGestureRecognizerState::Began => ScrollPhase::Began,
+                UIGestureRecognizerState::Ended => ScrollPhase::Ended,
+                UIGestureRecognizerState::Cancelled | UIGestureRecognizerState::Failed => ScrollPhase::Cancelled,
+                _ => ScrollPhase::Changed,
+            };
+            self.pointer_precise_scroll(t.x, t.y, phase);
         }
 
         #[unsafe(method(touchesBegan:withEvent:))]
@@ -362,6 +371,13 @@ impl RemoteView {
     pub fn pointer_scroll(&self, delta: ScrollDelta, began: bool) {
         let events = self.ivars().pointer.borrow_mut().scroll(delta, began);
         self.send_input(&events);
+    }
+
+    /// A trackpad scroll with its phase (EXT-2): one precise scroll event carrying its wheel
+    /// fallback.
+    pub fn pointer_precise_scroll(&self, dx: f64, dy: f64, phase: ScrollPhase) {
+        let event = self.ivars().pointer.borrow_mut().precise_scroll(dx, dy, phase, MomentumPhase::None);
+        self.send_input(&[event]);
     }
 
     /// Releases held keys and buttons (focus loss, background, another session in front).

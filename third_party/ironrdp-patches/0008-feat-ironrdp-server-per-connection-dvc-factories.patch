@@ -1,0 +1,97 @@
+From e7d8bf98b6ecaa87301aeedaf17a3dce22b35d99 Mon Sep 17 00:00:00 2001
+From: "Dr. Hutson" <dev@hutsonlabs.com>
+Date: Sun, 18 Oct 2026 10:04:35 -0500
+Subject: [PATCH] feat(ironrdp): ironrdp-server: per-connection factories for
+ embedder dynamic virtual channels
+
+---
+ crates/ironrdp-server/src/dvc_factory.rs | 13 +++++++++++++
+ crates/ironrdp-server/src/lib.rs         |  2 ++
+ crates/ironrdp-server/src/server.rs      | 10 ++++++++++
+ 3 files changed, 25 insertions(+)
+ create mode 100644 third_party/ironrdp/crates/ironrdp-server/src/dvc_factory.rs
+
+diff --git a/crates/ironrdp-server/src/dvc_factory.rs b/crates/ironrdp-server/src/dvc_factory.rs
+new file mode 100644
+index 0000000..ad3c432
+--- /dev/null
++++ b/crates/ironrdp-server/src/dvc_factory.rs
+@@ -0,0 +1,13 @@
++use ironrdp_dvc::DrdynvcServer;
++
++/// Attaches an embedder's own dynamic virtual channel(s) to each new connection.
++///
++/// The server builds a fresh [`DrdynvcServer`] per connection and offers its built-in channels
++/// (input, display control, graphics, ...). A factory registered with
++/// [`RdpServer::add_dvc_factory`](crate::RdpServer::add_dvc_factory) is called once per
++/// connection to add more, for example a vendor extension channel.
++pub trait DvcServerFactory: Send {
++    /// Returns `dvc` with this factory's channel processor(s) attached
++    /// (`dvc.with_dynamic_channel(...)`).
++    fn attach(&self, dvc: DrdynvcServer) -> DrdynvcServer;
++}
+diff --git a/crates/ironrdp-server/src/lib.rs b/crates/ironrdp-server/src/lib.rs
+index 2894624..d3b6ce7 100644
+--- a/crates/ironrdp-server/src/lib.rs
++++ b/crates/ironrdp-server/src/lib.rs
+@@ -9,6 +9,7 @@ mod builder;
+ mod capabilities;
+ mod clipboard;
+ mod display;
++mod dvc_factory;
+ mod echo;
+ mod encoder;
+ mod error;
+@@ -30,6 +31,7 @@ pub use display::{
+     BitmapUpdate, ColorPointer, DesktopSize, DisplayUpdate, Framebuffer, LargePointer, PixelFormat, RGBAPointer,
+     RdpServerDisplay, RdpServerDisplayUpdates,
+ };
++pub use dvc_factory::DvcServerFactory;
+ pub use echo::{EchoDvcBridge, EchoRoundTripMeasurement, EchoServerHandle, EchoServerMessage};
+ pub use error::{ServerError, ServerErrorExt, ServerErrorKind, ServerResult, ServerResultExt};
+ #[cfg(feature = "egfx")]
+diff --git a/crates/ironrdp-server/src/server.rs b/crates/ironrdp-server/src/server.rs
+index 5c9151b..0f1577d 100644
+--- a/crates/ironrdp-server/src/server.rs
++++ b/crates/ironrdp-server/src/server.rs
+@@ -670,6 +670,7 @@ pub struct RdpServer {
+     cliprdr_factory: Option<Box<dyn CliprdrServerFactory>>,
+     rdpei_factory: Option<Box<dyn RdpeiServerFactory>>,
+     rdpdr_factory: Option<Box<dyn RdpdrServerFactory>>,
++    dvc_factories: Vec<Box<dyn crate::DvcServerFactory>>,
+     echo_handle: EchoServerHandle,
+     #[cfg(feature = "egfx")]
+     gfx_factory: Option<Box<dyn GfxServerFactory>>,
+@@ -1392,6 +1393,7 @@ impl RdpServer {
+             cliprdr_factory,
+             rdpei_factory,
+             rdpdr_factory,
++            dvc_factories: Vec::new(),
+             echo_handle: EchoServerHandle::new(ev_sender.clone()),
+             #[cfg(feature = "egfx")]
+             gfx_factory,
+@@ -1435,6 +1437,12 @@ impl RdpServer {
+         builder::RdpServerBuilder::new()
+     }
+ 
++    /// Adds a factory that attaches the embedder's own dynamic virtual channel(s) to every new
++    /// connection, after the built-in ones.
++    pub fn add_dvc_factory(&mut self, factory: Box<dyn crate::DvcServerFactory>) {
++        self.dvc_factories.push(factory);
++    }
++
+     /// Set or clear the credential validator for TLS-mode connections.
+     ///
+     /// When set, credentials received from the client during
+@@ -1880,6 +1888,8 @@ impl RdpServer {
+             dvc
+         };
+ 
++        let dvc = self.dvc_factories.iter().fold(dvc, |dvc, factory| factory.attach(dvc));
++
+         acceptor.attach_static_channel(dvc);
+ 
+         for factory in &self.static_channel_factories {
+-- 
+2.54.0 (Apple Git-157)
+

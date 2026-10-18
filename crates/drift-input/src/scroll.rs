@@ -102,6 +102,43 @@ impl ScrollAccumulator {
     }
 }
 
+/// Wheel events for whole `vertical` and `horizontal` units (RDP signs), in events of at most
+/// [`MAX_UNITS_PER_EVENT`], vertical first: what a server without `Drift::Mac::v1` gets for an
+/// [`InputEvent::PreciseScroll`] (EXT-2).
+pub fn wheel_events(vertical: i32, horizontal: i32) -> Vec<InputEvent> {
+    let mut out = Vec::new();
+    for (mut remaining, horizontal) in [(vertical, false), (horizontal, true)] {
+        let chunk = i32::from(MAX_UNITS_PER_EVENT);
+        while remaining != 0 {
+            let step = remaining.clamp(-chunk, chunk);
+            remaining -= step;
+            // `step` is within ±255, so it fits in i16.
+            out.push(InputEvent::Wheel { horizontal, units: i16::try_from(step).unwrap_or(0) });
+        }
+    }
+    out
+}
+
+/// Sums the wheel units of `events` per axis: `(vertical, horizontal)`.
+pub fn wheel_units(events: &[InputEvent]) -> (i32, i32) {
+    events.iter().fold((0, 0), |(v, h), e| match e {
+        InputEvent::Wheel { horizontal: false, units } => (v + i32::from(*units), h),
+        InputEvent::Wheel { horizontal: true, units } => (v, h + i32::from(*units)),
+        _ => (v, h),
+    })
+}
+
+/// Points to hundredths of a point, saturating.
+pub fn centi(points: f64) -> i32 {
+    let v = (points * 100.0).round();
+    if v.is_nan() {
+        0
+    } else {
+        // Clamped to the i32 range first, so the conversion is exact.
+        v.clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32
+    }
+}
+
 /// Adds `units` to `residual` and emits its whole part in events of at most `chunk` units.
 fn emit(residual: &mut f64, units: f64, chunk: i16, horizontal: bool, out: &mut Vec<InputEvent>) {
     let units = if units.is_nan() { 0.0 } else { units.clamp(-MAX_UNITS_PER_PUSH, MAX_UNITS_PER_PUSH) };

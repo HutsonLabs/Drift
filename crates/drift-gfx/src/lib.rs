@@ -23,7 +23,7 @@ pub mod sink;
 mod state;
 
 pub use ack::AckOutbox;
-pub use caps::{advertised_caps, caps_advertise_pdu};
+pub use caps::{GfxCaps, advertised_caps, advertised_caps_for, caps_advertise_pdu, caps_advertise_pdu_for};
 pub use client::{CHANNEL_NAME, GfxClient};
 pub use error::GfxError;
 pub use sink::{FrameSink, PresentedCallback};

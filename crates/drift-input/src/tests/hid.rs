@@ -161,3 +161,13 @@ fn release_all_lifts_every_held_key_in_order() {
     assert_eq!(released, vec![Scancode::new(0x1E).event(false), Scancode::new(0x2A).event(false)]);
     assert_eq!(kb.release_all(), vec![]);
 }
+
+/// HOST-6: a key typed on an iPad reaches a Mac host as the same key: HID usage → scancode →
+/// `kVK_*` agrees with Apple's HID ↔ `kVK_*` correspondence.
+#[test]
+fn hid_to_scancode_to_kvk_matches_apple() {
+    for (usage, kvk) in hid_to_kvk() {
+        let sc = scancode_for_hid(usage, CmdAs::Super).unwrap_or_else(|| panic!("usage {usage:#x}"));
+        assert_eq!(crate::keymap::kvk_for(sc, KeyboardType::Ansi), Some(kvk), "usage {usage:#x}");
+    }
+}

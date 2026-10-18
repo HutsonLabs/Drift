@@ -1,4 +1,5 @@
-//! `kVK_*` → set-1 scancode mapping. Owned by task **M2-1**.
+//! `kVK_*` → set-1 scancode mapping (task **M2-1**) and its inverse for Drift Host
+//! ([`kvk_for`], task **HOST-6**).
 //!
 //! macOS reports *virtual key codes* (`NSEvent.keyCode`, the Carbon `kVK_*` constants from
 //! `HIToolbox/Events.h`). They are positional, like PC scancodes, so the mapping is a fixed
@@ -342,6 +343,43 @@ pub fn scancode_for(kvk: u16, keyboard: KeyboardType, cmd_as: CmdAs) -> Option<S
         (kvk::RIGHT_COMMAND, _, CmdAs::Ctrl) => Some(Scancode::ext(0x1D)),
         _ => base_scancode(kvk),
     }
+}
+
+/// Maps a set-1 scancode back to the `kVK_*` code of a `keyboard`-type Mac (task **HOST-6**,
+/// Drift Host's input injection).
+///
+/// It is derived from [`scancode_for`] over [`ALL_KVK`] (with the Command keys as the Windows
+/// keys, `CmdAs::Super`), so the two directions are one table and cannot drift apart. Every
+/// mapped key round-trips on every keyboard type. The intentional asymmetries:
+/// - the Windows keys (`E0 5B`/`E0 5C`) come back as Command, and Control stays Control, so a
+///   client that sends Command as Control (`CmdAs::Ctrl`) types Control on the Mac;
+/// - on an ISO Mac the two ISO positions swap back, so the physical key is preserved;
+/// - PC-only keys (Num Lock, Print Screen, Scroll Lock, Pause) have no Mac key: `None`.
+pub fn kvk_for(scancode: Scancode, keyboard: KeyboardType) -> Option<u16> {
+    let table = match keyboard {
+        KeyboardType::Ansi => &INVERSE[0],
+        KeyboardType::Iso => &INVERSE[1],
+        KeyboardType::Jis => &INVERSE[2],
+    };
+    let table = table.get_or_init(|| {
+        let mut t = [None; 512];
+        for &(_, code) in ALL_KVK {
+            if let Some(sc) = scancode_for(code, keyboard, CmdAs::Super) {
+                t[inverse_index(sc)] = Some(code);
+            }
+        }
+        t
+    });
+    table[inverse_index(scancode)]
+}
+
+/// One lazily built inverse table per keyboard type (ANSI, ISO, JIS).
+static INVERSE: [std::sync::OnceLock<[Option<u16>; 512]>; 3] =
+    [std::sync::OnceLock::new(), std::sync::OnceLock::new(), std::sync::OnceLock::new()];
+
+/// Index of a scancode in an inverse table: the make code, plus 256 when extended.
+const fn inverse_index(sc: Scancode) -> usize {
+    sc.code as usize + if sc.extended { 256 } else { 0 }
 }
 
 /// The keyboard-type-independent part of the table (ANSI positions).

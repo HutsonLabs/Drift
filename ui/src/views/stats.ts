@@ -13,12 +13,15 @@ function decimal(tenths: number): string {
 
 /** The readouts, frame rate first — the number the M1 acceptance step reads. */
 function readouts(stats: StatsView): [string, string][] {
-  return [
+  const out: [string, string][] = [
     [decimal(stats.fps_tenths), "fps"],
     [decimal(stats.mbit_tenths), "Mbit/s"],
     [decimal(stats.latency_p95_tenths_ms), "ms"],
     [String(stats.unacked_frames), "unacked"],
   ];
+  // EXT-4: a Drift Host says which step of its quality ladder it is on.
+  if (stats.host_quality) out.push([stats.host_quality, "quality"]);
+  return out;
 }
 
 /** The one-line summary ("58.9 fps · 1.2 Mbit/s · 4.3 ms · 2 unacked"). */

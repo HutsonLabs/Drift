@@ -43,8 +43,8 @@ pub const OUTPUT_PIXEL_FORMAT: u32 = cv::NV12_FULL_RANGE;
 /// through `CVMetalTextureCache` (zero copy).
 #[derive(Debug, Clone)]
 pub struct DecodedPicture {
-    buffer: SharedPixelBuffer,
-    size: Size<u32>,
+    pub(crate) buffer: SharedPixelBuffer,
+    pub(crate) size: Size<u32>,
 }
 
 impl DecodedPicture {
@@ -80,12 +80,12 @@ impl Nv12Source for DecodedPicture {
 }
 
 /// Where the output callback leaves the decoded picture (or the error status).
-type OutputSlot = Mutex<Option<Result<SharedPixelBuffer, i32>>>;
+pub(crate) type OutputSlot = Mutex<Option<Result<SharedPixelBuffer, i32>>>;
 
 /// One decompression session bound to one format description.
-struct Session {
-    session: CFRetained<VTDecompressionSession>,
-    format: CFRetained<CMFormatDescription>,
+pub(crate) struct Session {
+    pub(crate) session: CFRetained<VTDecompressionSession>,
+    pub(crate) format: CFRetained<CMFormatDescription>,
 }
 
 impl Drop for Session {
@@ -223,12 +223,77 @@ impl H264Decoder for VtDecoder {
     }
 }
 
-fn lock(slot: &OutputSlot) -> std::sync::MutexGuard<'_, Option<Result<SharedPixelBuffer, i32>>> {
+/// AVC444 (ADR `AVC444-client`): two VideoToolbox sessions, one per view, and the last picture
+/// of each view, recombined on the CPU ([`crate::avc444::combine_filtered`]) and converted to
+/// BGRA. Before the first auxiliary view (or after a size change) the main view is shown alone
+/// with its 4:2:0 chroma, as AVC420 would.
+#[derive(Debug, Default)]
+pub struct VtAvc444Decoder {
+    main: VtDecoder,
+    aux: VtDecoder,
+    last_main: Option<Nv12Planes>,
+    last_aux: Option<Nv12Planes>,
+}
+
+impl VtAvc444Decoder {
+    /// Creates a decoder; both sessions are built lazily from their first SPS/PPS.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn view(decoder: &mut VtDecoder, annex_b: &[u8]) -> Result<Option<Nv12Planes>, DecodeError> {
+        match decoder.decode_picture(annex_b)? {
+            Some(picture) => picture.to_planes().map(Some),
+            None => Ok(None),
+        }
+    }
+}
+
+impl drift_core::video::Avc444Decoder for VtAvc444Decoder {
+    fn decode(
+        &mut self,
+        main: Option<&[u8]>,
+        aux: Option<&[u8]>,
+    ) -> Result<Option<drift_core::BgraPicture>, DecodeError> {
+        if let Some(au) = main
+            && let Some(planes) = Self::view(&mut self.main, au)?
+        {
+            self.last_main = Some(planes);
+        }
+        if let Some(au) = aux
+            && let Some(planes) = Self::view(&mut self.aux, au)?
+        {
+            self.last_aux = Some(planes);
+        }
+        let Some(main) = self.last_main.as_ref() else { return Ok(None) };
+        let combined = self
+            .last_aux
+            .as_ref()
+            .and_then(|aux| {
+                crate::avc444::combine_filtered(main, aux, crate::avc444::CHROMA_FILTER_THRESHOLD)
+            })
+            .or_else(|| crate::avc444::upsample_main(main))
+            .ok_or_else(|| DecodeError("AVC444: the views could not be combined".into()))?;
+        let bgra = crate::avc444::yuv444_to_bgra(&combined);
+        drift_core::BgraPicture::new(combined.size(), bgra)
+            .map(Some)
+            .ok_or_else(|| DecodeError("AVC444: picture size mismatch".into()))
+    }
+
+    fn reset(&mut self) {
+        H264Decoder::reset(&mut self.main);
+        H264Decoder::reset(&mut self.aux);
+        self.last_main = None;
+        self.last_aux = None;
+    }
+}
+
+pub(crate) fn lock(slot: &OutputSlot) -> std::sync::MutexGuard<'_, Option<Result<SharedPixelBuffer, i32>>> {
     slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// VideoToolbox output callback: stores the decoded image (retained) or the error status.
-unsafe extern "C-unwind" fn output_callback(
+pub(crate) unsafe extern "C-unwind" fn output_callback(
     refcon: *mut c_void,
     _source_frame_refcon: *mut c_void,
     status: i32,
@@ -331,7 +396,10 @@ pub(crate) fn format_description(ps: &ParameterSets) -> Result<CFRetained<CMForm
 }
 
 /// Wraps an AVCC sample in a `CMSampleBuffer` (data copied into a CoreMedia-owned block).
-fn make_sample(avcc: &[u8], format: &CMFormatDescription) -> Result<CFRetained<CMSampleBuffer>, DecodeError> {
+pub(crate) fn make_sample(
+    avcc: &[u8],
+    format: &CMFormatDescription,
+) -> Result<CFRetained<CMSampleBuffer>, DecodeError> {
     let mut block: *mut CMBlockBuffer = std::ptr::null_mut();
     // SAFETY: a null memory block with the default allocator makes CoreMedia allocate `len`
     // bytes; `block` is a valid out-pointer.

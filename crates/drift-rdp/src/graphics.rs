@@ -192,11 +192,67 @@ impl Graphics {
         &self,
         display_control: DisplayControlClient,
         clipboard: Option<CliprdrClient>,
+        drift_mac: DriftMacLeg<'_>,
+        caps: drift_gfx::GfxCaps,
+        sound: Option<ironrdp_rdpsnd::client::Rdpsnd>,
     ) -> impl FnOnce(ClientConnector) -> ClientConnector + Send + use<> {
         let drdynvc = DrdynvcClient::new().with_dynamic_channel(display_control);
+        // EXT-1: offered only when the app asked for it; a non-Drift server never opens it.
+        let DriftMacLeg { link, pairing, status, menus } = drift_mac;
+        let drdynvc = match link {
+            Some(link) => {
+                link.reset();
+                // EXT-3: offer menu mirroring when the app shows the host's menus.
+                let menus = if menus {
+                    drift_ext::wire::Capabilities::MENUS
+                } else {
+                    drift_ext::wire::Capabilities::NONE
+                };
+                // EXT-2: every Drift client sends precise scrolls and gestures to a host that
+                // takes them.
+                // EXT-4: and asks for a quality, showing the host's status in its statistics.
+                let offer = menus
+                    | drift_ext::wire::Capabilities::SCROLL
+                    | drift_ext::wire::Capabilities::GESTURES
+                    | drift_ext::status::StatusClient::capabilities();
+                let client = match pairing {
+                    // HOST-8: offer pairing and answer the host's challenge on every leg. EXT-5: a
+                    // paired Drift Host is also offered the HEVC profiles this device decodes.
+                    Some(pairing) if caps == drift_gfx::GfxCaps::DriftHost => {
+                        let codec = drift_ext::codec::ClientCodec::new(hevc_offer());
+                        drift_ext::channel::DriftMacClient::new(
+                            link.clone(),
+                            offer
+                                | drift_ext::pairing::ClientPairing::capabilities()
+                                | drift_ext::codec::ClientCodec::capabilities(),
+                        )
+                        .with_responder(pairing.responder())
+                        .with_responder(codec.responder())
+                    }
+                    Some(pairing) => drift_ext::channel::DriftMacClient::new(
+                        link.clone(),
+                        drift_ext::pairing::ClientPairing::capabilities() | offer,
+                    )
+                    .with_responder(pairing.responder()),
+                    None => drift_ext::channel::DriftMacClient::new(link.clone(), offer),
+                };
+                let client = client.with_responder(status.responder());
+                drdynvc.with_dynamic_channel(client)
+            }
+            None => drdynvc,
+        };
         let drdynvc = match tile_pool() {
             Some(pool) => {
-                let gfx = GfxClient::new(Box::new(self.sink.clone()), Box::new(VtDecoder::new()), pool);
+                let mut gfx = GfxClient::new(Box::new(self.sink.clone()), Box::new(VtDecoder::new()), pool);
+                // AVC444 only where V10 is advertised: a paired Drift Host (ADR `AVC444-client`).
+                gfx.set_caps(caps);
+                if caps == drift_gfx::GfxCaps::DriftHost {
+                    gfx.set_avc444(Box::new(drift_video::decode::VtAvc444Decoder::new()));
+                    // EXT-5: whatever HEVC a paired Drift Host sends after negotiating it.
+                    if pairing.is_some() {
+                        gfx.set_hevc(Box::new(drift_video::hevc::VtHevcDecoder::new()));
+                    }
+                }
                 let notify = Arc::clone(&self.acks_ready);
                 gfx.acks().set_notifier(move || notify.notify_one());
                 drdynvc.with_dynamic_channel(gfx)
@@ -205,8 +261,12 @@ impl Graphics {
         };
         move |connector| {
             let connector = connector.with_static_channel(drdynvc);
-            match clipboard {
+            let connector = match clipboard {
                 Some(cliprdr) => connector.with_static_channel(cliprdr),
+                None => connector,
+            };
+            match sound {
+                Some(rdpsnd) => connector.with_static_channel(rdpsnd),
                 None => connector,
             }
         }
@@ -228,7 +288,54 @@ pub(crate) fn flush_acks(stage: &ActiveStage) -> Result<Option<Vec<u8>>, Disconn
         .map_err(|e| DisconnectReason::ProtocolError(format!("send frame acknowledge: {e}")))
 }
 
+/// What one leg offers on `Drift::Mac::v1` (EXT-1): the link to report to, pairing (HOST-8),
+/// whether it mirrors the host's menus (EXT-3) and the quality preference with the host's status
+/// (EXT-4).
+pub(crate) struct DriftMacLeg<'a> {
+    /// `None`: the channel is not offered.
+    pub(crate) link: Option<&'a drift_ext::channel::Link>,
+    /// Pair or authenticate.
+    pub(crate) pairing: Option<&'a drift_ext::pairing::ClientPairing>,
+    /// The quality preference and the host's status.
+    pub(crate) status: &'a drift_ext::status::StatusClient,
+    /// Offer menu mirroring.
+    pub(crate) menus: bool,
+}
+
+/// Encodes `Drift::Mac::v1` messages as a frame for the wire (`None` when the channel is not
+/// open). Polls, presses and gestures are sent this way, outside a reply (EXT-2, EXT-3).
+pub(crate) fn encode_drift_mac(
+    stage: &ActiveStage,
+    messages: &[drift_ext::wire::Message],
+) -> Result<Option<Vec<u8>>, String> {
+    let Some(channel) = stage.get_dvc::<drift_ext::channel::DriftMacClient>() else { return Ok(None) };
+    let channel_id = channel.channel_id();
+    let messages = drift_ext::channel::outgoing(messages).map_err(|e| e.to_string())?;
+    let svc = ironrdp_dvc::encode_dvc_messages(channel_id, messages, ChannelFlags::empty())
+        .map_err(|e| format!("encode Drift::Mac::v1: {e}"))?;
+    stage
+        .process_svc_processor_messages(SvcProcessorMessages::<DrdynvcClient>::new(svc))
+        .map(Some)
+        .map_err(|e| format!("send Drift::Mac::v1: {e}"))
+}
+
 /// The graphics pipeline's own error, if the last processing failure came from it.
 pub(crate) fn take_gfx_error(stage: &mut ActiveStage) -> Option<DisconnectReason> {
     stage.get_dvc_mut::<GfxClient>()?.processor_mut().take_error().map(|e| e.disconnect_reason())
+}
+
+/// What this device offers a paired Drift Host on `Drift::Mac::v1` (EXT-5, ADR `EXT-5-hevc-hdr`):
+/// the HEVC profiles it decodes, and SDR only.
+///
+/// The compositor shows 8-bit pictures today, so 10-bit and HDR are not offered yet (the host
+/// picks them only for HDR). 4:4:4 is offered on the Mac, where VideoToolbox decodes it; iPhone
+/// and iPad offer 4:2:0 until a device run confirms 4:4:4 decoding there.
+pub(crate) fn hevc_offer() -> drift_ext::codec::CodecOffer {
+    use drift_ext::codec::{CodecOffer, HevcProfile, Transfer};
+    let hevc = if cfg!(target_os = "macos") {
+        vec![HevcProfile::Main, HevcProfile::Main444]
+    } else {
+        vec![HevcProfile::Main]
+    };
+    CodecOffer { hevc, transfers: vec![Transfer::Sdr] }
 }

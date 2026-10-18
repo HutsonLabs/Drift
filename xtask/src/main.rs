@@ -71,6 +71,30 @@ enum Cmd {
     },
     /// Build the Apple silicon .app/.dmg (task M9-5).
     Bundle,
+    /// Build `Drift Host.app` (the menu-bar host) into `target/<profile>/bundle/` (HOST-9).
+    HostBundle {
+        /// Use the debug build instead of release.
+        #[arg(long)]
+        debug: bool,
+    },
+    /// List private-API strings in a built app's executables that App Review may flag (STORE-2).
+    ReviewRisk {
+        /// The `.app` bundle (every file in `Contents/MacOS` is scanned) or one executable.
+        path: PathBuf,
+    },
+    /// Sign `Drift Host.app` with Developer ID, make the DMG and (optionally) notarize it (STORE-4).
+    HostRelease {
+        /// Submit the DMG to Apple's notary service and staple the ticket. Reads the App Store
+        /// Connect key from `APPLE_API_KEY_PATH`, `APPLE_KEY_ID` and `APPLE_API_ISSUER`.
+        #[arg(long)]
+        notarize: bool,
+    },
+    /// Build the Mac App Store package: universal, sandboxed, Apple Distribution (STORE-1).
+    MasPackage {
+        /// The Mac App Store provisioning profile for `com.hutsonlabs.drift` to embed.
+        #[arg(long)]
+        profile: Option<PathBuf>,
+    },
     /// Verify the GNOME host configuration over SSH, read-only (task M0-4).
     HostSetupCheck {
         /// SSH destination (default `$DRIFT_E2E_SSH` or `homelab@10.1.2.40`).
@@ -124,11 +148,158 @@ fn run(cmd: Cmd) -> Result<()> {
             e2e(&root, &args, bench.then_some(BenchOptions { update_baseline }))
         }
         Cmd::Bundle => not_yet("bundle", "M9-5"),
+        Cmd::HostBundle { debug } => host_bundle(&root, if debug { "debug" } else { "release" }),
+        Cmd::ReviewRisk { path } => review_risk(&path),
+        Cmd::HostRelease { notarize } => host_release(&root, notarize),
+        Cmd::MasPackage { profile } => mas_package(&root, profile.as_deref()),
         Cmd::HostSetupCheck { host, headless, report, save_report } => {
             host_setup_check(host, &headless, report.as_deref(), save_report.as_deref())
         }
         Cmd::ImportFixtures { staging, secrets } => import_fixtures(&root, staging, secrets),
     }
+}
+
+fn host_bundle(root: &Path, profile: &str) -> Result<()> {
+    let plan = xtask::host_bundle::plan(root, profile);
+    let status = Command::new(cargo()).args(&plan.build_args).current_dir(root).status()?;
+    if !status.success() {
+        bail!("cargo {} failed", plan.build_args.join(" "));
+    }
+    if plan.app.exists() {
+        std::fs::remove_dir_all(&plan.app).with_context(|| format!("removing {}", plan.app.display()))?;
+    }
+    for (from, to) in &plan.copies {
+        if let Some(dir) = to.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        std::fs::copy(from, to).with_context(|| format!("copying {} to {}", from.display(), to.display()))?;
+    }
+    // Ad-hoc signature so the bundle runs locally; Developer ID signing is STORE-4.
+    let status =
+        Command::new("codesign").args(["--force", "--deep", "--sign", "-"]).arg(&plan.app).status()?;
+    if !status.success() {
+        bail!("codesign failed");
+    }
+    println!("{}", plan.app.display());
+    Ok(())
+}
+
+fn review_risk(path: &Path) -> Result<()> {
+    let macos = path.join("Contents/MacOS");
+    // A Mac app keeps its executables in Contents/MacOS; an iOS app is flat, so every Mach-O
+    // file at its top level is scanned.
+    let dir = if macos.is_dir() { Some(macos) } else { path.is_dir().then(|| path.to_owned()) };
+    let files: Vec<PathBuf> = match dir {
+        Some(dir) => std::fs::read_dir(&dir)?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.is_file() && is_mach_o(p))
+            .collect(),
+        None => vec![path.to_owned()],
+    };
+    let mut found = 0;
+    for file in files {
+        let bytes = std::fs::read(&file).with_context(|| format!("reading {}", file.display()))?;
+        for risk in xtask::store::review_risks(&bytes) {
+            found += 1;
+            println!("{}: `{}` — {}", file.display(), risk.needle, risk.why);
+        }
+    }
+    println!("{found} review risk(s)");
+    Ok(())
+}
+
+/// Whether `path` starts with a Mach-O or universal ("fat") magic number.
+fn is_mach_o(path: &Path) -> bool {
+    use std::io::Read as _;
+    let mut magic = [0_u8; 4];
+    std::fs::File::open(path).and_then(|mut f| f.read_exact(&mut magic)).is_ok()
+        && matches!(u32::from_be_bytes(magic), 0xFEED_FACF | 0xCFFA_EDFE | 0xCAFE_BABE | 0xBEBA_FECA)
+}
+
+fn checked(cmd: &mut Command, what: &str) -> Result<()> {
+    let status = cmd.status().with_context(|| format!("running {what}"))?;
+    if !status.success() {
+        bail!("{what} failed ({status})");
+    }
+    Ok(())
+}
+
+fn host_release(root: &Path, notarize: bool) -> Result<()> {
+    host_bundle(root, "release")?;
+    let plan = xtask::store::host_release_plan(root, env!("CARGO_PKG_VERSION"));
+    for args in &plan.sign {
+        checked(Command::new("codesign").args(args), "codesign")?;
+    }
+    checked(
+        Command::new("codesign").args(["--verify", "--deep", "--strict"]).arg(&plan.app),
+        "codesign --verify",
+    )?;
+    if plan.staging.exists() {
+        std::fs::remove_dir_all(&plan.staging)?;
+    }
+    std::fs::create_dir_all(&plan.staging)?;
+    checked(
+        Command::new("ditto").arg(&plan.app).arg(plan.staging.join(xtask::host_bundle::APP_NAME)),
+        "ditto",
+    )?;
+    std::os::unix::fs::symlink("/Applications", plan.staging.join("Applications"))?;
+    if let Some(dir) = plan.dmg.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    checked(Command::new("hdiutil").args(&plan.hdiutil), "hdiutil")?;
+    checked(Command::new("codesign").args(&plan.sign_dmg), "codesign (dmg)")?;
+    if notarize {
+        let var = |name: &str| std::env::var(name).with_context(|| format!("{name} is not set"));
+        let (key, key_id, issuer) =
+            (var("APPLE_API_KEY_PATH")?, var("APPLE_KEY_ID")?, var("APPLE_API_ISSUER")?);
+        // The key values are passed as arguments and never printed.
+        checked(
+            Command::new("xcrun")
+                .args(&plan.notarize_args)
+                .args(["--key", &key, "--key-id", &key_id, "--issuer", &issuer]),
+            "notarytool submit",
+        )?;
+        checked(Command::new("xcrun").args(&plan.staple_args), "stapler staple")?;
+    }
+    println!("{}", plan.dmg.display());
+    Ok(())
+}
+
+fn mas_package(root: &Path, profile: Option<&Path>) -> Result<()> {
+    let plan = xtask::store::mas_plan(root, profile);
+    let status = Command::new(cargo()).args(&plan.tauri_args).current_dir(root.join("src-tauri")).status()?;
+    if !status.success() {
+        bail!("cargo {} failed", plan.tauri_args.join(" "));
+    }
+    match &plan.embed_profile {
+        Some((from, to)) => {
+            std::fs::copy(from, to).with_context(|| format!("copying {}", from.display()))?;
+            // The profile sits inside the sealed bundle: sign again with the same identity
+            // and entitlements so the signature covers it.
+            let status = Command::new("codesign")
+                .args(["--force", "--options", "runtime", "--sign", xtask::store::APPLE_DISTRIBUTION])
+                .arg("--entitlements")
+                .arg(root.join("src-tauri/entitlements.mas.plist"))
+                .arg(&plan.app)
+                .status()?;
+            if !status.success() {
+                bail!("codesign failed");
+            }
+        }
+        None => eprintln!(
+            "xtask: no --profile given; the package has no embedded provisioning profile and App Store \
+             validation will reject it (STORE-1)"
+        ),
+    }
+    if let Some(dir) = plan.pkg.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let status = Command::new("productbuild").args(&plan.productbuild_args).status()?;
+    if !status.success() {
+        bail!("productbuild failed");
+    }
+    println!("{}", plan.pkg.display());
+    Ok(())
 }
 
 fn not_yet(name: &str, task: &str) -> Result<()> {

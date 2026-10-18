@@ -39,10 +39,10 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   on iPhone.
 - [✓] **IOS-8 iPhone layout.** Portrait: picture on top, trackpad and key row below. Landscape:
   full screen with auto-hiding controls.
-- [~] **IOS-9 Pairing UI.** Bonjour list of Drift Hosts, QR scan or typed code, pinned host key
-  stored in the Keychain (pairs with HOST-8). *Client half done (ADR `IOS-9-pairing`): discovery,
-  code and `drift-pair:` link, QR scanner, paired profiles, Keychain device key and pins. The
-  host checking the code and storing the device key waits for HOST-8 and EXT-1.*
+- [✓] **IOS-9 Pairing UI.** Bonjour list of Drift Hosts, QR scan or typed code, pinned host key
+  stored in the Keychain (pairs with HOST-8). *The handshake landed with HOST-8 (ADR
+  `HOST-8-pairing`) and runs end to end on loopback; the camera and a real device are manual
+  steps in `docs/acceptance.md`.*
 - [✓] **IOS-10 Clipboard on iOS.** UIPasteboard backend for `drift-clipboard`; paste only on an
   explicit user action, so iOS never shows its paste prompt unasked.
 - [✓] **IOS-11 Session switcher.** On iOS, the UI-windows "one window per connection" becomes an
@@ -50,62 +50,112 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 
 ## HOST — Drift Host (Mac)
 
-- [ ] **HOST-1 Server spike.** `ironrdp-server` with `egfx` streams a static AVC420 frame to
+- [✓] **HOST-1 Server spike.** `ironrdp-server` with `egfx` streams a static AVC420 frame to
   Drift's own client on loopback. Record what the server lacks for AVC444, DISP and CLIPRDR
   (ADR open question 4).
-- [ ] **HOST-12 UDP transport.** Runs straight after HOST-1 (ADR decision 6). Measure
+- [~] **HOST-12 UDP transport.** Runs straight after HOST-1 (ADR decision 6). Measure
   `ironrdp-rdpeudp`'s lossy mode for GFX on lossy Wi-Fi (ADR open question 6). If it holds up,
   ship it. If not, write an ADR choosing a QUIC library and carry RDP PDUs over QUIC between
   Drift ends: reliable streams for input, clipboard and DVC, and one stream (or datagrams) per
   GFX frame. The client tries UDP first with a paired Drift Host and falls back to TCP.
-- [ ] **HOST-2 Host skeleton.** New `drift-host` crate and binary: TLS listener, one session,
+  *Measured and decided (ADR `HOST-12-quic-transport`): no lossy RDP-UDP in the vendored tree;
+  reliable RDP-UDP2 collapses at 0.5 % loss; QUIC with BBR holds. `drift-transport` has the QUIC
+  session (pinned host, stream per frame) and the QUIC-then-TCP order. Wired end to end after
+  HOST-8: Drift Host listens on UDP on its RDP port, and a paired profile connects over QUIC
+  first and falls back to TCP (tested through a 2 % lossy link). Left: GFX still rides the main
+  stream; one stream per frame needs the client to reorder frames and ask for a keyframe when
+  one is lost, because AVC P-frames depend on the previous frame (ADR amendment).*
+- [✓] **HOST-2 Host skeleton.** New `drift-host` crate and binary: TLS listener, one session,
   fast-path input logged only. Menu-bar shell later (HOST-9).
-- [ ] **HOST-3 Capture.** New `drift-capture` crate: ScreenCaptureKit `SCStream` per display,
+  *The screen, pointer and injection are wired in (ADR `HOST-pipeline`); the test pattern stays
+  as the fallback without Screen Recording.*
+- [~] **HOST-3 Capture.** New `drift-capture` crate: ScreenCaptureKit `SCStream` per display,
   IOSurface frames, dirty rects, cursor shape and position reported separately.
-- [ ] **HOST-4 Real-time encoder.** Extend `drift-video::encode` with a real-time profile (no
+  *`drift-capture` built and tested (ADR `HOST-3-capture`); the pointer sampler ran for real, but
+  this Mac has no Screen Recording grant, so a live stream is a manual step in `docs/acceptance.md`.*
+- [✓] **HOST-4 Real-time encoder.** Extend `drift-video::encode` with a real-time profile (no
   reordering, low-latency rate control, bounded keyframe interval) and an AVC444 mode. Measure
-  60 fps at 4K on M1 (ADR open question 5).
-- [ ] **HOST-5 Frame mailbox.** One-slot newest-frame mailbox between capture and encode, and
+  60 fps at 4K on M1 (ADR open question 5). *Measured on an M4 Pro (ADR `HOST-4-realtime-encoder`): 4K60
+  AVC420 yes; AVC444 60 fps up to about 1080p, about 25 fps at 4K. M1 not measured.*
+- [✓] **HOST-5 Frame mailbox.** One-slot newest-frame mailbox between capture and encode, and
   between encode and the socket. Stats for dropped frames.
-- [ ] **HOST-6 Input injection.** Inverse of `drift-input::keymap` (set-1 scancodes → `kVK_*`),
+- [✓] **HOST-6 Input injection.** Inverse of `drift-input::keymap` (set-1 scancodes → `kVK_*`),
   mouse and wheel through `CGEventPost`. One shared table and round-trip tests.
-- [ ] **HOST-7 Link hygiene.** Interactive-video service class on the socket; idle heartbeat to
+- [✓] **HOST-7 Link hygiene.** Interactive-video service class on the socket; idle heartbeat to
   keep a phone's Wi-Fi radio awake; backlog detection feeding EXT-4.
-- [ ] **HOST-8 Pairing and pins.** Code shown on the Mac, device key stored, host certificate
+  *ADR `HOST-7-link-hygiene`; the effect on a phone over Wi-Fi is a manual measurement.*
+- [✓] **HOST-8 Pairing and pins.** Code shown on the Mac, device key stored, host certificate
   pinned on the device. Pairing on by default; listener refuses unpaired devices.
-- [ ] **HOST-9 Menu-bar app.** Status, paired devices, permissions check (Screen Recording,
-  Accessibility, Local Network) with plain-language first-run guidance.
-- [ ] **HOST-10 Virtual display.** `CGVirtualDisplay` created and resized from Display Control
-  layouts; launch self-test; fallback to the physical display.
-- [ ] **HOST-11 Clipboard and audio.** CLIPRDR server role reusing `drift-clipboard`'s mapping;
+- [~] **HOST-9 Menu-bar app.** Status, paired devices, permissions check (Screen Recording,
+  Accessibility, Local Network) with plain-language first-run guidance. *`drift-host-app` and `cargo xtask host-bundle` (ADR
+  `HOST-9-menu-bar`). The paired-devices submenu lists HOST-8's paired devices ("Pairing is off"
+  without pairing); looking at the real menu and alert is a manual step.*
+- [~] **HOST-10 Virtual display.** `CGVirtualDisplay` created and resized from Display Control
+  layouts; launch self-test; fallback to the physical display. *Planning, the private-API
+  module with its self-test, the display manager and the physical fallback are in (ADR
+  `HOST-10-virtual-display`); a virtual display was created and removed on the dev Mac. The live
+  picture switches capture to the virtual display at its mode's size (ADR `HOST-pipeline`,
+  "Virtual displays and AVC444"); a real client resize is manual.*
+- [~] **HOST-11 Clipboard and audio.** CLIPRDR server role reusing `drift-clipboard`'s mapping;
   `ironrdp-rdpsnd` fed from ScreenCaptureKit audio.
-- [ ] **HOST-13 Login window.** LaunchDaemon + per-session LaunchAgent + LoginWindow agent, so a
-  paired device reaches the Mac after a restart.
-- [ ] **HOST-14 Extra paths.** USB cable link and peer-to-peer Wi-Fi alongside the LAN; remote
-  access over the user's own VPN.
+  *Both directions of the clipboard and the host's sound to Drift's client work over loopback
+  (ADR `HOST-11-clipboard-and-audio`); the client plays it through `AVAudioEngine`. Live system
+  audio needs Screen Recording and the real pasteboard a person: manual steps in
+  `docs/acceptance.md`.*
+- [~] **HOST-13 Login window.** LaunchDaemon + per-session LaunchAgent + LoginWindow agent, so a
+  paired device reaches the Mac after a restart. *Daemon (broker, root), agents, routing, IPC
+  with socket hand-off and the shared store are built and tested on loopback (ADR
+  `HOST-13-login-window`). No public API captures the login window on macOS 15+, so the
+  login-window agent shows the test pattern unless ScreenCaptureKit works there; installing the
+  services and a real restart are manual steps.*
+- [~] **HOST-14 Extra paths.** USB cable link and peer-to-peer Wi-Fi alongside the LAN; remote
+  access over the user's own VPN. *Peer-to-peer Wi-Fi (Bonjour with P2P, `SO_RECV_ANYIF`
+  listeners) and VPN reachability with path classification (`drift_apple::paths`, "away" for
+  EXT-4) are built (ADR `HOST-14-extra-paths`). A USB cable link has no public API on either end
+  and is not built.*
 
 ## EXT — `Drift::Mac::v1` channel
 
-- [ ] **EXT-1 Channel framing.** Versioned, length-delimited DVC messages with a fuzz target
+- [✓] **EXT-1 Channel framing.** Versioned, length-delimited DVC messages with a fuzz target
   (M9-2 style). Client and host negotiate and fall back to plain RDP when absent.
-- [ ] **EXT-2 Precise scroll and gestures.** Scroll with phase and momentum; swipe and pinch
-  mapped on the host to Mission Control, App Exposé and Spaces shortcuts.
-- [ ] **EXT-3 Menu mirroring.** Host reads the frontmost app's menu bar through Accessibility;
-  iPad shows it in the iPadOS 26 menu bar and chooses items remotely.
-- [ ] **EXT-4 Quality hints.** Host reports backlog and suggests a quality; a separate default
-  quality for devices away from the local network.
-- [ ] **EXT-5 HEVC and HDR.** After HOST-4 measures AVC444: a Drift extension codec (HEVC Main 10,
+- [✓] **EXT-2 Precise scroll and gestures.** Scroll with phase and momentum; swipe and pinch
+  mapped on the host to Mission Control, App Exposé and Spaces shortcuts. *ADR
+  `EXT-2-scroll-gestures`; the live Mac behaviour is a manual step in `docs/acceptance.md`.*
+- [✓] **EXT-3 Menu mirroring.** Host reads the frontmost app's menu bar through Accessibility;
+  iPad shows it in the iPadOS 26 menu bar and chooses items remotely. *ADR `EXT-3-menu-mirroring`:
+  client polls once a second; choosing from the real iPad menu bar is a manual step.*
+- [✓] **EXT-4 Quality hints.** Host reports backlog and suggests a quality; a separate default
+  quality for devices away from the local network. *ADR `EXT-4-quality-hints`; a real slowed
+  link is a manual step in `docs/acceptance.md`.*
+- [~] **EXT-5 HEVC and HDR.** After HOST-4 measures AVC444: a Drift extension codec (HEVC Main 10,
   4:4:4 where VideoToolbox allows it, HDR metadata) negotiated over the channel, encoded by
   VideoToolbox on the host and decoded on the client, with AVC444 as the fallback (ADR decision 2).
+  *HEVC done (ADR `EXT-5-hevc-hdr`): negotiation on `Drift::Mac::v1`, Main and 4:4:4 at 4K60 on an
+  M4 Pro, decoded on Mac and iOS, private GFX codec id. HDR: encoder tags and metadata only;
+  HDR screen capture and EDR rendering on the client are not done, so sessions stay SDR.*
 
 ## STORE — Distribution
 
-- [ ] **STORE-1 Mac App Store packaging.** Provisioning profile, application/team identifier
+- [~] **STORE-1 Mac App Store packaging.** Provisioning profile, application/team identifier
   entitlements, universal build, `ITSAppUsesNonExemptEncryption` and export-compliance answers.
-  Update `bundle.shortDescription` for GNOME and Mac hosts.
-- [ ] **STORE-2 Review-risk check.** Upload a build to App Store Connect and validate it,
+  Update `bundle.shortDescription` for GNOME and Mac hosts. *`cargo xtask mas-package` builds a
+  universal, sandboxed, Apple Distribution-signed app in an installer-signed `.pkg` (ADR
+  `STORE-1-mac-app-store`). Blocked on the account: no `com.hutsonlabs.drift` App ID, profile or
+  app record. Owner's decisions (2026-10-18): skipped for now — no App ID, profiles or App Store
+  Connect record are created — and `ITSAppUsesNonExemptEncryption` stays unset.*
+- [~] **STORE-2 Review-risk check.** Upload a build to App Store Connect and validate it,
   including the transparent webview (ADR open question 7). Plan native overlays if it fails.
-- [ ] **STORE-3 iOS App Store packaging.** `NSLocalNetworkUsageDescription`,
-  `NSBonjourServices`, privacy manifest, TestFlight build.
-- [ ] **STORE-4 Drift Host release.** Developer ID signing, notarization and DMG through the
-  M9-5 release path; Hardened Runtime without the App Sandbox.
+  *Validate only (no upload, per the owner). `altool --validate-app` needs an App Store Connect
+  record for `com.hutsonlabs.drift`, which does not exist yet. `cargo xtask review-risk` finds
+  one private key (`drawsBackground`, from wry's transparent webview); the native-overlay plan is
+  in ADR `STORE-2-review-risk`, and iOS drops the key (STORE-3).*
+- [~] **STORE-3 iOS App Store packaging.** `NSLocalNetworkUsageDescription`,
+  `NSBonjourServices`, privacy manifest, TestFlight build. *Usage strings, privacy manifest and
+  App Store export options are in, iOS no longer carries wry's private transparency key, and the
+  900 MB `libapp.a` is no longer bundled (ADR `STORE-3-ios-app-store`). Archive and validation
+  need a development team, an iOS App Store profile and an App Store Connect record for
+  `com.hutsonlabs.drift`; TestFlight is out of scope (validate only).*
+- [✓] **STORE-4 Drift Host release.** Developer ID signing, notarization and DMG through the
+  M9-5 release path; Hardened Runtime without the App Sandbox. *`cargo xtask host-release
+  --notarize` (ADR `STORE-4-host-release`); a notarized, stapled DMG passed Gatekeeper on
+  2026-10-18. Not published.*

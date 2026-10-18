@@ -148,6 +148,12 @@ pub fn explain_disconnect(reason: &DisconnectReason, mode: ConnectMode) -> Error
             ],
             &[EditProfile, Close],
         ),
+        DisconnectReason::PairingRefused(why) => explanation(
+            "The Mac refused this device",
+            why.clone(),
+            &["On the Mac, open Drift Host and start pairing, then pair this device again."],
+            &[Close],
+        ),
         DisconnectReason::ProtocolError(detail) => explanation(
             "Unexpected data from the host",
             format!("The connection failed because the host sent something Drift didn’t expect ({detail})."),

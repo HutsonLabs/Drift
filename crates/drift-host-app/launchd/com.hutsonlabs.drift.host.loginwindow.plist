@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- HOST-13: the login window, before anyone logs in (launchd runs it as root there). Serves the
+     connections the daemon hands it while nobody is logged in. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.hutsonlabs.drift.host.loginwindow</string>
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/drift-host</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>drift-host</string>
+		<string>agent</string>
+		<string>loginwindow</string>
+	</array>
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>com.hutsonlabs.drift.host</string>
+	</array>
+	<key>LimitLoadToSessionType</key>
+	<string>LoginWindow</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ProcessType</key>
+	<string>Interactive</string>
+</dict>
+</plist>

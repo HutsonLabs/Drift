@@ -6,13 +6,19 @@ members = [
   "crates/drift-clipboard",
   "crates/drift-gfx",
   "crates/drift-codec",
+  "crates/drift-inject",
+  "crates/drift-ext",
   "crates/drift-video",
   "crates/drift-render",
   "crates/drift-rdp",
   "crates/drift-apple",
   "crates/drift-macos",
+  "crates/drift-capture",
   "crates/drift-ios",
+  "crates/drift-host",
+  "crates/drift-host-app",
   "crates/drift-testkit",
+  "crates/drift-transport",
   "src-tauri",
   "tests/e2e",
   "xtask",
@@ -32,6 +38,8 @@ publish = false
 # --- Drift crates ---
 drift-core = { path = "crates/drift-core" }
 drift-input = { path = "crates/drift-input" }
+drift-inject = { path = "crates/drift-inject" }
+drift-ext = { path = "crates/drift-ext" }
 drift-clipboard = { path = "crates/drift-clipboard" }
 drift-gfx = { path = "crates/drift-gfx" }
 drift-codec = { path = "crates/drift-codec" }
@@ -40,8 +48,11 @@ drift-render = { path = "crates/drift-render" }
 drift-rdp = { path = "crates/drift-rdp" }
 drift-apple = { path = "crates/drift-apple" }
 drift-macos = { path = "crates/drift-macos" }
+drift-capture = { path = "crates/drift-capture" }
 drift-ios = { path = "crates/drift-ios" }
+drift-host = { path = "crates/drift-host" }
 drift-testkit = { path = "crates/drift-testkit" }
+drift-transport = { path = "crates/drift-transport" }
 
 # --- IronRDP (vendored at rev b149f50 + Drift patches; third_party/ironrdp) ---
 ironrdp-acceptor = { path = "third_party/ironrdp/crates/ironrdp-acceptor" }
@@ -55,6 +66,7 @@ ironrdp-dvc = { path = "third_party/ironrdp/crates/ironrdp-dvc" }
 ironrdp-egfx = { path = "third_party/ironrdp/crates/ironrdp-egfx" }
 ironrdp-graphics = { path = "third_party/ironrdp/crates/ironrdp-graphics" }
 ironrdp-pdu = { path = "third_party/ironrdp/crates/ironrdp-pdu" }
+ironrdp-rdpsnd = { path = "third_party/ironrdp/crates/ironrdp-rdpsnd" }
 ironrdp-server = { path = "third_party/ironrdp/crates/ironrdp-server", default-features = false }
 ironrdp-session = { path = "third_party/ironrdp/crates/ironrdp-session" }
 ironrdp-svc = { path = "third_party/ironrdp/crates/ironrdp-svc" }

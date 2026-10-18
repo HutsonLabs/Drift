@@ -13,6 +13,7 @@
 //! - [`repo`]: repository discovery and file listing helpers.
 //! - [`sanitize`] and [`fixtures`]: `cargo xtask import-fixtures` (M0-3).
 //! - [`host_check`]: `cargo xtask host-setup-check` (M0-4).
+//! - [`host_bundle`]: `cargo xtask host-bundle`, the Drift Host app bundle (HOST-9).
 
 pub mod bench;
 pub mod ci_plan;
@@ -20,10 +21,12 @@ pub mod coverage;
 pub mod e2e_env;
 pub mod fixtures;
 pub mod fuzz_audit;
+pub mod host_bundle;
 pub mod host_check;
 pub mod icons;
 pub mod npm_ban;
 pub mod repo;
 pub mod sanitize;
 pub mod secret_scan;
+pub mod store;
 pub mod workflows;
