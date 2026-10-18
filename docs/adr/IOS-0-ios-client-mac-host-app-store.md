@@ -164,8 +164,9 @@ over the `Drift::Mac::v1` DVC after TLS. The idea is from Sill; the protocol is 
   codes, `GCMouse` deltas under pointer lock, `UIPointerInteraction`, touches and Apple Pencil
   hover, and forwards normalized events to `drift-input` through the existing command layer.
   Touch has two modes: trackpad (relative) and direct (absolute tap-to-click).
-- **Windows:** UI-windows' one window per connection becomes one in-app session switcher on iOS
-  until Tauri mobile supports multiple scenes (to verify in IOS-1).
+- **Windows:** UI-windows' one window per connection becomes one in-app session switcher on iOS.
+  IOS-1 showed that Tauri mobile can open a window per `UIWindowScene` on iPad, so on iPad a
+  session may also move to its own scene (IOS-11). iPhone has one scene, so the switcher stays.
 - **iPhone layout:** portrait puts the picture above an on-screen trackpad and key row
   (idea from Sill); landscape is full screen.
 
@@ -204,6 +205,35 @@ scope.
 | iPhone portrait: picture above a trackpad and keys | decision 8, IOS-8 |
 | USB cable and peer-to-peer Wi-Fi as extra paths besides the LAN | later; HOST-14 |
 
+## IOS-1 spike notes
+
+Run on an iPad Pro 13-inch (M5) simulator, iOS 27.0, Xcode 27.0, Tauri 2.11.6 (tao 0.35.3,
+wry 0.55.1), tauri-cli 2.11.4.
+
+- `cargo tauri ios init --ci` generates `gen/apple` with xcodegen. The Rust crate is built as a
+  `staticlib` (`libapp.a`) by a pre-build script (`cargo tauri ios xcode-script`) and linked
+  into a small `main.mm` that calls `ffi::start_app()`. The lib needs
+  `#[cfg_attr(mobile, tauri::mobile_entry_point)]` on `run()`.
+- Xcode 27 rejects the generated iOS 14.0 deployment target (supported range 15.0 to 27.0).
+  Set `bundle.iOS.minimumSystemVersion` in `tauri.conf.json` and rerun `xcodegen generate` in
+  `gen/apple` (or re-init).
+- A lone `tauri` dependency resolved a newer `tauri-runtime` that does not compile with tauri
+  2.11.6. The spike reused Drift's `Cargo.lock`; the real app gets this for free.
+- Pointer lock: the method is added to the class, so it applies to every Tao view controller.
+  Drift should return a per-instance value (an associated object or a lookup by pointer) so only
+  a session view locks. The lock is applied asynchronously and drops when the scene goes
+  inactive or to the background, and iPadOS only grants it to a full-screen scene. A Swift
+  plugin could do the same through the Objective-C runtime from `load(webview:)`
+  (`webview.window?.rootViewController`); there is no need to subclass.
+- Scenes: tao sets its scene delegate in code, so the manifest only needs
+  `UIApplicationSceneManifest` → `UIApplicationSupportsMultipleScenes = true`. UIKit logs a
+  harmless "no UIScene configuration dictionary … named TaoScene" error. A new window's scene
+  comes to the front and the previous one goes to the background. `RunEvent::SceneRequested`
+  fires only for scenes the system opens (for example from the app switcher), not for ones Drift
+  creates. Closing a scene from the system UI was not tested.
+- The app's stdout reaches the unified log (category `app`, prefixed `[stdout]`), not
+  `simctl launch --console-pty`.
+
 ## Consequences
 
 - Drift stops being "a GNOME client" and becomes a client for GNOME and Mac hosts; `project.md`'s
@@ -224,7 +254,15 @@ scope.
 ## Open questions (each has a task)
 
 1. Does Tauri mobile allow replacing the root view controller's `prefersPointerLocked`? (IOS-1)
+   **Answered: yes.** The root view controller is tao's `TaoUIViewController`, a class tao builds
+   at runtime that does not override `prefersPointerLocked`. Adding the method with
+   `class_addMethod` and calling `setNeedsUpdateOfPrefersPointerLocked` locks the pointer: UIKit
+   logged `pointerLockState … isLocked: YES` while the scene was foreground active. Spike branch
+   `spike/IOS-1-tauri-mobile`.
 2. Does Tauri mobile support more than one window/scene? (IOS-1)
+   **Answered: yes, on iPad.** With `UIApplicationSupportsMultipleScenes` in `Info.plist`,
+   `WebviewWindowBuilder::build` connects a new `UIWindowScene` (connected scenes went from 1 to
+   2, one window each). Same spike branch.
 3. Do `objc2-io-surface` / `objc2-core-video` features used by `drift-render` build for iOS
    unchanged? (IOS-2)
 4. How complete is `ironrdp-server` with `egfx` for AVC420/AVC444 streaming? (HOST-1)

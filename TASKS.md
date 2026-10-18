@@ -13,7 +13,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 
 ## IOS — Drift for iPhone and iPad (client)
 
-- [ ] **IOS-1 Tauri mobile spike.** `tauri ios init` on a throwaway branch. Answer the ADR's open
+- [✓] **IOS-1 Tauri mobile spike.** `tauri ios init` on a throwaway branch. Answer the ADR's open
   questions 1–2: can a plugin set `prefersPointerLocked` on the root view controller, and does
   Tauri mobile support more than one window or scene? Write the answers into the ADR.
 - [ ] **IOS-2 Platform gating.** `cfg(target_os)` gates on every AppKit use. `drift-core`,
