@@ -95,6 +95,11 @@ impl Pacer {
         self.interval = Self::interval_for(fps);
     }
 
+    /// The frame rate the cap allows.
+    pub fn fps(&self) -> u32 {
+        u32::try_from(Duration::from_secs(1).as_nanos() / self.interval.as_nanos().max(1)).unwrap_or(u32::MAX)
+    }
+
     /// The wait before the next frame may be taken at `now` (zero when it may).
     pub fn wait(&self, now: Instant) -> Duration {
         self.last.map_or(Duration::ZERO, |t| (t + self.interval).saturating_duration_since(now))
@@ -438,6 +443,10 @@ pub struct LiveHevcEncoder<R> {
     raw: R,
     encoder: HevcEncoder,
     selection: HevcSelection,
+    fps: u32,
+    pacer: Pacer,
+    /// The bit rate at the best quality (EXT-4 levels are fractions of it).
+    best_bitrate: u32,
     pending: VecDeque<Vec<Avc420Region>>,
     keyframe_due: bool,
     last: Option<PixelBuffer>,
@@ -453,8 +462,29 @@ impl<R: RawFrames> LiveHevcEncoder<R> {
     /// A real-time HEVC encoder for `raw` at up to `fps` frames a second.
     pub fn new(raw: R, fps: u32, selection: HevcSelection) -> Result<Self, FrameError> {
         let config = HevcConfig::realtime(raw.size(), fps, selection.profile, selection.transfer);
+        let best_bitrate = config.average_bitrate;
         let encoder = HevcEncoder::new(config).map_err(|e| FrameError(e.to_string()))?;
-        Ok(Self { raw, encoder, selection, pending: VecDeque::new(), keyframe_due: true, last: None })
+        Ok(Self {
+            raw,
+            encoder,
+            selection,
+            fps,
+            pacer: Pacer::new(fps),
+            best_bitrate,
+            pending: VecDeque::new(),
+            keyframe_due: true,
+            last: None,
+        })
+    }
+
+    /// The encoder's current average bit rate (EXT-4).
+    pub fn average_bitrate(&self) -> u32 {
+        self.encoder.config().average_bitrate
+    }
+
+    /// The current frame-rate cap (EXT-4).
+    pub fn fps_cap(&self) -> u32 {
+        self.pacer.fps()
     }
 
     fn encode(
@@ -496,8 +526,12 @@ impl<R: RawFrames> LiveSource for LiveHevcEncoder<R> {
             std::thread::sleep(timeout.min(Duration::from_millis(4)));
             return Ok(Vec::new());
         }
+        if !self.keyframe_due && !paced(&self.pacer, timeout) {
+            return Ok(Vec::new());
+        }
         match self.raw.next(timeout) {
             Some(RawFrame { buffer, damage }) => {
+                self.pacer.taken(Instant::now());
                 let out = match decide(false, damage != Damage::None, self.keyframe_due) {
                     Step::Encode { keyframe } => self.encode(&buffer, &damage, keyframe)?,
                     Step::Wait => Vec::new(),
@@ -514,6 +548,14 @@ impl<R: RawFrames> LiveSource for LiveHevcEncoder<R> {
 
     fn pointer(&mut self) -> Vec<drift_capture::cursor::CursorEvent> {
         self.raw.pointer()
+    }
+
+    fn set_quality(&mut self, level: crate::quality::QualityLevel) {
+        let q = crate::quality::settings_for(level, self.best_bitrate, self.fps);
+        if let Err(e) = self.encoder.set_average_bitrate(q.bitrate) {
+            tracing::warn!(error = %e, "could not change the HEVC bit rate");
+        }
+        self.pacer.set_fps(q.fps);
     }
 
     fn hevc(&self) -> Option<HevcSelection> {

@@ -419,6 +419,22 @@ impl HevcEncoder {
         self.session.as_ref().is_some_and(|s| s.low_latency)
     }
 
+    /// Changes the average bit rate of the running session (EXT-4 quality steps).
+    pub fn set_average_bitrate(&mut self, bitrate: u32) -> Result<(), EncodeError> {
+        self.config.average_bitrate = bitrate;
+        let Some(session) = &self.session else { return Ok(()) };
+        let value = CFNumber::new_i32(i32::try_from(bitrate).unwrap_or(i32::MAX));
+        // SAFETY: a valid session, a constant key and a CFNumber value.
+        let status = unsafe {
+            VTSessionSetProperty(
+                &session.session,
+                kVTCompressionPropertyKey_AverageBitRate,
+                Some(value.as_ref()),
+            )
+        };
+        os("VTSessionSetProperty", status)
+    }
+
     /// Makes the next picture a keyframe.
     pub fn request_keyframe(&mut self) {
         self.force_keyframe = true;

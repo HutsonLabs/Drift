@@ -186,7 +186,9 @@ fn the_hevc_bit_rate_changes_on_a_running_session() {
         if n == 6 {
             enc.set_average_bitrate(1_500_000).unwrap();
         }
-        frames.extend(enc.encode(&buffer(&text_like(n)), t0 + Duration::from_millis(u64::from(n) * 16)).unwrap());
+        frames.extend(
+            enc.encode(&buffer(&text_like(n)), t0 + Duration::from_millis(u64::from(n) * 16)).unwrap(),
+        );
     }
     frames.extend(enc.flush().unwrap());
     assert_eq!(frames.len(), 12);
