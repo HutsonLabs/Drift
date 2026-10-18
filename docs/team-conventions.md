@@ -65,6 +65,7 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `HOST-11-clipboard-and-audio` | host runs the client's `ClipboardSync` on a clipboard thread; 16-bit stereo PCM rdpsnd from ScreenCaptureKit; `AVAudioEngine` player with a 200 ms cap; sound for every session |
 | `HOST-9-menu-bar` | Drift Host menu-bar app in Rust/AppKit (`drift-host-app`): pure menu model, permissions guidance, first-run alert, `SMAppService` login item, `cargo xtask host-bundle` |
 | `HOST-10-virtual-display` | private `CGVirtualDisplay` isolated in `cg_virtual` with a launch self-test, pure `ModePlan` (640×480…5K, HiDPI from 150 %), `DisplayManager` seam, physical fallback |
+| `STORE-1-mac-app-store` | `tauri.mas.conf.json` + `entitlements.mas.plist`, universal build, `cargo xtask mas-package`, what the account still lacks, export compliance |
 | `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility |
 
 ## Commands
@@ -84,6 +85,7 @@ another JS package manager.
 | `cargo xtask import-fixtures [--staging DIR]` | sanitize + import `~/code/drift-spikes/fixtures-staging` into `fixtures/` (M0-3, ADR `M0-3-fixture-capture-and-sanitization`) |
 | `cargo xtask host-setup-check` | read-only check of the GNOME host over SSH (M0-4, `docs/gnome-host-setup.md`) |
 | `cargo xtask bundle` | M9-5 (stub until then) |
+| `cargo xtask mas-package [--profile F]` | the Mac App Store `.pkg`: universal, sandboxed, Apple Distribution + installer signature (STORE-1) |
 | `cargo tauri dev` / `cargo tauri build` | run / bundle the app (UI is built by bun first) |
 
 `cargo tauri build` signs with the Developer ID identity pinned in `tauri.conf.json`

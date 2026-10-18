@@ -77,6 +77,12 @@ enum Cmd {
         #[arg(long)]
         debug: bool,
     },
+    /// Build the Mac App Store package: universal, sandboxed, Apple Distribution (STORE-1).
+    MasPackage {
+        /// The Mac App Store provisioning profile for `com.hutsonlabs.drift` to embed.
+        #[arg(long)]
+        profile: Option<PathBuf>,
+    },
     /// Verify the GNOME host configuration over SSH, read-only (task M0-4).
     HostSetupCheck {
         /// SSH destination (default `$DRIFT_E2E_SSH` or `homelab@10.1.2.40`).
@@ -131,6 +137,7 @@ fn run(cmd: Cmd) -> Result<()> {
         }
         Cmd::Bundle => not_yet("bundle", "M9-5"),
         Cmd::HostBundle { debug } => host_bundle(&root, if debug { "debug" } else { "release" }),
+        Cmd::MasPackage { profile } => mas_package(&root, profile.as_deref()),
         Cmd::HostSetupCheck { host, headless, report, save_report } => {
             host_setup_check(host, &headless, report.as_deref(), save_report.as_deref())
         }
@@ -160,6 +167,43 @@ fn host_bundle(root: &Path, profile: &str) -> Result<()> {
         bail!("codesign failed");
     }
     println!("{}", plan.app.display());
+    Ok(())
+}
+
+fn mas_package(root: &Path, profile: Option<&Path>) -> Result<()> {
+    let plan = xtask::store::mas_plan(root, profile);
+    let status = Command::new(cargo()).args(&plan.tauri_args).current_dir(root.join("src-tauri")).status()?;
+    if !status.success() {
+        bail!("cargo {} failed", plan.tauri_args.join(" "));
+    }
+    match &plan.embed_profile {
+        Some((from, to)) => {
+            std::fs::copy(from, to).with_context(|| format!("copying {}", from.display()))?;
+            // The profile sits inside the sealed bundle: sign again with the same identity
+            // and entitlements so the signature covers it.
+            let status = Command::new("codesign")
+                .args(["--force", "--options", "runtime", "--sign", xtask::store::APPLE_DISTRIBUTION])
+                .arg("--entitlements")
+                .arg(root.join("src-tauri/entitlements.mas.plist"))
+                .arg(&plan.app)
+                .status()?;
+            if !status.success() {
+                bail!("codesign failed");
+            }
+        }
+        None => eprintln!(
+            "xtask: no --profile given; the package has no embedded provisioning profile and App Store \
+             validation will reject it (STORE-1)"
+        ),
+    }
+    if let Some(dir) = plan.pkg.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let status = Command::new("productbuild").args(&plan.productbuild_args).status()?;
+    if !status.success() {
+        bail!("productbuild failed");
+    }
+    println!("{}", plan.pkg.display());
     Ok(())
 }
 

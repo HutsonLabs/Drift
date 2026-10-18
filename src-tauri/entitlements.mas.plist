@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Drift's entitlements for the Mac App Store build (STORE-1; `tauri.mas.conf.json`).
+
+  The same sandbox as the Developer ID build (`entitlements.plist`, ADR M9-3): outgoing
+  connections only, no listening, no file access. The App Store also needs the two identity
+  entitlements, which must match the provisioning profile embedded in the app
+  (`Contents/embedded.provisionprofile`, added by `cargo xtask mas-package`).
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.application-identifier</key>
+	<string>M9Z3N2R97A.com.hutsonlabs.drift</string>
+	<key>com.apple.developer.team-identifier</key>
+	<string>M9Z3N2R97A</string>
+</dict>
+</plist>

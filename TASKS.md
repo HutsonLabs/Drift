@@ -123,9 +123,12 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 
 ## STORE — Distribution
 
-- [ ] **STORE-1 Mac App Store packaging.** Provisioning profile, application/team identifier
+- [~] **STORE-1 Mac App Store packaging.** Provisioning profile, application/team identifier
   entitlements, universal build, `ITSAppUsesNonExemptEncryption` and export-compliance answers.
-  Update `bundle.shortDescription` for GNOME and Mac hosts.
+  Update `bundle.shortDescription` for GNOME and Mac hosts. *`cargo xtask mas-package` builds a
+  universal, sandboxed, Apple Distribution-signed app in an installer-signed `.pkg` (ADR
+  `STORE-1-mac-app-store`). Blocked on the account: no `com.hutsonlabs.drift` App ID, profile or
+  app record, and the export-compliance answer is the owner's to give.*
 - [ ] **STORE-2 Review-risk check.** Upload a build to App Store Connect and validate it,
   including the transparent webview (ADR open question 7). Plan native overlays if it fails.
 - [ ] **STORE-3 iOS App Store packaging.** `NSLocalNetworkUsageDescription`,
