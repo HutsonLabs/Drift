@@ -9,6 +9,7 @@ mod builder;
 mod capabilities;
 mod clipboard;
 mod display;
+mod dvc_factory;
 mod echo;
 mod encoder;
 mod error;
@@ -30,6 +31,7 @@ pub use display::{
     BitmapUpdate, ColorPointer, DesktopSize, DisplayUpdate, Framebuffer, LargePointer, PixelFormat, RGBAPointer,
     RdpServerDisplay, RdpServerDisplayUpdates,
 };
+pub use dvc_factory::DvcServerFactory;
 pub use echo::{EchoDvcBridge, EchoRoundTripMeasurement, EchoServerHandle, EchoServerMessage};
 pub use error::{ServerError, ServerErrorExt, ServerErrorKind, ServerResult, ServerResultExt};
 #[cfg(feature = "egfx")]

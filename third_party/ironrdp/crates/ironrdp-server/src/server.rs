@@ -670,6 +670,7 @@ pub struct RdpServer {
     cliprdr_factory: Option<Box<dyn CliprdrServerFactory>>,
     rdpei_factory: Option<Box<dyn RdpeiServerFactory>>,
     rdpdr_factory: Option<Box<dyn RdpdrServerFactory>>,
+    dvc_factories: Vec<Box<dyn crate::DvcServerFactory>>,
     echo_handle: EchoServerHandle,
     #[cfg(feature = "egfx")]
     gfx_factory: Option<Box<dyn GfxServerFactory>>,
@@ -1392,6 +1393,7 @@ impl RdpServer {
             cliprdr_factory,
             rdpei_factory,
             rdpdr_factory,
+            dvc_factories: Vec::new(),
             echo_handle: EchoServerHandle::new(ev_sender.clone()),
             #[cfg(feature = "egfx")]
             gfx_factory,
@@ -1433,6 +1435,12 @@ impl RdpServer {
 
     pub fn builder() -> builder::RdpServerBuilder<builder::WantsAddr> {
         builder::RdpServerBuilder::new()
+    }
+
+    /// Adds a factory that attaches the embedder's own dynamic virtual channel(s) to every new
+    /// connection, after the built-in ones.
+    pub fn add_dvc_factory(&mut self, factory: Box<dyn crate::DvcServerFactory>) {
+        self.dvc_factories.push(factory);
     }
 
     /// Set or clear the credential validator for TLS-mode connections.
@@ -1879,6 +1887,8 @@ impl RdpServer {
             }
             dvc
         };
+
+        let dvc = self.dvc_factories.iter().fold(dvc, |dvc, factory| factory.attach(dvc));
 
         acceptor.attach_static_channel(dvc);
 
