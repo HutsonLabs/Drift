@@ -548,6 +548,22 @@ running and Drift connected:
       Drift Host; the client log shows `Drift::Mac::v1 negotiated`. Connect the same client to
       the GNOME host: no such line, and the session works as before.
 
+### EXT-3 — Menu mirroring (ADR `EXT-3-menu-mirroring`)
+
+Done on 2026-10-18: an iPad simulator connected to `cargo run -p drift-host --example menu_host
+-- <app data dir>/Library/DriftSmoke` showed this Mac's frontmost app's menus (`remote menus in
+the menu bar … menus=4` in the log). Still to do by hand:
+
+- [ ] **Choose an item:** on an iPad with a pointer or keyboard, open the menu bar over a live
+      session to the Mac's TextEdit; Format › Font › Show Fonts opens the Fonts panel on the Mac.
+      Disabled items are grey, checked ones show a checkmark, shortcuts show as subtitles.
+- [ ] **Switch apps on the Mac:** bring Safari forward; within about 3 s the iPad's menus are
+      Safari's. Switch to Connections on the iPad: Drift's own menus come back.
+- [ ] **Large menus:** Xcode in front; the menu arrives (under 8192 elements) and the host stays
+      responsive.
+- [ ] **Without Accessibility:** revoke it for Drift Host; the iPad shows Drift's own menus and
+      the host logs that it has no Accessibility.
+
 ### HOST-4 — Real-time encoder (ADR `HOST-4-realtime-encoder`)
 
 Measured on an M4 Pro on 2026-10-18 with `cargo run --release -p drift-video --example

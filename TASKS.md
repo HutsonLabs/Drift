@@ -113,8 +113,9 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   (M9-2 style). Client and host negotiate and fall back to plain RDP when absent.
 - [ ] **EXT-2 Precise scroll and gestures.** Scroll with phase and momentum; swipe and pinch
   mapped on the host to Mission Control, App Exposé and Spaces shortcuts.
-- [ ] **EXT-3 Menu mirroring.** Host reads the frontmost app's menu bar through Accessibility;
-  iPad shows it in the iPadOS 26 menu bar and chooses items remotely.
+- [✓] **EXT-3 Menu mirroring.** Host reads the frontmost app's menu bar through Accessibility;
+  iPad shows it in the iPadOS 26 menu bar and chooses items remotely. *ADR `EXT-3-menu-mirroring`:
+  client polls once a second; choosing from the real iPad menu bar is a manual step.*
 - [ ] **EXT-4 Quality hints.** Host reports backlog and suggests a quality; a separate default
   quality for devices away from the local network.
 - [ ] **EXT-5 HEVC and HDR.** After HOST-4 measures AVC444: a Drift extension codec (HEVC Main 10,

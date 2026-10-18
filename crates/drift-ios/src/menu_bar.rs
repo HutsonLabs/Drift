@@ -211,6 +211,7 @@ fn rebuild(
     }
     // SAFETY: as above.
     let mut after: Retained<NSString> = unsafe { UIMenuApplication }.retain();
+    tracing::debug!(app = %snapshot.app, menus = snapshot.menus.len(), "building the remote menus");
     for menu in build_menus(mtm, snapshot, Rc::clone(on_press)) {
         builder.insertSiblingMenu_afterMenuForIdentifier(&menu, &after);
         after = menu.identifier();

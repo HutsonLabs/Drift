@@ -90,6 +90,12 @@ pub(super) fn refresh<R: Runtime>(app: &AppHandle<R>, mtm: MainThreadMarker) {
             bar.install();
             bar
         });
+        tracing::info!(
+            window = front.as_ref().map(|(l, _)| l.as_str()),
+            app = front.as_ref().map(|(_, m)| m.app.as_str()),
+            menus = front.as_ref().map_or(0, |(_, m)| m.menus.len()),
+            "remote menus in the menu bar"
+        );
         bar.set(front.as_ref().map(|(_, m)| (**m).clone()));
         s.shown = wanted;
     });
