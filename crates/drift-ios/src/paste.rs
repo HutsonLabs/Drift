@@ -221,8 +221,17 @@ impl PasteButton {
     /// Puts the button in the bottom-trailing corner of a `width` × `height` picture at the
     /// origin of its superview (the window lays the picture out after the button is added).
     pub fn place(&self, width: f64, height: f64) {
+        self.place_in(0.0, 0.0, width, height);
+    }
+
+    /// Puts the button in the bottom-trailing corner of the picture at `(x, y, width, height)`
+    /// in its superview (the iPhone layout puts the picture above the trackpad, IOS-8).
+    pub fn place_in(&self, x: f64, y: f64, width: f64, height: f64) {
         self.control.setFrame(CGRect {
-            origin: CGPoint { x: (width - BUTTON - INSET).max(0.0), y: (height - BUTTON - INSET).max(0.0) },
+            origin: CGPoint {
+                x: x + (width - BUTTON - INSET).max(0.0),
+                y: y + (height - BUTTON - INSET).max(0.0),
+            },
             size: CGSize { width: BUTTON, height: BUTTON },
         });
     }

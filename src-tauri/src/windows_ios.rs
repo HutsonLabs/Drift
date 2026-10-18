@@ -646,7 +646,10 @@ pub(crate) fn apply_view<R: Runtime>(app: &AppHandle<R>, label: &str, view: &Ses
                 None => plat.view.clear_desktop(),
             }
             plat.surface = surface;
-            if !phone_shell::layout(&app2, &label, plat) {
+            if phone_shell::layout(&app2, &label, plat) {
+                // The phone layout owns the frames; the paste button follows the picture.
+                place_paste_over_picture(plat);
+            } else {
                 layout(plat);
             }
             route_input(mtm, plat);
@@ -695,6 +698,16 @@ fn layout(plat: &WindowPlatform) {
             drift_ios::webview::place_page(&plat.web, frame.x, frame.y, frame.width, frame.height, false);
         }
     }
+}
+
+/// Pins the paste button to the picture's bottom-trailing corner wherever the picture is, and
+/// shows it only over a live picture with the clipboard on (IOS-10 with the IOS-8 layout).
+fn place_paste_over_picture(plat: &WindowPlatform) {
+    let Some(paste) = &plat.paste else { return };
+    let f = plat.view.frame();
+    paste.place_in(f.origin.x, f.origin.y, f.size.width, f.size.height);
+    let picture = matches!(plat.surface, Surface::Remote | Surface::Hud(_));
+    paste.set_visible(picture && plat.clipboard != ClipboardPrefs::Off);
 }
 
 /// Hardware input goes to the picture while it is on screen (live or under a HUD); the pointer
