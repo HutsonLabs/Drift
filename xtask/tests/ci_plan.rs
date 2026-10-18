@@ -355,7 +355,10 @@ fn uikit_is_only_an_ios_target_dependency() {
                     .get("dependencies")
                     .and_then(toml::Value::as_table)
                     .is_some_and(|d| d.contains_key("objc2-ui-kit"));
-                assert!(!has_uikit || cfg == "cfg(target_os = \"ios\")", "{name}: objc2-ui-kit under `{cfg}`");
+                assert!(
+                    !has_uikit || cfg == "cfg(target_os = \"ios\")",
+                    "{name}: objc2-ui-kit under `{cfg}`"
+                );
             }
         }
     }

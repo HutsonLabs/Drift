@@ -17,6 +17,7 @@ tauri = ["dep:tauri"]
 macos-ui-tests = []
 
 [dependencies]
+drift-apple.workspace = true
 drift-core.workspace = true
 drift-input.workspace = true
 ironrdp-graphics.workspace = true
@@ -24,14 +25,12 @@ ironrdp-pdu.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 uuid.workspace = true
-zeroize.workspace = true
 objc2.workspace = true
 block2.workspace = true
 dispatch2 = "0.3.1"
 objc2-foundation.workspace = true
 objc2-quartz-core = { workspace = true, features = ["objc2-core-foundation"] }
 objc2-core-foundation.workspace = true
-security-framework = "3.7"
 tauri = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -40,7 +39,6 @@ objc2-app-kit.workspace = true
 [dev-dependencies]
 drift-testkit.workspace = true
 proptest.workspace = true
-security-framework = "3.7"
 tempfile.workspace = true
 
 # AppKit smoke tests must run on the process main thread (views and windows are

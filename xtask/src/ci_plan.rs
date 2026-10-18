@@ -169,8 +169,17 @@ pub const VENDORED_TEST_PACKAGES: &[&str] =
 pub const IOS_TARGETS: &[&str] = &["aarch64-apple-ios", "aarch64-apple-ios-sim"];
 
 /// The crates that build for iOS: platform-neutral ones plus the Apple-framework ones.
-pub const IOS_CRATES: &[&str] =
-    &["drift-core", "drift-rdp", "drift-gfx", "drift-codec", "drift-input", "drift-video", "drift-render"];
+pub const IOS_CRATES: &[&str] = &[
+    "drift-core",
+    "drift-rdp",
+    "drift-gfx",
+    "drift-codec",
+    "drift-input",
+    "drift-video",
+    "drift-render",
+    "drift-apple",
+    "drift-ios",
+];
 
 /// The lint pass: formatting and clippy over every target and every feature.
 ///

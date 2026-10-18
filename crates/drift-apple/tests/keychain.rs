@@ -9,8 +9,8 @@
 
 use std::path::PathBuf;
 
-use drift_core::SecretRole;
 use drift_apple::keychain::Keychain;
+use drift_core::SecretRole;
 use uuid::Uuid;
 
 /// Password of the temporary test keychain file (not a credential).

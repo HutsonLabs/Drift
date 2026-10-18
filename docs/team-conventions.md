@@ -42,6 +42,7 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `M4-2-session-actor-channels` | resize debounce, CLIPRDR glue, suppress/ack policy, reconnect resume, greeter typing, FakeServer channels, real-host e2e findings |
 | `UI-tabs-connection-manager` | Connection Manager / Session tabs: hidden AppKit tab bar, HTML strip webview per window, full screen, focus, main-queue dispatch (superseded in most part by `UI-windows-gallery`) |
 | `UI-windows-gallery` | Connections gallery window + one window per session: no tabbing, title-bar webview, frames, thumbnails, Dock menu, menus, IPC contract |
+| `IOS-3-drift-apple-split` | `drift-apple` (Keychain, `NWPathMonitor`, LNP) shared by `drift-macos` and `drift-ios`; foreground as the iOS wake trigger; Settings link |
 | `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility |
 
 ## Commands
@@ -77,8 +78,9 @@ and poll. Other agents build in parallel on the same machine.
 
 ## Code rules
 
-- Pure logic in pure crates with unit/property tests; FFI crates (`drift-macos`, `drift-video`,
-  `drift-render`) are humble objects with smoke tests.
+- Pure logic in pure crates with unit/property tests; FFI crates (`drift-apple`, `drift-macos`,
+  `drift-ios`, `drift-video`, `drift-render`) are humble objects with smoke tests. `drift-ios`'s
+  tests run in a simulator: `xcrun simctl spawn <device> target/aarch64-apple-ios-sim/debug/deps/<test>`.
 - No `unwrap`/`expect` on network data (clippy `unwrap_used` is an error outside tests); every
   `unsafe` block has a `// SAFETY:` comment; public items are documented (`missing_docs`).
 - Apple platforms only (ADR `IOS-0`): `cfg(target_os = "macos")` / `"ios"` gates, nothing for
