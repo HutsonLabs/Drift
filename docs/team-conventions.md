@@ -47,6 +47,7 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `IOS-9-pairing` | client half of Mac pairing: `_drift-host._tcp` TXT, Damm-checked code, `drift-pair:` QR link, `paired_host` profiles, Keychain device key and pins |
 | `IOS-10-clipboard-on-ios` | UIPasteboard adapter, no polling, writes for the front window, `UIPasteControl` paste = clipboard + remote Ctrl+V |
 | `IOS-11-session-switcher` | native switcher button over session windows, own-scene activation (tao `set_focus` bug), closed scenes close sessions, `DRIFT_SMOKE_SCRIPT` |
+| `IOS-6-ios-input` | iPad input in Rust (not a Swift plugin): HID table, `Pointer`, `GCKeyboard`/`GCMouse`, hover, pointer lock per view controller, shortcuts iPadOS keeps |
 | `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility |
 
 ## Commands

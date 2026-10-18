@@ -107,6 +107,8 @@ fn ios_info_plist_and_project_spec_declare_the_ios_keys() {
         "NSLocalNetworkUsageDescription",
         "UIApplicationSupportsMultipleScenes",
         "CADisableMinimumFrameDurationOnPhone",
+        // IOS-6: iPad pointer clicks arrive as indirect-pointer touches.
+        "UIApplicationSupportsIndirectInputEvents",
     ] {
         assert!(plist.contains(&format!("<key>{key}</key>")), "Info.plist lacks {key}");
         assert!(spec.contains(&format!("{key}:")), "project.yml lacks {key}; xcodegen would drop it");
@@ -133,6 +135,7 @@ fn ios_project_links_the_frameworks_the_crates_need() {
         "CoreVideo.framework",
         "IOSurface.framework",
         "Network.framework",
+        "GameController.framework",
         "Metal.framework",
         "libz.tbd",
         "AVFoundation.framework",

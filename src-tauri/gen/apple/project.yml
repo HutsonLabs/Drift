@@ -63,6 +63,8 @@ targets:
         # One scene per session window on iPad (IOS-1, IOS-11); iPhone stays single-scene.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
+        # iPad pointer clicks arrive as pointer touches, not finger touches (IOS-6).
+        UIApplicationSupportsIndirectInputEvents: true
         # ProMotion iPhones only go above 60 Hz with this (IOS-4).
         CADisableMinimumFrameDurationOnPhone: true
         CFBundleShortVersionString: 0.2.0
@@ -101,6 +103,8 @@ targets:
       - sdk: CoreVideo.framework
       - sdk: IOSurface.framework
       - sdk: Network.framework
+      # drift-ios: GCKeyboard and GCMouse (IOS-6).
+      - sdk: GameController.framework
       - sdk: libz.tbd
       # drift-ios: the pairing QR scanner (IOS-9).
       - sdk: AVFoundation.framework

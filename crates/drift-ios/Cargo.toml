@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 drift-apple.workspace = true
 drift-core.workspace = true
+drift-input.workspace = true
 thiserror.workspace = true
 
 # UIKit exists only on iOS; the crate is empty elsewhere.
@@ -22,6 +23,7 @@ objc2-foundation = { workspace = true, features = ["NSNotification", "NSString",
 objc2-ui-kit.workspace = true
 # The pairing QR scanner (IOS-9).
 objc2-av-foundation = "0.3.2"
+objc2-game-controller = "0.3.2"
 objc2-core-foundation.workspace = true
 objc2-quartz-core = { workspace = true, features = ["objc2-core-foundation", "objc2-metal"] }
 
@@ -36,6 +38,11 @@ harness = false
 
 [[test]]
 name = "switcher"
+harness = false
+
+# IOS-6: keyboard, pointer and pointer lock glue, same main-thread harness.
+[[test]]
+name = "input"
 harness = false
 
 [lints]

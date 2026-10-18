@@ -390,6 +390,14 @@ app is in the background. Still to do by hand:
 - [ ] **ProMotion:** on a 120 Hz iPad Pro or iPhone Pro, Quartz Debug-style frame-rate overlay
       (Xcode ▸ Debug ▸ View Debugging ▸ Rendering) shows up to 120 Hz while the picture moves and
       a drop to the system rate when Connections is in front.
+- [ ] **IOS-6 keyboard:** on an iPad with a Magic Keyboard, typing, modifiers, arrows, F-keys and
+      Cmd chords reach the remote (Cmd as Super by default); the shortcuts listed in ADR `IOS-6`
+      stay with iPadOS; switching to Connections and back leaves no key stuck.
+- [ ] **IOS-6 pointer:** without lock, the pointer moves the remote pointer, click and
+      secondary click work, two-finger trackpad and wheel scroll scroll the remote. With the
+      session full screen, the pointer locks (system pointer disappears) and mouse motion,
+      buttons and wheel still work; check the wheel's direction.
+- [ ] **IOS-6 Pencil:** hovering an Apple Pencil (M2 iPad or later) moves the remote pointer.
 - [ ] **H.264 on a device:** `headless_motion.h264` decodes without `-8969` (it fails only in the
       simulator's software decoder, ADR `IOS-0` open question 3).
 - [ ] **IOS-10 paste button:** with a live session, copy text in Notes, tap the paste button in

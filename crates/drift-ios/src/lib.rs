@@ -13,15 +13,19 @@
 //! | [`webview`] | the page's `WKWebView`: picture below it, frames, main-queue dispatch | IOS-5 |
 //! | [`qr`] | the pairing QR scanner (AVFoundation camera, full-screen) | IOS-9 |
 //! | [`paste`] | `UIPasteControl` over the picture: the explicit, prompt-free paste | IOS-10 |
+//! | [`hardware`] | `GCKeyboard` keys and `GCMouse` deltas (under pointer lock) to the front session | IOS-6 |
+//! | [`pointer_lock`] | `prefersPointerLocked` on tao's root view controller, per instance | IOS-6 |
 //! | [`pacing`] | `CADisplayLink` asking for up to 120 Hz while a session is visible | IOS-4 |
 //!
 //! UIKit exists only on iOS, so the crate is empty on every other target. Every `unsafe` block
 //! has a `// SAFETY:` comment.
 #![cfg(target_os = "ios")]
 
+pub mod hardware;
 pub mod lifecycle;
 pub mod pacing;
 pub mod paste;
+pub mod pointer_lock;
 pub mod qr;
 pub mod settings;
 pub mod switcher;
