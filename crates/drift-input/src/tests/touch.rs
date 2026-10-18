@@ -128,18 +128,22 @@ fn two_finger_pan_scrolls() {
     t.began(&mut p, &z, 2, at(450.0, 300.0), 0.0);
     let mut out = t.moved(&mut p, &z, 1, at(400.0, 330.0), 0.05).events;
     out.extend(t.moved(&mut p, &z, 2, at(450.0, 330.0), 0.05).events);
-    // The centre moved 30 points down: 30 × 2 units per point = 60 wheel units (natural).
+    // The centre moved 30 points down: 30 × 2 units per point = 60 wheel units (natural),
+    // carried as the fallback of precise scrolls since EXT-2.
     let units: i32 = out
         .iter()
         .map(|e| match e {
-            InputEvent::Wheel { horizontal: false, units } => i32::from(*units),
-            other => panic!("only vertical wheel events: {other:?}"),
+            InputEvent::PreciseScroll { wheel_v, wheel_h: 0, .. } => *wheel_v,
+            other => panic!("only vertical precise scrolls: {other:?}"),
         })
         .sum();
     assert_eq!(units, 60);
     let mut rest = t.ended(&mut p, &z, 1, at(400.0, 330.0), 0.4).events;
     rest.extend(t.ended(&mut p, &z, 2, at(450.0, 330.0), 0.4).events);
-    assert!(rest.is_empty(), "no click after a scroll: {rest:?}");
+    assert!(
+        rest.iter().all(|e| matches!(e, InputEvent::PreciseScroll { wheel_v: 0, wheel_h: 0, .. })),
+        "no click after a scroll, only its end: {rest:?}"
+    );
 }
 
 #[test]

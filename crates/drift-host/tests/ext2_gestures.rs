@@ -6,8 +6,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use drift_core::{
-    ConnectMode, ConnectionProfile, InputEvent, MomentumPhase, ScrollPhase, SessionState, Size, SwipeDirection,
-    SystemClock,
+    ConnectMode, ConnectionProfile, InputEvent, MomentumPhase, ScrollPhase, SessionState, Size,
+    SwipeDirection, SystemClock,
 };
 use drift_ext::gestures::Gesture;
 use drift_host::frames::TestPattern;
@@ -78,7 +78,14 @@ fn start_host(input: &RecordingInput, identity: &HostIdentity) -> Host {
 }
 
 fn scroll(dy: i32, phase: ScrollPhase) -> InputEvent {
-    InputEvent::PreciseScroll { dx: 0, dy, phase, momentum: MomentumPhase::None, wheel_v: dy / 50, wheel_h: 0 }
+    InputEvent::PreciseScroll {
+        dx: 0,
+        dy,
+        phase,
+        momentum: MomentumPhase::None,
+        wheel_v: dy / 50,
+        wheel_h: 0,
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -98,7 +105,8 @@ async fn precise_scroll_and_swipes_ride_the_channel_to_the_host() {
     wait_state(&mut events, "connected", |s| matches!(s, SessionState::Connected { .. })).await;
     wait_until("Drift::Mac::v1 negotiated", Duration::from_secs(10), || {
         link.negotiated().is_some_and(|n| {
-            n.capabilities.contains(drift_ext::wire::Capabilities::SCROLL | drift_ext::wire::Capabilities::GESTURES)
+            n.capabilities
+                .contains(drift_ext::wire::Capabilities::SCROLL | drift_ext::wire::Capabilities::GESTURES)
         })
     })
     .await;
@@ -139,7 +147,9 @@ async fn without_the_channel_the_wheel_fallback_goes_and_gestures_are_dropped() 
         options(),
     );
     wait_state(&mut events, "connected", |s| matches!(s, SessionState::Connected { .. })).await;
-    handle.send(SessionCommand::Input(InputEvent::Swipe { direction: SwipeDirection::Up, fingers: 3 })).unwrap();
+    handle
+        .send(SessionCommand::Input(InputEvent::Swipe { direction: SwipeDirection::Up, fingers: 3 }))
+        .unwrap();
     // 600 hundredths → 12 wheel units in one vertical wheel event.
     handle.send(SessionCommand::Input(scroll(600, ScrollPhase::Changed))).unwrap();
     wait_until("the wheel at the host", Duration::from_secs(10), || input.mouse_events() >= 1).await;
@@ -147,4 +157,33 @@ async fn without_the_channel_the_wheel_fallback_goes_and_gestures_are_dropped() 
     assert_eq!(input.mouse_events(), 1, "one wheel event, nothing for the swipe");
     assert!(input.gestures().is_empty());
     let _ = handle.send(SessionCommand::Close);
+}
+
+#[test]
+fn the_injecting_sink_posts_shortcuts_and_pixel_scrolls_and_never_leaks_a_pinch() {
+    use std::sync::Mutex;
+
+    use drift_host::inject::InjectingInput;
+    use drift_host::input::InputSink;
+    use drift_inject::plan::{DisplayMap, InjectEvent};
+
+    let posted: Arc<Mutex<Vec<InjectEvent>>> = Arc::default();
+    let sink_posted = Arc::clone(&posted);
+    let map = DisplayMap { origin: (0.0, 0.0), desktop: (1280, 800), points_per_pixel: 1.0 };
+    let mut sink =
+        InjectingInput::new(map, move |e: &InjectEvent| sink_posted.lock().unwrap().push(e.clone()));
+    sink.gesture(Gesture::Swipe { direction: SwipeDirection::Up, fingers: 3 });
+    sink.gesture(Gesture::Scroll {
+        dx: 0,
+        dy: 250,
+        phase: ScrollPhase::Changed,
+        momentum: MomentumPhase::None,
+    });
+    sink.gesture(Gesture::Pinch { magnification: 200, phase: ScrollPhase::Began });
+    sink.session_ended();
+    // A new session's pinch starts from zero: 200 left over must not add up with this one.
+    sink.gesture(Gesture::Pinch { magnification: 100, phase: ScrollPhase::Changed });
+    let posted = posted.lock().unwrap();
+    assert_eq!(posted.len(), 5, "Control-Up as four key events, then one scroll: {posted:?}");
+    assert!(matches!(posted[4], InjectEvent::Scroll { dy, .. } if (dy - 2.5).abs() < 1e-9));
 }

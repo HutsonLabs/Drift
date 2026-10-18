@@ -9,10 +9,12 @@
 
 use std::collections::BTreeSet;
 
-use drift_core::{DesktopSize, InputEvent, MouseButton, Point, Size, ViewGeometry};
+use drift_core::{
+    DesktopSize, InputEvent, MomentumPhase, MouseButton, Point, ScrollPhase, Size, ViewGeometry,
+};
 
 use crate::coords::{ScaleMode, Viewport};
-use crate::scroll::{ScrollAccumulator, ScrollConfig, ScrollDelta};
+use crate::scroll::{ScrollAccumulator, ScrollConfig, ScrollDelta, centi, wheel_units};
 
 /// Pointer state of one remote view.
 #[derive(Debug, Clone)]
@@ -163,6 +165,30 @@ impl Pointer {
             self.scroll.reset();
         }
         self.scroll.push(delta)
+    }
+
+    /// A precise (trackpad or touch) scroll of `dx`, `dy` points (AppKit's `scrollingDelta`
+    /// signs) as one [`InputEvent::PreciseScroll`] (EXT-2): the points and phases for a Drift
+    /// Host, and the same wheel units [`Self::scroll`] would send for anyone else.
+    pub fn precise_scroll(
+        &mut self,
+        dx: f64,
+        dy: f64,
+        phase: ScrollPhase,
+        momentum: MomentumPhase,
+    ) -> InputEvent {
+        // A new gesture drops the previous one's remainder, as `scroll(…, began)` does.
+        let fallback = self.scroll(ScrollDelta::Precise { dx, dy }, phase == ScrollPhase::Began);
+        let (wheel_v, wheel_h) = wheel_units(&fallback);
+        let sign = if self.scroll.config().reverse { -1.0 } else { 1.0 };
+        InputEvent::PreciseScroll {
+            dx: centi(sign * dx),
+            dy: centi(sign * dy),
+            phase,
+            momentum,
+            wheel_v,
+            wheel_h,
+        }
     }
 
     /// Releases every held button where the pointer is (focus loss, background).

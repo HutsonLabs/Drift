@@ -7,6 +7,8 @@
 
 use std::time::Instant;
 
+use drift_ext::gestures::Gesture;
+use drift_inject::gesture::GesturePlanner;
 use drift_inject::plan::{DisplayMap, InjectEvent, Injector};
 use drift_input::KeyboardType;
 use ironrdp_pdu::input::fast_path::{FastPathInputEvent, KeyboardFlags};
@@ -103,6 +105,7 @@ type Post = Box<dyn FnMut(&InjectEvent) + Send>;
 /// Plans each client event with an [`Injector`] and posts the result.
 pub struct InjectingInput {
     injector: Injector,
+    gestures: GesturePlanner,
     post: Post,
     start: Instant,
 }
@@ -125,7 +128,12 @@ impl InjectingInput {
         keyboard: KeyboardType,
         post: impl FnMut(&InjectEvent) + Send + 'static,
     ) -> Self {
-        Self { injector: Injector::new(map, keyboard), post: Box::new(post), start: Instant::now() }
+        Self {
+            injector: Injector::new(map, keyboard),
+            gestures: GesturePlanner::default(),
+            post: Box::new(post),
+            start: Instant::now(),
+        }
     }
 
     /// Posts through CoreGraphics (needs Accessibility; see `drift_inject::cg`).
@@ -157,7 +165,14 @@ impl InputSink for InjectingInput {
         self.apply(mouse_to_fast_path(&event));
     }
 
+    fn gesture(&mut self, gesture: Gesture) {
+        for e in self.gestures.plan(&gesture) {
+            (self.post)(&e);
+        }
+    }
+
     fn session_ended(&mut self) {
+        self.gestures = GesturePlanner::default();
         self.release();
     }
 }

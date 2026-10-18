@@ -19,10 +19,9 @@
 
 use std::collections::BTreeMap;
 
-use drift_core::{InputEvent, MouseButton, Point};
+use drift_core::{InputEvent, MomentumPhase, MouseButton, Point, ScrollPhase};
 
 use crate::pointer::Pointer;
-use crate::scroll::ScrollDelta;
 use crate::zoom::{Zoom, ZoomChange};
 
 /// How far (points) a finger may wander and still tap.
@@ -264,29 +263,36 @@ impl Touches {
                 let Some((centre, spread)) = self.centre_and_spread() else { return TouchOutput::default() };
                 let mut out = TouchOutput::default();
                 if two.kind == TwoKind::Undecided {
-                    if self.zoom && (spread - two.start_spread).abs() > PINCH_SLOP {
+                    if (spread - two.start_spread).abs() > PINCH_SLOP {
                         two.kind = TwoKind::Pinch;
+                        if !self.zoom {
+                            // No local zoom (iPad): the pinch goes to the remote (EXT-2).
+                            out.events.push(remote_pinch(spread, two.start_spread, ScrollPhase::Began));
+                        }
                     } else if distance(centre, two.start_centre) > TAP_SLOP {
                         two.kind = TwoKind::Scroll;
-                        out.events = pointer.scroll(
-                            ScrollDelta::Precise {
-                                dx: centre.x - two.start_centre.x,
-                                dy: centre.y - two.start_centre.y,
-                            },
-                            true,
-                        );
+                        out.events.push(pointer.precise_scroll(
+                            centre.x - two.start_centre.x,
+                            centre.y - two.start_centre.y,
+                            ScrollPhase::Began,
+                            MomentumPhase::None,
+                        ));
                         two.last_centre = centre;
                     }
                 }
                 match two.kind {
                     TwoKind::Scroll if out.events.is_empty() => {
-                        out.events = pointer.scroll(
-                            ScrollDelta::Precise {
-                                dx: centre.x - two.last_centre.x,
-                                dy: centre.y - two.last_centre.y,
-                            },
-                            false,
-                        );
+                        out.events.push(pointer.precise_scroll(
+                            centre.x - two.last_centre.x,
+                            centre.y - two.last_centre.y,
+                            ScrollPhase::Changed,
+                            MomentumPhase::None,
+                        ));
+                    }
+                    TwoKind::Pinch if !self.zoom => {
+                        if out.events.is_empty() {
+                            out.events.push(remote_pinch(spread, two.last_spread, ScrollPhase::Changed));
+                        }
                     }
                     TwoKind::Pinch => {
                         let factor = if two.last_spread > 0.0 { spread / two.last_spread } else { 1.0 };
@@ -350,10 +356,24 @@ impl Touches {
             }
             State::Two(two) => {
                 self.state = State::Ignore;
-                if two.kind == TwoKind::Undecided && t - two.start_t <= TAP_MAX {
-                    TouchOutput::events(click(pointer, MouseButton::Right))
-                } else {
-                    TouchOutput::default()
+                match two.kind {
+                    TwoKind::Undecided if t - two.start_t <= TAP_MAX => {
+                        TouchOutput::events(click(pointer, MouseButton::Right))
+                    }
+                    // EXT-2: a Drift Host sees the fingers lift (no movement, no wheel units).
+                    TwoKind::Scroll => TouchOutput::events(vec![InputEvent::PreciseScroll {
+                        dx: 0,
+                        dy: 0,
+                        phase: ScrollPhase::Ended,
+                        momentum: MomentumPhase::None,
+                        wheel_v: 0,
+                        wheel_h: 0,
+                    }]),
+                    TwoKind::Pinch if !self.zoom => TouchOutput::events(vec![InputEvent::Pinch {
+                        magnification: 0,
+                        phase: ScrollPhase::Ended,
+                    }]),
+                    _ => TouchOutput::default(),
                 }
             }
             _ => TouchOutput::default(),
@@ -374,6 +394,15 @@ impl Touches {
         self.state = if self.fingers.is_empty() { State::Idle } else { State::Ignore };
         TouchOutput::events(events)
     }
+}
+
+/// A pinch from `before` to `now` finger spread as a remote pinch (EXT-2), in thousandths of
+/// magnification as AppKit reports it.
+fn remote_pinch(now: f64, before: f64, phase: ScrollPhase) -> InputEvent {
+    let change = if before > 0.0 { now / before - 1.0 } else { 0.0 };
+    let milli = (change * 1000.0).round();
+    let magnification = if milli.is_nan() { 0 } else { milli.clamp(-1_000_000.0, 1_000_000.0) as i32 };
+    InputEvent::Pinch { magnification, phase }
 }
 
 #[cfg(test)]

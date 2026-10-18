@@ -330,3 +330,50 @@ fn a_new_gesture_drops_the_previous_remainder() {
         vec![InputEvent::Wheel { horizontal: false, units: 1 }]
     );
 }
+
+// ---- EXT-2: precise scroll and gesture values from AppKit -------------------------------
+
+#[test]
+fn precise_scroll_carries_points_phases_and_the_wheel_fallback() {
+    use drift_core::{MomentumPhase, ScrollPhase};
+    let mut c = controller();
+    let mut plain = controller();
+    let wheel = plain.scroll(ScrollDelta::Precise { dx: 0.0, dy: 7.5 }, true);
+    let InputEvent::PreciseScroll { dx, dy, phase, momentum, wheel_v, wheel_h } =
+        c.precise_scroll(0.0, 7.5, ScrollPhase::Began, MomentumPhase::None)
+    else {
+        panic!()
+    };
+    assert_eq!((dx, dy, phase, momentum), (0, 750, ScrollPhase::Began, MomentumPhase::None));
+    assert_eq!(drift_input::scroll::wheel_events(wheel_v, wheel_h), wheel);
+}
+
+#[test]
+fn appkit_phase_bits_become_wire_phases() {
+    use drift_core::{MomentumPhase, ScrollPhase};
+    use drift_macos::input::{momentum_phase, scroll_phase};
+    assert_eq!(scroll_phase(0), ScrollPhase::None);
+    assert_eq!(scroll_phase(1), ScrollPhase::Began);
+    assert_eq!(scroll_phase(2), ScrollPhase::Changed, "stationary fingers are still the gesture");
+    assert_eq!(scroll_phase(4), ScrollPhase::Changed);
+    assert_eq!(scroll_phase(8), ScrollPhase::Ended);
+    assert_eq!(scroll_phase(16), ScrollPhase::Cancelled);
+    assert_eq!(scroll_phase(32), ScrollPhase::MayBegin);
+    assert_eq!(momentum_phase(0), MomentumPhase::None);
+    assert_eq!(momentum_phase(1), MomentumPhase::Began);
+    assert_eq!(momentum_phase(4), MomentumPhase::Changed);
+    assert_eq!(momentum_phase(8), MomentumPhase::Ended);
+}
+
+#[test]
+fn swipe_deltas_and_magnification() {
+    use drift_core::SwipeDirection;
+    use drift_macos::input::{magnification, swipe_direction};
+    assert_eq!(swipe_direction(1.0, 0.0), Some(SwipeDirection::Left));
+    assert_eq!(swipe_direction(-1.0, 0.0), Some(SwipeDirection::Right));
+    assert_eq!(swipe_direction(0.0, 1.0), Some(SwipeDirection::Up));
+    assert_eq!(swipe_direction(0.0, -1.0), Some(SwipeDirection::Down));
+    assert_eq!(swipe_direction(0.0, 0.0), None);
+    assert_eq!(magnification(0.0425), 43);
+    assert_eq!(magnification(f64::NAN), 0);
+}

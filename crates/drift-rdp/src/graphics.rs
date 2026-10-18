@@ -202,17 +202,17 @@ impl Graphics {
         let drdynvc = match drift_mac {
             Some(link) => {
                 link.reset();
+                // EXT-2: every Drift client sends precise scrolls and gestures to a host that
+                // takes them.
+                let input = drift_ext::wire::Capabilities::SCROLL | drift_ext::wire::Capabilities::GESTURES;
                 let client = match pairing {
                     // HOST-8: offer pairing and answer the host's challenge on every leg.
                     Some(pairing) => drift_ext::channel::DriftMacClient::new(
                         link.clone(),
-                        drift_ext::pairing::ClientPairing::capabilities(),
+                        input | drift_ext::pairing::ClientPairing::capabilities(),
                     )
                     .with_responder(pairing.responder()),
-                    None => drift_ext::channel::DriftMacClient::new(
-                        link.clone(),
-                        drift_ext::wire::Capabilities::NONE,
-                    ),
+                    None => drift_ext::channel::DriftMacClient::new(link.clone(), input),
                 };
                 drdynvc.with_dynamic_channel(client)
             }
@@ -259,6 +259,27 @@ pub(crate) fn flush_acks(stage: &ActiveStage) -> Result<Option<Vec<u8>>, Disconn
         .process_svc_processor_messages(SvcProcessorMessages::<DrdynvcClient>::new(svc))
         .map(Some)
         .map_err(|e| DisconnectReason::ProtocolError(format!("send frame acknowledge: {e}")))
+}
+
+/// Encodes `messages` on `Drift::Mac::v1` as a frame for the wire (`None` when the channel is
+/// not open on this leg; EXT-2).
+pub(crate) fn drift_mac_frame(
+    stage: &ActiveStage,
+    messages: &[drift_ext::wire::Message],
+) -> Result<Option<Vec<u8>>, DisconnectReason> {
+    let Some(channel) = stage.get_dvc::<drift_ext::channel::DriftMacClient>() else { return Ok(None) };
+    let mut out: Vec<ironrdp_dvc::DvcMessage> = Vec::with_capacity(messages.len());
+    for m in messages {
+        let bytes = drift_ext::wire::encode(m)
+            .map_err(|e| DisconnectReason::ProtocolError(format!("encode Drift::Mac::v1 message: {e}")))?;
+        out.push(Box::new(drift_ext::channel::RawFrame(bytes)));
+    }
+    let svc = ironrdp_dvc::encode_dvc_messages(channel.channel_id(), out, ChannelFlags::empty())
+        .map_err(|e| DisconnectReason::ProtocolError(format!("encode Drift::Mac::v1: {e}")))?;
+    stage
+        .process_svc_processor_messages(SvcProcessorMessages::<DrdynvcClient>::new(svc))
+        .map(Some)
+        .map_err(|e| DisconnectReason::ProtocolError(format!("send Drift::Mac::v1: {e}")))
 }
 
 /// The graphics pipeline's own error, if the last processing failure came from it.

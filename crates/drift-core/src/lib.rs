@@ -37,7 +37,7 @@ pub mod video;
 
 pub use clock::{Clock, SystemClock};
 pub use geometry::{Bgra, DesktopSize, Point, Rect, Size, ViewGeometry};
-pub use input::{InputEvent, MouseButton};
+pub use input::{InputEvent, MomentumPhase, MouseButton, ScrollPhase, SwipeDirection};
 pub use layout::{DisplayControlCaps, MonitorLayout, desired_layout};
 pub use messages::{ErrorAction, ErrorExplanation, explain_disconnect};
 pub use profile::{

@@ -24,7 +24,10 @@ fn wheel_events_split_units_into_rdp_sized_events_vertical_first() {
 fn pointer(reverse: bool) -> Pointer {
     let mut p = Pointer::new(ScrollConfig { units_per_point: 2.0, reverse });
     p.set_desktop(DesktopSize { width: 1280, height: 800 }, ScaleMode::Fit);
-    p.set_view_geometry(drift_core::ViewGeometry { points: drift_core::Size::new(1280.0, 800.0), backing_scale: 1.0 });
+    p.set_view_geometry(drift_core::ViewGeometry {
+        points: drift_core::Size::new(1280.0, 800.0),
+        backing_scale: 1.0,
+    });
     p
 }
 
@@ -44,7 +47,8 @@ fn a_precise_scroll_keeps_points_and_phase_and_the_same_wheel_fallback() {
 #[test]
 fn reverse_applies_to_the_precise_deltas_too() {
     let mut p = pointer(true);
-    let InputEvent::PreciseScroll { dx, dy, .. } = p.precise_scroll(2.0, -3.0, ScrollPhase::Changed, MomentumPhase::None)
+    let InputEvent::PreciseScroll { dx, dy, .. } =
+        p.precise_scroll(2.0, -3.0, ScrollPhase::Changed, MomentumPhase::None)
     else {
         panic!()
     };

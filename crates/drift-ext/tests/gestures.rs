@@ -45,10 +45,10 @@ fn other_messages_are_not_gestures() {
 fn malformed_payloads_are_errors_not_panics() {
     for (kind, payload) in [
         (types::SCROLL, vec![1, 2, 3]),
-        (types::SWIPE, vec![9, 3]),         // unknown direction
-        (types::SWIPE, vec![0]),            // short
+        (types::SWIPE, vec![9, 3]),          // unknown direction
+        (types::SWIPE, vec![0]),             // short
         (types::PINCH, vec![0, 0, 0, 0, 7]), // unknown phase
-        (types::SMART_ZOOM, vec![1]),       // must be empty
+        (types::SMART_ZOOM, vec![1]),        // must be empty
     ] {
         let msg = Message::Unknown { kind, payload };
         assert!(matches!(Gesture::from_message(&msg), Some(Err(_))), "{msg:?}");

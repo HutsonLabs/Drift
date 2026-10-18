@@ -254,6 +254,7 @@ fn phases(phase: ScrollPhase) -> (i64, i64) {
         ScrollPhase::Changed => (scroll(CGScrollPhase::Changed), 0),
         ScrollPhase::Ended => (scroll(CGScrollPhase::Ended), 0),
         ScrollPhase::Cancelled => (scroll(CGScrollPhase::Cancelled), 0),
+        ScrollPhase::MomentumBegan => (0, momentum(CGMomentumScrollPhase::Begin)),
         ScrollPhase::Momentum => (0, momentum(CGMomentumScrollPhase::Continue)),
         ScrollPhase::MomentumEnded => (0, momentum(CGMomentumScrollPhase::End)),
     }

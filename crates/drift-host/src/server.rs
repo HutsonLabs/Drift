@@ -21,6 +21,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use drift_core::Size;
 use drift_ext::channel::{DriftMacServer, Link};
+use drift_ext::gestures::GestureResponder;
 use drift_ext::wire::Capabilities;
 use drift_transport::quic::{QuicError, QuicHost};
 use drift_transport::stream::TransportStream;
@@ -271,6 +272,7 @@ impl Host {
                 pairing: pairing.clone(),
                 host_fingerprint: *identity.fingerprint().as_bytes(),
                 current: Arc::clone(&current),
+                input: Arc::clone(&input),
             }));
             server.set_credentials(Some(Credentials {
                 username,
@@ -909,19 +911,33 @@ struct DriftMacFactory {
     pairing: Option<Pairing>,
     host_fingerprint: [u8; 32],
     current: Arc<Mutex<ConnectionAuth>>,
+    /// Where precise scrolls and gestures go (EXT-2), like the rest of the input.
+    input: SharedSink,
 }
 
 impl DvcServerFactory for DriftMacFactory {
     fn attach(&self, dvc: DrdynvcServer) -> DrdynvcServer {
         let link = Link::new();
         *lock(&self.link) = Some(link.clone());
+        // EXT-2: gestures reach the input sink only once the connection is authorized, like
+        // keys and the mouse (HOST-8).
+        let gestures = {
+            let (current, input) = (Arc::clone(&self.current), Arc::clone(&self.input));
+            Box::new(GestureResponder::new(move |g| {
+                if lock(&current).is_authorized() {
+                    lock(&input).gesture(g);
+                }
+            }))
+        };
+        let input_caps = Capabilities::SCROLL | Capabilities::GESTURES;
         let channel = match &self.pairing {
             Some(pairing) => {
                 let auth = lock(&self.current).clone();
-                DriftMacServer::new(link, Capabilities::PAIRING)
+                DriftMacServer::new(link, Capabilities::PAIRING | input_caps)
                     .with_responder(pairing.responder(self.host_fingerprint, auth))
+                    .with_responder(gestures)
             }
-            None => DriftMacServer::new(link, Capabilities::NONE),
+            None => DriftMacServer::new(link, input_caps).with_responder(gestures),
         };
         dvc.with_dynamic_channel(channel)
     }

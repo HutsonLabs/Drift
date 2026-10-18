@@ -260,9 +260,38 @@ define_class!(
             } else {
                 ScrollDelta::Lines { dx, dy }
             };
+            if event.hasPreciseScrollingDeltas() {
+                // EXT-2: phases and momentum ride along for a Drift Host.
+                let phase = crate::input::scroll_phase(event.phase().0 as u64);
+                let momentum = crate::input::momentum_phase(event.momentumPhase().0 as u64);
+                let scroll = self.ivars().input.borrow_mut().precise_scroll(dx, dy, phase, momentum);
+                self.emit(&[scroll]);
+                return;
+            }
             let began = event.phase().contains(NSEventPhase::Began);
             let events = self.ivars().input.borrow_mut().scroll(delta, began);
             self.emit(&events);
+        }
+
+        // --- trackpad gestures (EXT-2; only a Drift Host acts on them) ----------------------
+
+        #[unsafe(method(swipeWithEvent:))]
+        fn swipe_with_event(&self, event: &NSEvent) {
+            if let Some(direction) = crate::input::swipe_direction(event.deltaX(), event.deltaY()) {
+                self.emit(&[InputEvent::Swipe { direction, fingers: 3 }]);
+            }
+        }
+
+        #[unsafe(method(magnifyWithEvent:))]
+        fn magnify_with_event(&self, event: &NSEvent) {
+            let phase = crate::input::scroll_phase(event.phase().0 as u64);
+            let magnification = crate::input::magnification(event.magnification());
+            self.emit(&[InputEvent::Pinch { magnification, phase }]);
+        }
+
+        #[unsafe(method(smartMagnifyWithEvent:))]
+        fn smart_magnify_with_event(&self, _event: &NSEvent) {
+            self.emit(&[InputEvent::SmartZoom]);
         }
 
         // --- cursor ------------------------------------------------------------------------
