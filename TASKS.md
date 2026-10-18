@@ -43,7 +43,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   host checking the code and storing the device key waits for HOST-8 and EXT-1.*
 - [✓] **IOS-10 Clipboard on iOS.** UIPasteboard backend for `drift-clipboard`; paste only on an
   explicit user action, so iOS never shows its paste prompt unasked.
-- [ ] **IOS-11 Session switcher.** On iOS, the UI-windows "one window per connection" becomes an
+- [✓] **IOS-11 Session switcher.** On iOS, the UI-windows "one window per connection" becomes an
   in-app switcher (or scenes, if IOS-1 says Tauri allows them).
 
 ## HOST — Drift Host (Mac)

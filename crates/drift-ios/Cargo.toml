@@ -16,6 +16,7 @@ thiserror.workspace = true
 [target.'cfg(target_os = "ios")'.dependencies]
 block2.workspace = true
 dispatch2 = "0.3.1"
+tracing.workspace = true
 objc2.workspace = true
 objc2-foundation = { workspace = true, features = ["NSNotification", "NSString", "NSURL", "NSDictionary", "NSRunLoop", "NSObjCRuntime", "NSItemProvider", "NSProgress", "NSError", "NSData", "NSArray", "NSDate"] }
 objc2-ui-kit.workspace = true
@@ -31,6 +32,10 @@ harness = false
 
 [[test]]
 name = "paste"
+harness = false
+
+[[test]]
+name = "switcher"
 harness = false
 
 [lints]

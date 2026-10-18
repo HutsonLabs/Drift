@@ -26,6 +26,7 @@ pub mod recording;
 pub mod secrets;
 pub mod services;
 pub mod smoke;
+pub mod switcher;
 pub mod view;
 #[cfg(target_os = "macos")]
 pub mod windows;
@@ -242,6 +243,13 @@ pub fn run() {
     #[cfg(feature = "smoke-env")]
     {
         options.secrets = Some(smoke::secrets_from(std::env::vars()) as Arc<dyn secrets::SecretStore>);
+        #[cfg(target_os = "ios")]
+        if let Ok(script) = std::env::var("DRIFT_SMOKE_SCRIPT") {
+            match smoke::parse_script(&script) {
+                Ok(steps) => options.on_ready = Some(Box::new(move |app| smoke::run_script(app, steps))),
+                Err(e) => tracing::warn!(error = %e, "DRIFT_SMOKE_SCRIPT ignored"),
+            }
+        }
     }
     run_with(options);
 }

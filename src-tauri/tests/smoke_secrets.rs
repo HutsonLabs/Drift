@@ -35,3 +35,20 @@ fn loads_every_smoke_variable_and_nothing_else() {
     assert_eq!(store.get(b, SecretRole::LinuxLogin).unwrap().as_deref().map(String::as_str), Some("fake-b"));
     assert!(!store.has(a, SecretRole::RdpSystem));
 }
+
+#[test]
+fn smoke_scripts_parse_waits_connects_and_picks() {
+    use drift_app::smoke::{SmokeStep, parse_script};
+    use std::time::Duration;
+    assert_eq!(
+        parse_script("connect: Fake host 2 ; wait:1.5; pick:session-0;").unwrap(),
+        vec![
+            SmokeStep::Connect("Fake host 2".into()),
+            SmokeStep::Wait(Duration::from_millis(1500)),
+            SmokeStep::Pick("session-0".into()),
+        ]
+    );
+    assert!(parse_script("wait:soon").is_err());
+    assert!(parse_script("jump:1").is_err());
+    assert!(parse_script("pick").is_err());
+}

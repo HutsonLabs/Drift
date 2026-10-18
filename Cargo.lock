@@ -1593,6 +1593,7 @@ dependencies = [
  "objc2-quartz-core",
  "objc2-ui-kit",
  "thiserror 2.0.20",
+ "tracing",
 ]
 
 [[package]]

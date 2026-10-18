@@ -8,6 +8,7 @@
 //! |---|---|---|
 //! | [`lifecycle`] | foreground observer and the reconnect triggers it feeds | IOS-3 |
 //! | [`settings`] | the app's page in Settings (Local Network permission) | IOS-3 |
+//! | [`switcher`] | the switcher button and its menu of windows | IOS-11 |
 //! | [`view`] | `RemoteView`: `UIView` + `CAMetalLayer` under the `WKWebView` | IOS-4 |
 //! | [`webview`] | the page's `WKWebView`: picture below it, frames, main-queue dispatch | IOS-5 |
 //! | [`qr`] | the pairing QR scanner (AVFoundation camera, full-screen) | IOS-9 |
@@ -23,6 +24,7 @@ pub mod pacing;
 pub mod paste;
 pub mod qr;
 pub mod settings;
+pub mod switcher;
 pub mod view;
 pub mod webview;
 

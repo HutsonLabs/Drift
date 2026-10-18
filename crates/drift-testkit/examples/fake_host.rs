@@ -20,6 +20,9 @@
 //! With `FAKE_HOST_COPY_TEXT=<text>`, the host copies that text two seconds after connecting
 //! and asks for the client's text clipboard every five seconds, so both clipboard directions can
 //! be checked (IOS-10). Stop it with SIGINT to print what each connection received.
+//!
+//! With `FAKE_HOST_PROFILES=<n>`, it writes `n` profiles ("Fake host", "Fake host 2", …) for the
+//! same server, so several session windows can be open at once (IOS-11).
 #![allow(missing_docs, clippy::print_stdout, clippy::unwrap_used, clippy::expect_used)]
 
 use std::time::Duration;
@@ -95,19 +98,28 @@ async fn main() {
     let script = leg(&cert, close_after, copy_text.as_deref());
     let server = FakeServer::start(vec![script; LEGS]).await.expect("listen on 127.0.0.1");
 
-    let mut profile = ConnectionProfile::new("Fake host", "127.0.0.1", ConnectMode::Headless);
-    profile.port = server.port();
-    USER.clone_into(&mut profile.rdp_username);
-    profile.cert_pin = Some(cert.fingerprint());
+    let count: usize = std::env::var("FAKE_HOST_PROFILES").ok().and_then(|s| s.parse().ok()).unwrap_or(1);
     let mut store = ProfileStore::new();
-    store.upsert(profile.clone()).expect("a valid profile");
+    let mut profiles = Vec::new();
+    for n in 1..=count.max(1) {
+        let name = if n == 1 { "Fake host".to_owned() } else { format!("Fake host {n}") };
+        let mut profile = ConnectionProfile::new(name, "127.0.0.1", ConnectMode::Headless);
+        profile.port = server.port();
+        USER.clone_into(&mut profile.rdp_username);
+        profile.cert_pin = Some(cert.fingerprint());
+        store.upsert(profile.clone()).expect("a valid profile");
+        profiles.push(profile);
+    }
     std::fs::create_dir_all(&dir).expect("config dir");
     std::fs::write(std::path::Path::new(&dir).join("profiles.toml"), store.to_toml().expect("toml"))
         .expect("write profiles.toml");
 
     println!("fake host listening on {}", server.addr());
     println!("DRIFT_AUTOCONNECT=Fake host");
-    println!("DRIFT_SMOKE_SECRET={}:rdp-user:{PASSWORD}", profile.id);
+    for (i, profile) in profiles.iter().enumerate() {
+        let suffix = if i == 0 { String::new() } else { format!("_{}", i + 1) };
+        println!("DRIFT_SMOKE_SECRET{suffix}={}:rdp-user:{PASSWORD}", profile.id);
+    }
     tokio::signal::ctrl_c().await.ok();
     for (i, leg) in server.log().legs.iter().enumerate() {
         let keys = leg
