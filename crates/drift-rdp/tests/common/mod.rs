@@ -32,6 +32,11 @@ pub struct Harness {
 }
 
 impl Harness {
+    /// Wraps an actor spawned by the test itself (a custom frame sink).
+    pub fn from_parts(handle: SessionHandle, events: SessionEvents, frames: FrameLog) -> Self {
+        Self { handle, events, seen: Vec::new(), frames }
+    }
+
     /// Spawns a session with the real clock.
     pub fn start(profile: ConnectionProfile, password: &str) -> Self {
         Self::start_with_clock(profile, password, Arc::new(SystemClock))
