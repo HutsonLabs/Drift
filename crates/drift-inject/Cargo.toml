@@ -8,6 +8,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+drift-core.workspace = true
+drift-ext.workspace = true
 drift-input.workspace = true
 ironrdp-pdu.workspace = true
 

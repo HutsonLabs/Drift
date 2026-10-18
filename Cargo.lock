@@ -1585,6 +1585,7 @@ dependencies = [
 name = "drift-ext"
 version = "0.2.0"
 dependencies = [
+ "drift-core",
  "ironrdp-core",
  "ironrdp-dvc",
  "ironrdp-pdu",
@@ -1681,6 +1682,8 @@ dependencies = [
 name = "drift-inject"
 version = "0.2.0"
 dependencies = [
+ "drift-core",
+ "drift-ext",
  "drift-input",
  "ironrdp-pdu",
  "objc2-core-foundation",
