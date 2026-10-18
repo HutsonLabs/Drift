@@ -6,6 +6,7 @@ members = [
   "crates/drift-clipboard",
   "crates/drift-gfx",
   "crates/drift-codec",
+  "crates/drift-inject",
   "crates/drift-video",
   "crates/drift-render",
   "crates/drift-rdp",
@@ -32,6 +33,7 @@ publish = false
 # --- Drift crates ---
 drift-core = { path = "crates/drift-core" }
 drift-input = { path = "crates/drift-input" }
+drift-inject = { path = "crates/drift-inject" }
 drift-clipboard = { path = "crates/drift-clipboard" }
 drift-gfx = { path = "crates/drift-gfx" }
 drift-codec = { path = "crates/drift-codec" }

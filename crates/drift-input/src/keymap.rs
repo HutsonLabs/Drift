@@ -344,6 +344,11 @@ pub fn scancode_for(kvk: u16, keyboard: KeyboardType, cmd_as: CmdAs) -> Option<S
     }
 }
 
+/// Maps a set-1 scancode back to the `kVK_*` code of a `keyboard`-type Mac (HOST-6).
+pub fn kvk_for(_scancode: Scancode, _keyboard: KeyboardType) -> Option<u16> {
+    None
+}
+
 /// The keyboard-type-independent part of the table (ANSI positions).
 const fn base_scancode(code: u16) -> Option<Scancode> {
     use kvk::*;
