@@ -34,11 +34,9 @@ drift-input.workspace = true
 drift-rdp.workspace = true
 drift-render.workspace = true
 drift-video.workspace = true
-drift-macos = { workspace = true, features = ["tauri"] }
 objc2.workspace = true
 png.workspace = true
 objc2-core-foundation = { workspace = true, optional = true }
-objc2-app-kit = { workspace = true, features = ["NSWorkspace", "NSWindow", "NSApplication", "NSResponder", "NSView", "NSWindowTabGroup"] }
 objc2-foundation = { workspace = true, features = ["NSString", "NSURL", "NSArray"] }
 tokio.workspace = true
 tracing.workspace = true
@@ -52,6 +50,11 @@ tauri-specta.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
+
+# AppKit and the AppKit platform layer exist only on macOS (IOS-2).
+[target.'cfg(target_os = "macos")'.dependencies]
+drift-macos = { workspace = true, features = ["tauri"] }
+objc2-app-kit = { workspace = true, features = ["NSWorkspace", "NSWindow", "NSApplication", "NSResponder", "NSView", "NSWindowTabGroup"] }
 
 [dev-dependencies]
 muda = { version = "0.19", default-features = false }

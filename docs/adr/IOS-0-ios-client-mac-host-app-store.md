@@ -264,7 +264,12 @@ wry 0.55.1), tauri-cli 2.11.4.
    `WebviewWindowBuilder::build` connects a new `UIWindowScene` (connected scenes went from 1 to
    2, one window each). Same spike branch.
 3. Do `objc2-io-surface` / `objc2-core-video` features used by `drift-render` build for iOS
-   unchanged? (IOS-2)
+   unchanged? (IOS-2) **Answered: yes.** All seven crates built for both iOS targets with no
+   source change; the only blocker was `drift-clipboard`'s default `macos` feature linking AppKit
+   into `drift-rdp`. On an iOS 27 simulator, `drift-render`'s goldens, video import and present
+   tests pass, and so do five of `drift-video`'s six VideoToolbox decode tests.
+   `headless_motion.h264` fails there with `kVTVideoDecoderBadDataErr` (-8969); the simulator
+   decodes in software, so this needs a check on a device before it counts as a bug.
 4. How complete is `ironrdp-server` with `egfx` for AVC420/AVC444 streaming? (HOST-1)
 5. Can VideoToolbox's real-time H.264 encoder produce AVC444's two streams at 60 fps on M1? (HOST-4)
 6. Is `ironrdp-rdpeudp`'s lossy mode usable for GFX, or do Drift-to-Drift sessions need the

@@ -1,6 +1,6 @@
 //! M5-3 Red: smoke test of the NSPasteboard adapter on a private
 //! `NSPasteboard pasteboardWithUniqueName` (never touches the user's clipboard).
-#![cfg(feature = "macos")]
+#![cfg(all(feature = "macos", target_os = "macos"))]
 
 use drift_clipboard::pasteboard::NsPasteboard;
 use drift_clipboard::poll::{PasteboardPort, PasteboardWatcher};

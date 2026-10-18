@@ -16,7 +16,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 - [✓] **IOS-1 Tauri mobile spike.** `tauri ios init` on a throwaway branch. Answer the ADR's open
   questions 1–2: can a plugin set `prefersPointerLocked` on the root view controller, and does
   Tauri mobile support more than one window or scene? Write the answers into the ADR.
-- [ ] **IOS-2 Platform gating.** `cfg(target_os)` gates on every AppKit use. `drift-core`,
+- [✓] **IOS-2 Platform gating.** `cfg(target_os)` gates on every AppKit use. `drift-core`,
   `drift-rdp`, `drift-gfx`, `drift-codec`, `drift-input`, `drift-video` and `drift-render` build
   for `aarch64-apple-ios` and `aarch64-apple-ios-sim`. Add both targets to `cargo xtask ci`.
 - [ ] **IOS-3 Split `drift-macos`.** New `drift-apple` (Keychain, `NWPathMonitor`, Local Network

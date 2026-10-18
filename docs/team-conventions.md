@@ -52,7 +52,8 @@ another JS package manager.
 | Command | What it does |
 |---|---|
 | `cargo xtask check` | fast loop: `cargo fmt --check`, clippy `-D warnings`, nextest |
-| `cargo xtask ci` | the merge gate: npm-ban, secret-scan, workflow audit, `bun install --frozen-lockfile`, `bun test`, `bun run typecheck`, `bun run build`, bindings freshness, fmt, clippy `--all-features --all-targets`, the vendored IronRDP fork's fmt + tests, nextest under llvm-cov + coverage gate, `cargo deny`. The step list lives in `xtask/src/ci_plan.rs` and is asserted by `xtask/tests/ci_plan.rs` (ADR `M0-6-ci-gate-coverage`) |
+| `cargo xtask ci` | the merge gate: npm-ban, secret-scan, workflow audit, `bun install --frozen-lockfile`, `bun test`, `bun run typecheck`, `bun run build`, bindings freshness, fmt, clippy `--all-features --all-targets`, the vendored IronRDP fork's fmt + tests, nextest under llvm-cov + coverage gate, `cargo deny`, and the iOS crates linted for
+`aarch64-apple-ios` and `aarch64-apple-ios-sim` with their simulator tests linked (IOS-2). The step list lives in `xtask/src/ci_plan.rs` and is asserted by `xtask/tests/ci_plan.rs` (ADR `M0-6-ci-gate-coverage`) |
 | `cargo xtask ci --no-coverage` | same, without instrumentation (faster locally) |
 | `cargo xtask bindings` | regenerate `ui/src/bindings.ts` after changing IPC commands/types |
 | `cargo xtask npm-ban` / `secret-scan` / `workflows` | the individual hygiene checks |
@@ -80,7 +81,9 @@ and poll. Other agents build in parallel on the same machine.
   `drift-render`) are humble objects with smoke tests.
 - No `unwrap`/`expect` on network data (clippy `unwrap_used` is an error outside tests); every
   `unsafe` block has a `// SAFETY:` comment; public items are documented (`missing_docs`).
-- macOS only: no `cfg(target_os)` branches for other platforms.
+- Apple platforms only (ADR `IOS-0`): `cfg(target_os = "macos")` / `"ios"` gates, nothing for
+  other platforms. AppKit (`objc2-app-kit`) is only ever a
+  `[target.'cfg(target_os = "macos")'.dependencies]` entry; `xtask/tests/ci_plan.rs` checks it.
 - Shared contracts (plan §3) live in `drift-core` (+ `FrameSink` in `drift-gfx`, the session
   interface in `drift-rdp::session`). Changing them is a cross-stream change: update the ADR.
 - IronRDP changes: separate commits touching only `third_party/ironrdp/`, exported to
