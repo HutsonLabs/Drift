@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 drift-apple.workspace = true
+drift-clipboard.workspace = true
 drift-core.workspace = true
 drift-ext.workspace = true
 # The VideoToolbox H.264 encoder (behind `recording` today) draws the skeleton's test pattern;
