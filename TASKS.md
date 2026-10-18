@@ -78,8 +78,9 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   between encode and the socket. Stats for dropped frames.
 - [✓] **HOST-6 Input injection.** Inverse of `drift-input::keymap` (set-1 scancodes → `kVK_*`),
   mouse and wheel through `CGEventPost`. One shared table and round-trip tests.
-- [ ] **HOST-7 Link hygiene.** Interactive-video service class on the socket; idle heartbeat to
+- [✓] **HOST-7 Link hygiene.** Interactive-video service class on the socket; idle heartbeat to
   keep a phone's Wi-Fi radio awake; backlog detection feeding EXT-4.
+  *ADR `HOST-7-link-hygiene`; the effect on a phone over Wi-Fi is a manual measurement.*
 - [ ] **HOST-8 Pairing and pins.** Code shown on the Mac, device key stored, host certificate
   pinned on the device. Pairing on by default; listener refuses unpaired devices.
 - [ ] **HOST-9 Menu-bar app.** Status, paired devices, permissions check (Screen Recording,

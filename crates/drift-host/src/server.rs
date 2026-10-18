@@ -91,6 +91,12 @@ pub struct HostStats {
     pub drift_mac: String,
     /// The latest connection or encoder error.
     pub last_error: Option<String>,
+    /// The session socket carries the interactive-video service class (HOST-7).
+    pub video_service_class: bool,
+    /// How far behind the current client is (HOST-7; EXT-4 turns it into quality hints).
+    pub backlog: crate::link::Backlog,
+    /// Heartbeats sent on an idle link (HOST-7).
+    pub heartbeats: u64,
 }
 
 type SharedStats = Arc<Mutex<HostStats>>;
@@ -151,6 +157,8 @@ impl Host {
                 surface: Mutex::new(None),
                 pointer: Mutex::new(None),
                 keyframe_wanted: AtomicBool::new(false),
+                probe: Mutex::new(None),
+                last_pointer: Mutex::new(None),
             });
             let input: SharedSink = Arc::new(Mutex::new(input));
             // `RdpServer` holds non-`Send` parts, so it is built on this thread.
@@ -167,13 +175,24 @@ impl Host {
                 password: password.to_string(),
                 domain: None,
             }));
+            let on_start = |stream: &tokio::net::TcpStream| {
+                use std::os::fd::AsRawFd as _;
+                let fd = stream.as_raw_fd();
+                let video = crate::link::set_service_class(fd, crate::link::NET_SERVICE_TYPE_VI)
+                    .inspect_err(|e| tracing::warn!(error = %e, "could not set the video service class"))
+                    .is_ok();
+                lock(&thread_stats).video_service_class = video;
+                *lock(&gfx.probe) = crate::link::SocketProbe::new(fd).ok();
+            };
             let on_end = || {
                 // Stop the pump (and the capture with it), and let go of held keys and buttons.
                 drop(lock(&gfx.pump).take());
                 drop(lock(&gfx.live).take());
                 lock(&input).session_ended();
+                *lock(&gfx.probe) = None;
+                *lock(&gfx.last_pointer) = None;
             };
-            runtime.block_on(serve(&mut server, listener, &thread_stats, &mut stopped, &on_end));
+            runtime.block_on(serve(&mut server, listener, &thread_stats, &mut stopped, &on_start, &on_end));
         })?;
         Ok(Self { addr, stats, drift_mac, stop: Some(stop), thread: Some(thread) })
     }
@@ -221,6 +240,7 @@ async fn serve(
     listener: std::net::TcpListener,
     stats: &SharedStats,
     stopped: &mut tokio::sync::oneshot::Receiver<()>,
+    on_start: &dyn Fn(&tokio::net::TcpStream),
     on_end: &dyn Fn(),
 ) {
     let Ok(listener) = TcpListener::from_std(listener) else { return };
@@ -239,6 +259,7 @@ async fn serve(
         let Some(ticket) = gate.try_begin() else { continue };
         tracing::info!(%peer, "session starting");
         lock(stats).sessions_served += 1;
+        on_start(&stream);
         let session = server.run_connection(stream);
         tokio::pin!(session);
         loop {
@@ -364,6 +385,10 @@ struct GfxShared {
     pointer: Mutex<Option<mpsc::UnboundedSender<DisplayUpdate>>>,
     /// The next picture must be a keyframe (a new surface).
     keyframe_wanted: AtomicBool,
+    /// The session socket's send-buffer probe (HOST-7).
+    probe: Mutex<Option<crate::link::SocketProbe>>,
+    /// The last pointer position or hide sent, repeated as the idle heartbeat (HOST-7).
+    last_pointer: Mutex<Option<DisplayUpdate>>,
 }
 
 impl GfxShared {
@@ -592,9 +617,35 @@ impl GfxTarget for GfxShared {
     }
 
     fn pointer(&self, update: DisplayUpdate) {
+        if matches!(update, DisplayUpdate::PointerPosition(_) | DisplayUpdate::HidePointer) {
+            *lock(&self.last_pointer) = Some(update.clone());
+        }
         if let Some(tx) = lock(&self.pointer).as_ref() {
             let _ = tx.send(update);
         }
+    }
+
+    fn sample(&self) -> crate::link::BacklogSample {
+        let frames_in_flight = lock(&self.handle).clone().map_or(0, |s| lock(&s).frames_in_flight());
+        let unsent_bytes = lock(&self.probe).as_ref().and_then(|p| p.unsent_bytes().ok()).unwrap_or(0);
+        crate::link::BacklogSample { frames_in_flight, unsent_bytes }
+    }
+
+    fn report_backlog(&self, level: crate::link::Backlog) {
+        tracing::info!(?level, "backlog");
+        lock(&self.stats).backlog = level;
+    }
+
+    /// Repeats the last pointer position (or hide): a few bytes, and no visible change on any
+    /// client — Drift never warps its pointer, and others move it to where it already is.
+    fn heartbeat(&self) -> bool {
+        let Some(update) = lock(&self.last_pointer).clone() else { return false };
+        let Some(tx) = lock(&self.pointer).clone() else { return false };
+        if tx.send(update).is_err() {
+            return false;
+        }
+        lock(&self.stats).heartbeats += 1;
+        true
     }
 
     fn take_keyframe_request(&self) -> bool {

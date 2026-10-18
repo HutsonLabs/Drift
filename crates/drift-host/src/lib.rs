@@ -15,6 +15,7 @@
 //! | [`pipeline`] | the live picture: raw frames → real-time encoder → AVC420 frames with regions | HOST-pipeline |
 //! | [`capture`] | the screen (ScreenCaptureKit) as raw frames, and the pointer beside it | HOST-pipeline |
 //! | [`pointer`] | pointer changes → RDP pointer updates, shapes cached | HOST-pipeline |
+//! | [`link`] | link hygiene: video service class, idle heartbeat, backlog level | HOST-7 |
 //! | [`setup`] | the binary's wiring: screen or pattern, injection or logging | HOST-pipeline |
 //! | [`inject`] | client input → `drift-inject` plans → CoreGraphics events | HOST-pipeline |
 //! | [`server`] | the listener, the connection loop, EGFX and Display Control wiring | HOST-2 |
@@ -29,6 +30,7 @@ pub mod identity;
 pub mod inject;
 pub mod input;
 pub mod layout;
+pub mod link;
 mod live;
 pub mod pipeline;
 pub mod pointer;

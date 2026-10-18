@@ -97,6 +97,10 @@ async fn a_live_source_streams_frames_and_input_reaches_the_injector() {
     wait_until("the client's acks at the host", Duration::from_secs(10), || host.stats().frames_acked >= 20)
         .await;
     assert!(host.stats().frames_sent >= 20, "{:?}", host.stats());
+    // HOST-7: the session socket carries the interactive-video service class, and a link that
+    // keeps up reports no backlog.
+    assert!(host.stats().video_service_class, "{:?}", host.stats());
+    assert_eq!(host.stats().backlog, drift_host::link::Backlog::Clear, "{:?}", host.stats());
 
     // A client layout does not change a live desktop: the host answers with the source's size.
     handle

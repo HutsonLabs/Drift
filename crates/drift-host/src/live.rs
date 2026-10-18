@@ -3,7 +3,8 @@
 //!
 //! The server side is behind [`GfxTarget`], so this file holds no `ironrdp-server` state. The
 //! pump never encodes under backpressure, asks for a keyframe when the server could not queue a
-//! frame, and stops when the session ends ([`Pump`] is dropped).
+//! frame, and stops when the session ends ([`Pump`] is dropped). It also runs HOST-7's link
+//! hygiene: a heartbeat when the link has been idle, and the backlog level.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,6 +13,7 @@ use std::time::{Duration, Instant};
 
 use ironrdp_server::DisplayUpdate;
 
+use crate::link::{Backlog, BacklogMeter, BacklogSample, HEARTBEAT_INTERVAL, IdleHeartbeat};
 use crate::pipeline::{LiveFrame, LiveSource};
 use crate::pointer::{PointerCache, pointer_update};
 
@@ -29,6 +31,12 @@ pub(crate) trait GfxTarget: Send + Sync {
     fn pointer(&self, update: DisplayUpdate);
     /// Takes a pending keyframe request (a resize).
     fn take_keyframe_request(&self) -> bool;
+    /// Frames in flight and bytes waiting in the socket (HOST-7).
+    fn sample(&self) -> BacklogSample;
+    /// The backlog level changed.
+    fn report_backlog(&self, level: Backlog);
+    /// The link has been idle: send something tiny and harmless. Returns whether it did.
+    fn heartbeat(&self) -> bool;
 }
 
 /// A running pump; dropping it stops the thread and waits for it.
@@ -54,13 +62,20 @@ pub(crate) fn start(mut source: Box<dyn LiveSource>, target: Arc<dyn GfxTarget>)
         let started = Instant::now();
         let mut pointers = PointerCache::default();
         let mut sent: u64 = 0;
+        let mut idle = IdleHeartbeat::new(HEARTBEAT_INTERVAL);
+        let mut backlog = BacklogMeter::default();
         while !stopped.load(Ordering::Relaxed) {
             if target.take_keyframe_request() {
                 source.request_keyframe();
             }
+            let before = backlog.level();
+            if backlog.update(target.sample()) != before {
+                target.report_backlog(backlog.level());
+            }
             for event in source.pointer() {
                 if let Some(update) = pointer_update(&event, &mut pointers) {
                     target.pointer(update);
+                    idle.sent(Instant::now());
                 }
             }
             let frames = match source.next(POLL, target.backpressure()) {
@@ -74,15 +89,89 @@ pub(crate) fn start(mut source: Box<dyn LiveSource>, target: Arc<dyn GfxTarget>)
             let timestamp = u32::try_from(started.elapsed().as_millis()).unwrap_or(u32::MAX);
             for frame in &frames {
                 match target.send(frame, timestamp) {
-                    Some(true) => sent += 1,
+                    Some(true) => {
+                        sent += 1;
+                        idle.sent(Instant::now());
+                    }
                     // The picture never reached the client, so later P-frames would reference
                     // nothing: start again from a keyframe.
                     Some(false) => source.request_keyframe(),
                     None => return,
                 }
             }
+            let now = Instant::now();
+            if idle.due(now) && target.heartbeat() {
+                idle.sent(now);
+            }
         }
         tracing::debug!(sent, "pump stopped");
     })?;
     Ok(Pump { stop, thread: Some(thread) })
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use std::sync::Mutex;
+
+    use drift_core::Size;
+
+    use super::*;
+    use crate::frames::FrameError;
+
+    #[derive(Default)]
+    struct Fake {
+        heartbeats: Mutex<u32>,
+        levels: Mutex<Vec<Backlog>>,
+        sample: Mutex<BacklogSample>,
+    }
+
+    impl GfxTarget for Fake {
+        fn backpressure(&self) -> bool {
+            false
+        }
+        fn send(&self, _: &LiveFrame, _: u32) -> Option<bool> {
+            Some(true)
+        }
+        fn pointer(&self, _: DisplayUpdate) {}
+        fn take_keyframe_request(&self) -> bool {
+            false
+        }
+        fn sample(&self) -> BacklogSample {
+            *self.sample.lock().unwrap()
+        }
+        fn report_backlog(&self, level: Backlog) {
+            self.levels.lock().unwrap().push(level);
+        }
+        fn heartbeat(&self) -> bool {
+            *self.heartbeats.lock().unwrap() += 1;
+            true
+        }
+    }
+
+    struct Idle;
+
+    impl LiveSource for Idle {
+        fn size(&self) -> Size<u32> {
+            Size::new(64, 64)
+        }
+        fn request_keyframe(&mut self) {}
+        fn next(&mut self, timeout: Duration, _: bool) -> Result<Vec<LiveFrame>, FrameError> {
+            std::thread::sleep(timeout);
+            Ok(Vec::new())
+        }
+    }
+
+    #[test]
+    fn an_idle_link_gets_heartbeats_and_a_slow_one_reports_its_backlog() {
+        let fake = Arc::new(Fake::default());
+        *fake.sample.lock().unwrap() = BacklogSample { frames_in_flight: 9, unsent_bytes: 0 };
+        let pump = start(Box::new(Idle), Arc::clone(&fake) as Arc<dyn GfxTarget>).unwrap();
+        std::thread::sleep(Duration::from_millis(500));
+        drop(pump);
+        let beats = *fake.heartbeats.lock().unwrap();
+        assert!((2..=7).contains(&beats), "about one per 100 ms of idle link, got {beats}");
+        assert_eq!(fake.levels.lock().unwrap().as_slice(), &[Backlog::Backlogged]);
+    }
 }
