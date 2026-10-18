@@ -34,6 +34,7 @@ pub fn start_host(
         input: Box::new(RecordingInput::default()),
         clipboard,
         audio,
+        displays: Box::new(drift_host::display::PhysicalOnly),
     })
     .unwrap();
     (host, identity)

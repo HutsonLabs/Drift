@@ -69,12 +69,9 @@ async fn drift_connects_sees_the_pattern_and_its_input_reaches_the_host() {
         frames: Box::new(|| Box::new(TestPattern::new())),
         live: None,
         input: Box::new(input.clone()),
-<<<<<<< HEAD
         clipboard: None,
         audio: None,
-=======
         displays: Box::new(drift_host::display::PhysicalOnly),
->>>>>>> task/HOST-10-virtual-display
     })
     .unwrap();
 

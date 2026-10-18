@@ -87,16 +87,12 @@ pub fn start(dir: &Path, listen: Option<SocketAddr>) -> Result<Launched, String>
         password,
         desktop: config.desktop,
         frames: Box::new(|| Box::new(TestPattern::new())),
-<<<<<<< HEAD
         live: live.map(|l| l.0),
         input,
         // HOST-11: the Mac's pasteboard over CLIPRDR, its system audio over rdpsnd.
         clipboard: Some(Box::new(|| Box::new(drift_clipboard::pasteboard::NsPasteboard::general()))),
         audio: Some(Box::new(|| Box::new(crate::audio::SystemAudio::default()))),
-=======
-        input: Box::new(RecordingInput::default()),
         displays: display_manager(&config),
->>>>>>> task/HOST-10-virtual-display
     })
     .map_err(|e| format!("cannot listen on {}: {e}", config.listen))?;
     Ok(Launched { host, config, fingerprint: identity.fingerprint() })

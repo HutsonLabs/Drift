@@ -80,6 +80,7 @@ async fn a_live_source_streams_frames_and_input_reaches_the_injector() {
         input: Box::new(InjectingInput::new(map, move |e: &InjectEvent| p.lock().unwrap().push(e.clone()))),
         clipboard: None,
         audio: None,
+        displays: Box::new(drift_host::display::PhysicalOnly),
     })
     .unwrap();
 

@@ -40,7 +40,10 @@ async fn a_client_layout_reaches_the_display_manager() {
         password: zeroize::Zeroizing::new(PASS.to_owned()),
         desktop: Size::new(1280, 800),
         frames: Box::new(|| Box::new(TestPattern::new())),
+        live: None,
         input: Box::new(RecordingInput::default()),
+        clipboard: None,
+        audio: None,
         displays: Box::new(recorder.clone()),
     })
     .unwrap();
