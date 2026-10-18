@@ -22,11 +22,13 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 - [✓] **IOS-3 Split `drift-macos`.** New `drift-apple` (Keychain, `NWPathMonitor`, Local Network
   detection) shared by `drift-macos` (AppKit) and a new `drift-ios` (UIKit). No behaviour change
   on macOS.
-- [ ] **IOS-4 Remote view on iOS.** `drift-ios` hosts the `CAMetalLayer` in a `UIView` under the
+- [✓] **IOS-4 Remote view on iOS.** `drift-ios` hosts the `CAMetalLayer` in a `UIView` under the
   `WKWebView` (M7-3 layering). Drawable size tracks the view and the screen scale; ProMotion
   pacing at up to 120 Hz.
-- [ ] **IOS-5 First light on iPad.** The iOS app connects to the GNOME test host (headless
-  mode), shows a live desktop, and reconnects after backgrounding.
+- [~] **IOS-5 First light on iPad.** The iOS app connects to the GNOME test host (headless
+  mode), shows a live desktop, and reconnects after backgrounding. *Done in the iPad simulator
+  against `fake_host` (live picture, reconnect while backgrounded); the GNOME host was down, so
+  the device run is in `docs/acceptance.md`.*
 - [ ] **IOS-6 Input plugin.** Swift Tauri plugin: `GCKeyboard` raw key codes, `GCMouse` deltas
   with pointer lock, `UIPointerInteraction`, and Apple Pencil hover as pointer movement, all fed to
   `drift-input`. Document which system shortcuts iPadOS keeps for itself.

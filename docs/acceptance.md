@@ -362,3 +362,33 @@ Install the signed `Drift.app`, then confirm on that build:
 - [ ] **Config:** the profile list is written to
       `~/Library/Containers/com.hutsonlabs.drift/Data/Library/Application Support/com.hutsonlabs.drift/`
       and survives a relaunch; nothing is written outside the container.
+
+## IOS — Drift for iPhone and iPad
+
+Build and run in a simulator (ADR `IOS-5-ios-app-shell`):
+
+```text
+cd src-tauri && cargo tauri ios build --target aarch64-sim --debug --features smoke-env
+xcrun simctl install <device> gen/apple/build/arm64-sim/Drift.app
+cargo run -p drift-testkit --example fake_host -- "$(xcrun simctl get_app_container <device> com.hutsonlabs.drift data)/Library/DriftSmoke"
+SIMCTL_CHILD_DRIFT_CONFIG_DIR=<that dir> SIMCTL_CHILD_DRIFT_AUTOCONNECT="Fake host" \
+  SIMCTL_CHILD_DRIFT_SMOKE_SECRET=<printed by fake_host> xcrun simctl launch <device> com.hutsonlabs.drift
+```
+
+Done in an iPad Pro 13-inch (M5) simulator, iOS 27, on 2026-10-18 against `fake_host`: live
+moving picture, the session survives 40 s in the background, and with
+`FAKE_HOST_CLOSE_AFTER=25` the host's close is followed by a reconnect within a second while the
+app is in the background. Still to do by hand:
+
+- [ ] **IOS-5 first light on a device:** a real iPad (signed with a development team) connects to
+      the GNOME test host in Headless mode, shows the live desktop at the iPad's native size, and
+      after 5 minutes in the background (long enough for iOS to suspend it) reconnects on return.
+      The GNOME host (10.1.2.40) was down when IOS-5 landed.
+- [ ] **Local Network prompt on iOS:** the first LAN connection shows iOS's prompt with Drift's
+      usage text; denying it shows the errno 65 screen, whose button opens Drift's page in
+      Settings.
+- [ ] **ProMotion:** on a 120 Hz iPad Pro or iPhone Pro, Quartz Debug-style frame-rate overlay
+      (Xcode ▸ Debug ▸ View Debugging ▸ Rendering) shows up to 120 Hz while the picture moves and
+      a drop to the system rate when Connections is in front.
+- [ ] **H.264 on a device:** `headless_motion.h264` decodes without `-8969` (it fails only in the
+      simulator's software decoder, ADR `IOS-0` open question 3).

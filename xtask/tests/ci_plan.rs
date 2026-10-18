@@ -376,3 +376,18 @@ fn drift_ios_uses_uikit_and_drift_apple_does_not() {
     let macos = by_name.get("drift-macos").expect("drift-macos");
     assert!(macos.contains("drift-apple"), "drift-macos builds on drift-apple");
 }
+
+#[test]
+fn the_gate_lints_the_app_library_for_both_ios_targets() {
+    // IOS-5: the Tauri app itself (the static library Xcode links) keeps building for iOS.
+    let steps = ci_plan::ci(Options::default());
+    for target in ci_plan::IOS_TARGETS {
+        let step = steps
+            .iter()
+            .find(|s| s.is_cargo_with(&["clippy", "--target", target, "-p drift-app", "--lib"]))
+            .unwrap_or_else(|| panic!("no drift-app clippy step for {target}"));
+        let line = step.command_line().unwrap_or_default();
+        assert!(line.contains("--features smoke-env"), "`{line}` must also lint the simulator smoke path");
+        assert!(line.contains("-D warnings"), "`{line}` must deny warnings");
+    }
+}

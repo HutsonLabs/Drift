@@ -188,7 +188,7 @@ pub fn explain(reason: DisconnectReason, mode: ConnectMode) -> ErrorExplanation 
 #[tauri::command]
 #[specta::specta]
 pub fn open_local_network_settings() -> Result<(), CommandError> {
-    crate::platform::open_url(drift_core::messages::LOCAL_NETWORK_SETTINGS_URL)
+    crate::platform::open_local_network_settings()
 }
 
 /// Connects `profile_id`: opens a session window for it, or brings its window forward if it

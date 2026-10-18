@@ -93,3 +93,49 @@ fn the_webview_is_transparent_so_overlays_can_be_drawn_over_the_picture() {
         "the config flag alone does nothing; wry needs the cargo feature: {tauri_dep}"
     );
 }
+
+// ---- IOS-5: the iOS app project -------------------------------------------------------------
+
+/// The iOS `Info.plist` and the xcodegen spec that regenerates it carry the same keys: Local
+/// Network usage (else iOS denies LAN connections), multiple scenes (one per session window on
+/// iPad, IOS-1/IOS-11) and ProMotion above 60 Hz on iPhone (IOS-4).
+#[test]
+fn ios_info_plist_and_project_spec_declare_the_ios_keys() {
+    let plist = read("gen/apple/drift-app_iOS/Info.plist");
+    let spec = read("gen/apple/project.yml");
+    for key in [
+        "NSLocalNetworkUsageDescription",
+        "UIApplicationSupportsMultipleScenes",
+        "CADisableMinimumFrameDurationOnPhone",
+    ] {
+        assert!(plist.contains(&format!("<key>{key}</key>")), "Info.plist lacks {key}");
+        assert!(spec.contains(&format!("{key}:")), "project.yml lacks {key}; xcodegen would drop it");
+    }
+}
+
+/// Xcode 27 rejects deployment targets below iOS 15 (IOS-1); Drift asks for 17 (scene
+/// activation requests).
+#[test]
+fn ios_minimum_system_version_is_17() {
+    let conf: serde_json::Value = serde_json::from_str(&read("tauri.conf.json")).unwrap();
+    assert_eq!(conf["bundle"]["iOS"]["minimumSystemVersion"], "17.0");
+    assert!(read("gen/apple/project.yml").contains("iOS: 17.0"));
+}
+
+/// A static library carries no link directives, so every framework Drift's crates need is listed
+/// in the Xcode project (the first iOS link failed on VideoToolbox, CoreMedia and libz).
+#[test]
+fn ios_project_links_the_frameworks_the_crates_need() {
+    let spec = read("gen/apple/project.yml");
+    for framework in [
+        "VideoToolbox.framework",
+        "CoreMedia.framework",
+        "CoreVideo.framework",
+        "IOSurface.framework",
+        "Network.framework",
+        "Metal.framework",
+        "libz.tbd",
+    ] {
+        assert!(spec.contains(framework), "project.yml does not link {framework}");
+    }
+}

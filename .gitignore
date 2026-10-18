@@ -11,4 +11,5 @@ ui/dist/
 **/fuzz/target/
 *.profraw
 lcov.info
-src-tauri/gen/
+# Tauri-generated capability schemas; the iOS Xcode project in gen/apple is tracked (IOS-5).
+src-tauri/gen/schemas/

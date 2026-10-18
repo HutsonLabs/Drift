@@ -212,6 +212,29 @@ fn ios_steps() -> Vec<Step> {
             run(&format!("cargo clippy -D warnings ({target})"), Program::Cargo, "", &args)
         })
         .collect();
+    // The app library Xcode links on iOS (IOS-5), with the simulator smoke path; its tests and
+    // examples are macOS-only.
+    for target in IOS_TARGETS {
+        steps.push(run(
+            &format!("cargo clippy -D warnings (drift-app, {target})"),
+            Program::Cargo,
+            "",
+            &[
+                "clippy",
+                "--target",
+                target,
+                "-p",
+                "drift-app",
+                "--lib",
+                "--features",
+                "smoke-env",
+                "--locked",
+                "--",
+                "-D",
+                "warnings",
+            ],
+        ));
+    }
     let mut args = vec!["test", "--no-run", "--target", "aarch64-apple-ios-sim", "--locked"];
     args.extend(&packages);
     steps.push(run("link the iOS crates' tests (aarch64-apple-ios-sim)", Program::Cargo, "", &args));
