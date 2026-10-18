@@ -1491,6 +1491,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "drift-capture"
+version = "0.2.0"
+dependencies = [
+ "drift-core",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "drift-clipboard"
 version = "0.2.0"
 dependencies = [
