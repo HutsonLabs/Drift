@@ -62,7 +62,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   reliable RDP-UDP2 collapses at 0.5 % loss; QUIC with BBR holds. `drift-transport` has the QUIC
   session (pinned host, stream per frame) and the QUIC-then-TCP order. Left: the host listening
   on UDP (HOST-2) and `drift-rdp` connecting over QUIC with the paired-host flag (HOST-8).*
-- [ ] **HOST-2 Host skeleton.** New `drift-host` crate and binary: TLS listener, one session,
+- [✓] **HOST-2 Host skeleton.** New `drift-host` crate and binary: TLS listener, one session,
   fast-path input logged only. Menu-bar shell later (HOST-9).
 - [~] **HOST-3 Capture.** New `drift-capture` crate: ScreenCaptureKit `SCStream` per display,
   IOSurface frames, dirty rects, cursor shape and position reported separately.

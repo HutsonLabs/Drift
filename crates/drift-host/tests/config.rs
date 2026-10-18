@@ -21,9 +21,11 @@ fn the_default_listener_is_loopback_only_on_the_rdp_port() {
 fn config_round_trips_through_toml_and_a_missing_file_is_the_default() {
     let dir = tempfile::tempdir().unwrap();
     assert_eq!(HostConfig::load(dir.path()).unwrap(), HostConfig::default());
-    let mut c = HostConfig::default();
-    c.listen = "0.0.0.0:3390".parse().unwrap();
-    "someone".clone_into(&mut c.username);
+    let c = HostConfig {
+        listen: "0.0.0.0:3390".parse().unwrap(),
+        username: "someone".to_owned(),
+        ..HostConfig::default()
+    };
     c.save(dir.path()).unwrap();
     assert_eq!(HostConfig::load(dir.path()).unwrap(), c);
     assert!(c.listens_beyond_loopback());

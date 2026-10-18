@@ -64,7 +64,7 @@ async fn drift_connects_sees_the_pattern_and_its_input_reaches_the_host() {
         listen: "127.0.0.1:0".parse().unwrap(),
         identity: identity.clone(),
         username: USER.into(),
-        password: PASS.into(),
+        password: zeroize::Zeroizing::new(PASS.to_owned()),
         desktop: Size::new(1280, 800),
         frames: Box::new(|| Box::new(TestPattern::new())),
         input: Box::new(input.clone()),
@@ -72,12 +72,13 @@ async fn drift_connects_sees_the_pattern_and_its_input_reaches_the_host() {
     .unwrap();
 
     let (sink, frames) = RecordingFrameSink::new(PresentMode::Immediate);
+    let client_link = drift_ext::channel::Link::new();
     let (handle, mut events) = drift_rdp::spawn_session(
         profile(host.port(), &identity),
         SessionSecrets::new(PASS),
         Box::new(sink),
         Arc::new(SystemClock),
-        options(),
+        SessionOptions { drift_mac: Some(client_link.clone()), ..options() },
     );
     wait_state(&mut events, "connected", |s| matches!(s, SessionState::Connected { .. })).await;
     wait_until("an AVC420 test pattern on screen", Duration::from_secs(15), || {
@@ -85,6 +86,10 @@ async fn drift_connects_sees_the_pattern_and_its_input_reaches_the_host() {
     })
     .await;
     assert!(host.stats().avc420_negotiated, "{:?}", host.stats());
+    // Drift::Mac::v1 (EXT-1) is offered by the host and negotiated with a Drift client.
+    wait_until("Drift::Mac::v1 negotiated", Duration::from_secs(10), || client_link.negotiated().is_some())
+        .await;
+    assert!(host.stats().drift_mac.starts_with("Negotiated"), "{:?}", host.stats());
 
     handle.send(SessionCommand::Input(InputEvent::MouseMove { x: 10, y: 20 })).unwrap();
     handle
@@ -123,6 +128,15 @@ async fn drift_connects_sees_the_pattern_and_its_input_reaches_the_host() {
         .unwrap();
     wait_until("the layout at the host", Duration::from_secs(10), || {
         host.stats().layouts.last() == Some(&Size::new(1000, 700))
+    })
+    .await;
+    // …and the client gets a new 1000×700 output with a fresh picture on it.
+    wait_until("a 1000×700 reset and picture at the client", Duration::from_secs(15), || {
+        let calls = frames.calls();
+        let reset = calls
+            .iter()
+            .rposition(|c| matches!(c, FrameSinkCall::Reset { output } if *output == Size::new(1000, 700)));
+        reset.is_some_and(|i| calls[i..].iter().any(|c| matches!(c, FrameSinkCall::BlitNv12 { .. })))
     })
     .await;
 
