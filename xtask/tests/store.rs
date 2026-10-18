@@ -98,3 +98,54 @@ fn the_risk_scan_names_private_webview_keys_found_in_a_binary() {
 fn a_clean_binary_has_no_review_risks() {
     assert!(store::review_risks(b"setTitlebarAppearsTransparent: NSVisualEffectView").is_empty());
 }
+
+// ---- STORE-3: iOS App Store ---------------------------------------------------------------------
+
+/// Apple's required-reason API categories and the reason codes Drift declares for them.
+const REQUIRED_REASONS: &[(&str, &str)] = &[
+    // Rust std / tokio read file metadata (`stat`, `fstat`) for files in the app container.
+    ("NSPrivacyAccessedAPICategoryFileTimestamp", "C617.1"),
+    // `Instant` (mach_absolute_time / CLOCK_UPTIME_RAW) measures elapsed time only.
+    ("NSPrivacyAccessedAPICategorySystemBootTime", "35F9.1"),
+    // WebKit-hosted settings of the app's own (`NSUserDefaults` standard defaults).
+    ("NSPrivacyAccessedAPICategoryUserDefaults", "CA92.1"),
+];
+
+#[test]
+fn the_ios_app_ships_a_privacy_manifest_without_tracking() {
+    let m = read("src-tauri/gen/apple/drift-app_iOS/PrivacyInfo.xcprivacy");
+    assert_eq!(plist_value(&m, "NSPrivacyTracking").as_deref(), Some("false"));
+    assert!(m.contains("<key>NSPrivacyTrackingDomains</key>\n\t<array/>"), "no tracking domains");
+    assert!(m.contains("<key>NSPrivacyCollectedDataTypes</key>\n\t<array/>"), "Drift collects no data");
+    for (category, reason) in REQUIRED_REASONS {
+        let entry = m.split(category).nth(1).unwrap_or_else(|| panic!("{category} not declared"));
+        let reasons = entry.split("</array>").next().unwrap_or_default();
+        assert!(reasons.contains(&format!("<string>{reason}</string>")), "{category} lacks reason {reason}");
+    }
+    let spec = read("src-tauri/gen/apple/project.yml");
+    assert!(spec.contains("drift-app_iOS/PrivacyInfo.xcprivacy"), "project.yml must bundle the manifest");
+    assert!(
+        read("src-tauri/gen/apple/drift-app.xcodeproj/project.pbxproj").contains("PrivacyInfo.xcprivacy")
+    );
+}
+
+#[test]
+fn ios_export_options_export_for_app_store_connect_and_never_upload() {
+    let e = read("src-tauri/gen/apple/ExportOptions.plist");
+    assert_eq!(plist_value(&e, "method").as_deref(), Some("app-store-connect"));
+    assert_eq!(plist_value(&e, "destination").as_deref(), Some("export"), "validate only: never upload");
+    assert_eq!(plist_value(&e, "teamID").as_deref(), Some(TEAM_ID));
+}
+
+#[test]
+fn the_private_transparency_key_is_a_macos_only_feature() {
+    // STORE-2: Tauri's `macos-private-api` turns on wry's private `drawsBackground` key; iOS makes
+    // the page see-through with public API instead (drift-ios), so iOS builds must not enable it.
+    let manifest = read("src-tauri/Cargo.toml").parse::<toml::Table>().unwrap();
+    let common = manifest["dependencies"]["tauri"]["features"].as_array().unwrap();
+    assert!(!common.iter().any(|f| f.as_str() == Some("macos-private-api")), "{common:?}");
+    let mac = manifest["target"]["cfg(target_os = \"macos\")"]["dependencies"]["tauri"]["features"]
+        .as_array()
+        .expect("tauri features under the macOS target table");
+    assert!(mac.iter().any(|f| f.as_str() == Some("macos-private-api")));
+}
