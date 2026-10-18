@@ -58,3 +58,17 @@ pub fn mas_plan(root: &Path, profile: Option<&Path>) -> MasPlan {
         profile.map(|p| (p.to_owned(), app.join("Contents").join("embedded.provisionprofile")));
     MasPlan { tauri_args, app, pkg, productbuild_args, embed_profile }
 }
+
+/// A string in a built binary that App Review's static analysis may read as private API use.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReviewRisk {
+    /// The string found.
+    pub needle: &'static str,
+    /// Where it comes from and why it matters.
+    pub why: &'static str,
+}
+
+/// Not yet implemented.
+pub fn review_risks(_binary: &[u8]) -> Vec<ReviewRisk> {
+    Vec::new()
+}

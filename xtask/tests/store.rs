@@ -82,3 +82,19 @@ fn a_given_profile_is_embedded_in_the_app() {
         )
     );
 }
+
+// ---- STORE-2: review risk ------------------------------------------------------------------------
+
+#[test]
+fn the_risk_scan_names_private_webview_keys_found_in_a_binary() {
+    let binary = b"\x00\x01allowsPictureInPictureMediaPlaybackdrawsBackgroundfullScreenEnabled\x00setTitlebarAppearsTransparent:\x00";
+    let hits = store::review_risks(binary);
+    let names: Vec<&str> = hits.iter().map(|r| r.needle).collect();
+    assert_eq!(names, ["drawsBackground"], "{hits:?}");
+    assert!(hits[0].why.contains("transparent"), "{}", hits[0].why);
+}
+
+#[test]
+fn a_clean_binary_has_no_review_risks() {
+    assert!(store::review_risks(b"setTitlebarAppearsTransparent: NSVisualEffectView").is_empty());
+}
