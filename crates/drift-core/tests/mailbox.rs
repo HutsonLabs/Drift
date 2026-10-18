@@ -140,3 +140,16 @@ proptest! {
         }
     }
 }
+
+#[test]
+fn post_merging_folds_the_dropped_item_into_the_new_one() {
+    // A replaced frame's damage must not be lost: the new frame takes the union.
+    let (tx, rx) = mailbox::<Vec<u8>>();
+    tx.post_merging(vec![1], |new, old| new.extend(old)).unwrap();
+    tx.post_merging(vec![2], |new, old| new.extend(old)).unwrap();
+    tx.post_merging(vec![3], |new, old| new.extend(old)).unwrap();
+    assert_eq!(rx.try_take(), Some(vec![3, 2, 1]));
+    assert_eq!(rx.stats(), MailboxStats { posted: 3, taken: 1, dropped: 2 });
+    drop(rx);
+    assert_eq!(tx.post_merging(vec![4], |_, _| unreachable!()), Err(Closed(vec![4])));
+}

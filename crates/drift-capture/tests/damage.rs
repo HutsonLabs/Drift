@@ -163,3 +163,19 @@ fn capture_config_defaults_and_validation() {
     assert!(CaptureConfig { queue_depth: 1, ..c.clone() }.validate().is_err(), "ScreenCaptureKit needs ≥ 3");
     assert!(CaptureConfig { max_dirty_rects: 0, ..c }.validate().is_err());
 }
+
+#[test]
+fn damage_merges_when_a_frame_is_dropped() {
+    // HOST-5: a frame replaced in the mailbox passes its damage on to the newer one.
+    assert_eq!(Damage::None.merge(Damage::None, BOUNDS, 16), Damage::None);
+    assert_eq!(Damage::Full.merge(Damage::None, BOUNDS, 16), Damage::Full);
+    assert_eq!(Damage::Rects(vec![r(0, 0, 5, 5)]).merge(Damage::Full, BOUNDS, 16), Damage::Full);
+    assert_eq!(
+        Damage::Rects(vec![r(0, 0, 5, 5)]).merge(Damage::Rects(vec![r(100, 100, 5, 5)]), BOUNDS, 16),
+        Damage::Rects(vec![r(0, 0, 5, 5), r(100, 100, 5, 5)])
+    );
+    assert_eq!(
+        Damage::Rects(vec![r(0, 0, 5, 5)]).merge(Damage::Rects(vec![r(5, 0, 5, 5)]), BOUNDS, 16),
+        Damage::Rects(vec![r(0, 0, 10, 5)])
+    );
+}
