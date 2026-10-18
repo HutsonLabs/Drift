@@ -472,6 +472,17 @@ With Screen Recording and Accessibility granted to the process running `drift-ho
 - [ ] Without Screen Recording: the log says so and the client shows the colour-bar pattern.
 - [ ] Without Accessibility and `inject_input` unset: the log says input is logged, not injected.
 
+### HOST-7 — Link hygiene (ADR `HOST-7-link-hygiene`)
+
+- [ ] **Service class:** during a session, `sudo tcpdump -i en0 -v port 3389` on the Mac shows the
+      host's packets with DSCP CS4/AF4x (video), or check Wireless Diagnostics' sniffer for AC_VI.
+- [ ] **Heartbeat on a phone:** connect an iPhone over Wi-Fi to an idle desktop; type a key every
+      few seconds. With the heartbeat the echo arrives in about one round trip; set
+      `HEARTBEAT_INTERVAL` very high (a test build) and compare: without it the first packet after
+      idle waits for the radio to wake (typically 50–200 ms more).
+- [ ] **Backlog:** throttle the link (Network Link Conditioner, 1 Mbit/s) while a video plays: the
+      host logs `backlog Building` then `Backlogged`; remove the throttle: `Clear` within a second.
+
 ### HOST-3 — Capture (ADR `HOST-3-capture`)
 
 Needs a Mac where the process running the tests (Terminal, or the CI runner) has Screen

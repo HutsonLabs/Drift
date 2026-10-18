@@ -30,6 +30,7 @@ ironrdp-pdu.workspace = true
 ironrdp-server = { workspace = true, features = ["egfx"] }
 ironrdp-svc.workspace = true
 async-trait = "0.1"
+libc.workspace = true
 # The host's self-signed certificate (generated once, pinned by paired devices in HOST-8).
 rcgen.workspace = true
 serde.workspace = true
