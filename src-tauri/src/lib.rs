@@ -68,6 +68,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::window_identity,
             commands::toggle_stats,
             commands::read_pairing_code,
+            commands::take_pairing_link,
             commands::pair_host,
             commands::start_host_discovery,
             commands::stop_host_discovery,
@@ -192,6 +193,13 @@ pub fn run_with(options: RunOptions) {
             windows::show_connections(handle, None);
         }
         tauri::RunEvent::Exit => windows::shutdown_blocking(handle),
+        // A `drift-pair:` link (the Mac's QR code through the Camera app, IOS-9).
+        tauri::RunEvent::Opened { urls } => {
+            if let Some(uri) = pairing::pairing_link(urls.iter().map(tauri::Url::as_str)) {
+                handle.state::<commands::AppState>().set_pairing_link(uri.clone());
+                windows::show_connections(handle, Some(connections::ConnectionsIntent::Pair { uri }));
+            }
+        }
         _ => {}
     });
 }

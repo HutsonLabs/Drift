@@ -22,6 +22,8 @@ export interface PairIntents {
 export interface PairSheetHandle {
   /** The hosts found so far. */
   update(hosts: HostAdvert[]): void;
+  /** Puts `text` (a `drift-pair:` link) in the code field and reads it. */
+  setCode(text: string): void;
 }
 
 /** Renders the pairing sheet into `root` and focuses its code field. */
@@ -178,6 +180,10 @@ export function renderPairSheet(root: HTMLElement, on: PairIntents): PairSheetHa
       if (chosen && !hosts.some((x) => x.host_id === chosen)) chosen = null;
       if (!chosen && hosts.length === 1) chosen = hosts[0]?.host_id ?? null;
       render();
+    },
+    setCode(text) {
+      code.value = text;
+      void read();
     },
   };
 }

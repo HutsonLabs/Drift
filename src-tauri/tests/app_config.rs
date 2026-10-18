@@ -151,7 +151,10 @@ fn ios_declares_bonjour_and_camera_use() {
         plist.contains("<key>NSBonjourServices</key>") && plist.contains("<string>_drift-host._tcp</string>")
     );
     assert!(spec.contains("NSBonjourServices:") && spec.contains("_drift-host._tcp"));
-    assert!(plist.contains("<key>NSCameraUsageDescription</key>"), "Info.plist lacks NSCameraUsageDescription");
+    assert!(
+        plist.contains("<key>NSCameraUsageDescription</key>"),
+        "Info.plist lacks NSCameraUsageDescription"
+    );
     assert!(spec.contains("NSCameraUsageDescription:"), "project.yml lacks NSCameraUsageDescription");
     // macOS browses too (typed-code pairing): the Mac's Info.plist declares the same type.
     assert!(read("Info.plist").contains("_drift-host._tcp"));
@@ -163,7 +166,10 @@ fn ios_declares_bonjour_and_camera_use() {
 fn both_apps_register_the_drift_pair_url_scheme() {
     for file in ["Info.plist", "gen/apple/drift-app_iOS/Info.plist"] {
         let plist = read(file);
-        assert!(plist.contains("<key>CFBundleURLSchemes</key>") && plist.contains("<string>drift-pair</string>"), "{file}");
+        assert!(
+            plist.contains("<key>CFBundleURLSchemes</key>") && plist.contains("<string>drift-pair</string>"),
+            "{file}"
+        );
     }
     assert!(read("gen/apple/project.yml").contains("CFBundleURLSchemes: [drift-pair]"));
 }

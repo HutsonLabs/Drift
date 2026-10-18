@@ -36,6 +36,8 @@ pub struct AppState {
     pub pairing: PairingService,
     /// The Bonjour browser while the pairing sheet is open.
     discovery: Mutex<Option<drift_apple::bonjour::HostBrowser>>,
+    /// A `drift-pair:` link the app was opened with, until the Connections page takes it.
+    pairing_link: Mutex<Option<String>>,
     next_window: AtomicU64,
     /// The profile of every session window from the moment it is built until it closes.
     window_profiles: Mutex<HashMap<String, ConnectionProfile>>,
@@ -57,6 +59,7 @@ impl AppState {
             frames,
             pairing,
             discovery: Mutex::new(None),
+            pairing_link: Mutex::new(None),
             next_window: AtomicU64::new(0),
             window_profiles: Mutex::new(HashMap::new()),
             closing: Mutex::new(HashSet::new()),
@@ -215,6 +218,20 @@ pub fn connect(
     // A paired Mac only connects while its pin matches the pairing record (IOS-9).
     state.pairing.check_before_connect(profile_id)?;
     crate::windows::connect_profile(&app, profile_id)
+}
+
+impl AppState {
+    /// Keeps a `drift-pair:` link for the Connections page (it may not have loaded yet).
+    pub(crate) fn set_pairing_link(&self, link: String) {
+        *self.pairing_link.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(link);
+    }
+}
+
+/// The `drift-pair:` link the app was opened with, once (IOS-9).
+#[tauri::command]
+#[specta::specta]
+pub fn take_pairing_link(state: State<'_, AppState>) -> Option<String> {
+    state.pairing_link.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take()
 }
 
 /// Recognises a scanned, pasted or typed pairing code (IOS-9).

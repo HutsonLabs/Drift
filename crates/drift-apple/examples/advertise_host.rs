@@ -17,7 +17,8 @@ fn main() {
     let host = args.next().unwrap_or_else(|| "studio.local".into());
     let port: u16 = args.next().and_then(|p| p.parse().ok()).unwrap_or(3389);
     let host_id = Uuid::new_v4();
-    let fingerprint = CertFingerprint::from_bytes(*Uuid::new_v4().as_bytes().repeat(2).first_chunk().unwrap());
+    let fingerprint =
+        CertFingerprint::from_bytes(*Uuid::new_v4().as_bytes().repeat(2).first_chunk().unwrap());
     let code = ShortCode::from_body(u32::try_from(host_id.as_u128() % 10_000_000).unwrap()).unwrap();
     let fp_hex: String = fingerprint.as_bytes().iter().map(|b| format!("{b:02x}")).collect();
     let txt = vec![
@@ -29,7 +30,14 @@ fn main() {
         ("fp".to_owned(), fp_hex),
     ];
     let _advert = Advertisement::register(&name, SERVICE_TYPE, port, &txt).expect("DNSServiceRegister");
-    let payload = PairingPayload::from(PairingTarget { host_id, name: name.clone(), host, port, fingerprint, code: code.clone() });
+    let payload = PairingPayload::from(PairingTarget {
+        host_id,
+        name: name.clone(),
+        host,
+        port,
+        fingerprint,
+        code: code.clone(),
+    });
     println!("advertising \"{name}\" as {SERVICE_TYPE}");
     println!("code: {code}");
     println!("qr: {}", payload.to_uri());

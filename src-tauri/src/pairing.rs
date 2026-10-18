@@ -257,6 +257,12 @@ impl PairingService {
     }
 }
 
+/// The first `drift-pair:` link among URLs the system opened Drift with (the Camera app scanning
+/// the Mac's QR code, or a click on a Mac).
+pub fn pairing_link<'a>(mut urls: impl Iterator<Item = &'a str>) -> Option<String> {
+    urls.find(|u| u.starts_with("drift-pair:")).map(str::to_owned)
+}
+
 /// Emitted to the `connections` page while discovery runs: every Drift Host currently found.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type, tauri_specta::Event)]
 pub struct HostsDiscovered(pub Vec<HostAdvert>);

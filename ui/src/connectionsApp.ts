@@ -45,6 +45,7 @@ export type ConnectionsApi = Pick<
   | "readPairingCode"
   | "pairHost"
   | "scanPairingQr"
+  | "takePairingLink"
 >;
 
 /** The Connections page controller. */
@@ -116,7 +117,10 @@ export class ConnectionsApp {
   async start(): Promise<void> {
     await Promise.all([this.reload(), this.loadConnections()]);
     this.renderGallery();
-    if (this.entries.length === 0 && this.sheet === null) await this.openNew();
+    // A drift-pair: link that launched the app opens "Pair a Mac" instead (IOS-9).
+    const link = (await this.api.takePairingLink()) as string | null;
+    if (link) await this.openPairing(link);
+    else if (this.entries.length === 0 && this.sheet === null) await this.openNew();
   }
 
   /** Open connections changed (the `connectionsChanged` event). */
@@ -145,6 +149,8 @@ export class ConnectionsApp {
   async onIntent(intent: ConnectionsIntent): Promise<void> {
     if (intent.kind === "new") {
       await this.openNew();
+    } else if (intent.kind === "pair") {
+      await this.openPairing(intent.uri);
     } else {
       await this.reload();
       this.renderGallery();
@@ -377,8 +383,12 @@ export class ConnectionsApp {
 
   // ---- pairing a Mac (IOS-9) -----------------------------------------------------------
 
-  private async openPairing(): Promise<void> {
-    if (this.pairing) return;
+  private async openPairing(link?: string): Promise<void> {
+    if (this.pairing) {
+      if (link) this.pairing.setCode(link);
+      return;
+    }
+    if (this.sheet) this.closeSheet();
     this.pairing = renderPairSheet(this.sheetLayer, {
       read: async (text) => {
         const r = (await this.api.readPairingCode(text)) as Result<PairingInput>;
@@ -401,6 +411,7 @@ export class ConnectionsApp {
       cancel: () => this.closePairing(),
     });
     this.updateInert();
+    if (link) this.pairing.setCode(link);
     const r = (await this.api.startHostDiscovery()) as Result<null>;
     if (r.status === "error") this.notice(describeError(r.error));
   }

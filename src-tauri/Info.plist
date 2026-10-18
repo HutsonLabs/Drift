@@ -4,6 +4,17 @@
 <dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Drift connects to remote desktops on your local network: GNOME Remote Desktop and Macs running Drift Host.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.hutsonlabs.drift.pair</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>drift-pair</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_drift-host._tcp</string>

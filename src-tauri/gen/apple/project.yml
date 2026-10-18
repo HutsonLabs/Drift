@@ -55,6 +55,10 @@ targets:
         NSLocalNetworkUsageDescription: "Drift connects to remote desktops on your local network: GNOME Remote Desktop and Macs running Drift Host."
         # Pairing (IOS-9): browse Drift Hosts with Bonjour and scan their QR codes.
         NSBonjourServices: [_drift-host._tcp]
+        # The Mac's QR code is a drift-pair: link; the Camera app opens Drift with it.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.hutsonlabs.drift.pair
+            CFBundleURLSchemes: [drift-pair]
         NSCameraUsageDescription: "Drift uses the camera to scan the pairing code shown on your Mac."
         # One scene per session window on iPad (IOS-1, IOS-11); iPhone stays single-scene.
         UIApplicationSceneManifest:

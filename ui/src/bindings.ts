@@ -78,6 +78,8 @@ export const commands = {
 	toggleStats: () => typedError<null, CommandError>(__TAURI_INVOKE("toggle_stats")),
 	/**  Recognises a scanned, pasted or typed pairing code (IOS-9). */
 	readPairingCode: (text: string) => typedError<PairingInput, CommandError>(__TAURI_INVOKE("read_pairing_code", { text })),
+	/**  The `drift-pair:` link the app was opened with, once (IOS-9). */
+	takePairingLink: () => __TAURI_INVOKE<string | null>("take_pairing_link"),
 	/**  Pairs a Mac running Drift Host and saves its connection (IOS-9). */
 	pairHost: (request: PairHostRequest) => typedError<ProfileEntry_Serialize, CommandError>(__TAURI_INVOKE("pair_host", { request })),
 	/**  Starts browsing for Drift Hosts; [`HostsDiscovered`] goes to the Connections page. */
@@ -305,7 +307,11 @@ export type ConnectionsIntent =
 /**  The edit sheet of a profile (Cmd+E, the error sheet's Edit Connection…). */
 { kind: "edit"; 
 /**  The profile to edit. */
-profile_id: string };
+profile_id: string } | 
+/**  "Pair a Mac" with a `drift-pair:` link the system opened Drift with (IOS-9). */
+{ kind: "pair"; 
+/**  The link (a QR payload). */
+uri: string };
 
 /**  Emitted to the `connections` page to open a sheet. */
 export type ConnectionsIntentRequested = ConnectionsIntent;
