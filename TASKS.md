@@ -53,11 +53,15 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 - [✓] **HOST-1 Server spike.** `ironrdp-server` with `egfx` streams a static AVC420 frame to
   Drift's own client on loopback. Record what the server lacks for AVC444, DISP and CLIPRDR
   (ADR open question 4).
-- [ ] **HOST-12 UDP transport.** Runs straight after HOST-1 (ADR decision 6). Measure
+- [~] **HOST-12 UDP transport.** Runs straight after HOST-1 (ADR decision 6). Measure
   `ironrdp-rdpeudp`'s lossy mode for GFX on lossy Wi-Fi (ADR open question 6). If it holds up,
   ship it. If not, write an ADR choosing a QUIC library and carry RDP PDUs over QUIC between
   Drift ends: reliable streams for input, clipboard and DVC, and one stream (or datagrams) per
   GFX frame. The client tries UDP first with a paired Drift Host and falls back to TCP.
+  *Measured and decided (ADR `HOST-12-quic-transport`): no lossy RDP-UDP in the vendored tree;
+  reliable RDP-UDP2 collapses at 0.5 % loss; QUIC with BBR holds. `drift-transport` has the QUIC
+  session (pinned host, stream per frame) and the QUIC-then-TCP order. Left: the host listening
+  on UDP (HOST-2) and `drift-rdp` connecting over QUIC with the paired-host flag (HOST-8).*
 - [ ] **HOST-2 Host skeleton.** New `drift-host` crate and binary: TLS listener, one session,
   fast-path input logged only. Menu-bar shell later (HOST-9).
 - [ ] **HOST-3 Capture.** New `drift-capture` crate: ScreenCaptureKit `SCStream` per display,

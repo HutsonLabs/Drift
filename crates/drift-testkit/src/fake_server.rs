@@ -102,6 +102,11 @@ impl TestCert {
         CertFingerprint::of_der(&self.der)
     }
 
+    /// The private key, PKCS#8 DER (test-only identity; for hosts built in tests).
+    pub fn key_pkcs8(&self) -> &[u8] {
+        &self.key_pkcs8
+    }
+
     /// The raw `subjectPublicKey` bits (what CredSSP binds to).
     pub fn public_key(&self) -> &[u8] {
         &self.public_key

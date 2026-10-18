@@ -11,7 +11,6 @@ use std::time::Duration;
 use drift_testkit::TestCert;
 use drift_transport::lossy::{LinkConfig, LossyUdpProxy};
 use drift_transport::quic::{QuicError, QuicHost, connect};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 fn host(cert: &TestCert) -> QuicHost {
     QuicHost::bind("127.0.0.1:0".parse().unwrap(), cert.der().to_vec(), cert.key_pkcs8().to_vec()).unwrap()
@@ -29,6 +28,8 @@ async fn main_stream_and_frames_survive_a_lossy_link() {
     };
     let proxy = LossyUdpProxy::start(host.local_addr(), link).await.unwrap();
 
+    // The host must outlive delivery: frames are only queued when `send_frame` returns.
+    let (done, delivered) = tokio::sync::oneshot::channel::<()>();
     let server = tokio::spawn(async move {
         let mut session = host.accept().await.unwrap();
         // Echo the RDP byte stream once, then send 50 frames.
@@ -39,7 +40,7 @@ async fn main_stream_and_frames_survive_a_lossy_link() {
             let frame = vec![u8::try_from(id % 251).unwrap(); 20_000];
             session.send_frame(id, &frame).await.unwrap();
         }
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        let _ = delivered.await;
         drop(host);
     });
 
@@ -47,7 +48,11 @@ async fn main_stream_and_frames_survive_a_lossy_link() {
     let sent: Vec<u8> = (0..64 * 1024).map(|i| u8::try_from(i % 256).unwrap()).collect();
     client.main_send().write_all(&sent).await.unwrap();
     let mut echoed = vec![0u8; sent.len()];
-    client.main_recv().read_exact(&mut echoed).await.unwrap();
+    client
+        .main_recv()
+        .read_exact(&mut echoed)
+        .await
+        .unwrap_or_else(|e| panic!("{e}; proxy {:?}", proxy.stats()));
     assert_eq!(echoed, sent, "the RDP byte stream is reliable and ordered");
 
     let mut frames = BTreeMap::new();
@@ -60,6 +65,7 @@ async fn main_stream_and_frames_survive_a_lossy_link() {
         assert!(data.iter().all(|b| *b == u8::try_from(id % 251).unwrap()), "frame {id} intact");
         frames.insert(id, ());
     }
+    let _ = done.send(());
     assert!(proxy.stats().dropped > 0, "the link really dropped packets: {:?}", proxy.stats());
     server.await.unwrap();
 }
@@ -73,6 +79,6 @@ async fn a_host_with_another_certificate_is_refused() {
     tokio::spawn(async move {
         let _ = host.accept().await;
     });
-    let err = connect(addr, "drift-host.local", other.fingerprint()).await.err().expect("pin mismatch");
+    let err = connect(addr, "drift-host.local", other.fingerprint()).await.expect_err("pin mismatch");
     assert!(matches!(err, QuicError::PinMismatch { .. }), "{err:?}");
 }
