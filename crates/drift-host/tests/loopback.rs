@@ -68,6 +68,7 @@ async fn drift_connects_sees_the_pattern_and_its_input_reaches_the_host() {
         desktop: Size::new(1280, 800),
         frames: Box::new(|| Box::new(TestPattern::new())),
         input: Box::new(input.clone()),
+        pairing: None,
     })
     .unwrap();
 
