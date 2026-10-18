@@ -139,8 +139,9 @@ pub trait Responder: Send + std::fmt::Debug {
 }
 
 /// Several responders on one channel, asked in order: the first to consume a message answers
-/// it, and every one may speak once both Hellos agreed (pairing and menus share the host's end,
-/// EXT-3).
+/// it, and every one may speak once both Hellos agreed. Every channel end holds one chain, which
+/// [`DriftMacClient::with_responder`] and [`DriftMacServer::with_responder`] extend (pairing,
+/// gestures, menus, quality and codec share it; HOST-8, EXT-2..5).
 #[derive(Debug, Default)]
 pub struct Chain(Vec<Box<dyn Responder>>);
 
@@ -153,8 +154,13 @@ impl Chain {
     /// Adds a responder after the others.
     #[must_use]
     pub fn with(mut self, responder: Box<dyn Responder>) -> Self {
-        self.0.push(responder);
+        self.push(responder);
         self
+    }
+
+    /// Adds a responder after the others, in place.
+    pub fn push(&mut self, responder: Box<dyn Responder>) {
+        self.0.push(responder);
     }
 }
 
@@ -199,7 +205,8 @@ impl DvcEncode for Frame {}
 struct Endpoint {
     link: Link,
     ours: Hello,
-    responder: Option<Box<dyn Responder>>,
+    /// Asked in order; the first that consumes a message answers it.
+    responders: Chain,
 }
 
 impl Endpoint {
@@ -207,7 +214,7 @@ impl Endpoint {
         let agent = format!("Drift {} {} {role}", env!("CARGO_PKG_VERSION"), std::env::consts::OS);
         let ours =
             Hello { min_version: PROTOCOL_VERSIONS.0, max_version: PROTOCOL_VERSIONS.1, capabilities, agent };
-        Self { link, ours, responder: None }
+        Self { link, ours, responders: Chain::new() }
     }
 
     fn frames(&mut self, messages: Vec<Message>) -> Vec<DvcMessage> {
@@ -252,13 +259,13 @@ impl Endpoint {
                 Ok(n) => {
                     tracing::info!(version = n.version, capabilities = n.capabilities.bits(), agent = %theirs.agent, "Drift::Mac::v1 negotiated");
                     self.link.set(LinkState::Negotiated(n));
-                    let replies = self.responder.as_mut().map(|r| r.on_negotiated(&n)).unwrap_or_default();
+                    let replies = self.responders.on_negotiated(&n);
                     return self.frames(replies);
                 }
                 Err(e) => self.fail(e.to_string()),
             },
             other if self.link.negotiated().is_some() => {
-                match self.responder.as_mut().and_then(|r| r.on_message(&other)) {
+                match self.responders.on_message(&other) {
                     Some(replies) => return self.frames(replies),
                     None => self.link.push(other),
                 }
@@ -284,10 +291,11 @@ impl DriftMacClient {
         Self(Endpoint::new(link, capabilities, "client"))
     }
 
-    /// Lets `responder` answer messages after the handshake (pairing, HOST-8).
+    /// Lets `responder` answer messages after the handshake (pairing, HOST-8; gestures, EXT-2).
+    /// Responders are asked in the order they were added.
     #[must_use]
     pub fn with_responder(mut self, responder: Box<dyn Responder>) -> Self {
-        self.0.responder = Some(responder);
+        self.0.responders.push(responder);
         self
     }
 }
@@ -324,10 +332,11 @@ impl DriftMacServer {
         Self(Endpoint::new(link, capabilities, "host"))
     }
 
-    /// Lets `responder` answer messages after the handshake (pairing, HOST-8).
+    /// Lets `responder` answer messages after the handshake (pairing, HOST-8; gestures, EXT-2).
+    /// Responders are asked in the order they were added.
     #[must_use]
     pub fn with_responder(mut self, responder: Box<dyn Responder>) -> Self {
-        self.0.responder = Some(responder);
+        self.0.responders.push(responder);
         self
     }
 }

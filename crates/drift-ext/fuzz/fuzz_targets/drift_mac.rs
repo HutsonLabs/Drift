@@ -4,10 +4,13 @@
 //! re-encodes what decoded and checks it decodes the same, then feeds a **sequence** of frames
 //! (u16-length-prefixed) through a client processor, which must never return an error (that
 //! would end the RDP session) and must stay in a sane state. Menu messages (EXT-3) also go
-//! through their own decoder, which must round-trip, and through the client's mirror.
+//! through their own decoder, which must round-trip, and through the client's mirror. EXT-2: a
+//! decoded gesture re-encodes to the same gesture, and a host end with the gesture responder
+//! takes the same sequence.
 #![no_main]
 
-use drift_ext::channel::{DriftMacClient, Link, LinkState};
+use drift_ext::channel::{DriftMacClient, DriftMacServer, Link, LinkState};
+use drift_ext::gestures::{Gesture, GestureResponder};
 use drift_ext::menus::{MenuMessage, MenuMirror};
 use drift_ext::wire::{Capabilities, decode, encode};
 use ironrdp_dvc::DvcProcessor;
@@ -21,10 +24,17 @@ fuzz_target!(|data: &[u8]| {
             let again = menu.try_to_message().expect("a decoded menu message re-encodes");
             assert_eq!(MenuMessage::from_message(&again).expect("still a menu message").expect("decodes"), menu);
         }
+        if let Some(Ok(gesture)) = Gesture::from_message(&message) {
+            assert_eq!(Gesture::from_message(&gesture.to_message()), Some(Ok(gesture)));
+        }
     }
 
+    let mut host = DriftMacServer::new(Link::new(), Capabilities::SCROLL | Capabilities::GESTURES)
+        .with_responder(Box::new(GestureResponder::new(|_| {})));
+    host.start(1).expect("start never fails");
+
     let link = Link::new();
-    let mut client = DriftMacClient::new(link.clone(), Capabilities::SCROLL);
+    let mut client = DriftMacClient::new(link.clone(), Capabilities::SCROLL | Capabilities::MENUS);
     client.start(1).expect("start never fails");
     let mut rest = data;
     while rest.len() >= 2 {
@@ -32,6 +42,7 @@ fuzz_target!(|data: &[u8]| {
         let take = len.min(rest.len() - 2);
         let frame = &rest[2..2 + take];
         assert!(client.process(1, frame).is_ok(), "a bad frame must not end the session");
+        assert!(host.process(1, frame).is_ok(), "nor on the host");
         rest = &rest[2 + take..];
     }
     let mut mirror = MenuMirror::default();

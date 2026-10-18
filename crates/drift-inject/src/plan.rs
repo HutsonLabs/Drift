@@ -124,6 +124,8 @@ pub enum ScrollPhase {
     Ended,
     /// The scroll was cancelled.
     Cancelled,
+    /// Momentum starts after the fingers lifted (`kCGScrollWheelEventMomentumPhase` = begin).
+    MomentumBegan,
     /// Momentum after the fingers lifted (`kCGScrollWheelEventMomentumPhase` = continue).
     Momentum,
     /// Momentum ended.

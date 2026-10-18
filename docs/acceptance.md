@@ -639,3 +639,16 @@ Needs the signed `Drift Host.app` (STORE-4) and an administrator. Never done on 
       away quality applies.
 - [ ] **No VPN, away:** connecting to the Mac's LAN address from cellular fails with the usual
       unreachable error (there is no NAT traversal).
+
+### EXT-2 — Precise scroll and gestures (ADR `EXT-2-scroll-gestures`)
+
+Needs Drift Host on a Mac with Accessibility granted, and Drift for Mac or iPad paired with it:
+
+- [ ] **Momentum:** flick a long page in Safari on the host from a Mac trackpad: it keeps moving
+      after the fingers lift and rubber-bands at the end, as it does locally.
+- [ ] **iPad:** the same with an iPad's trackpad, and with two fingers on the screen.
+- [ ] **Swipes:** a three- or four-finger swipe up shows Mission Control on the host, down shows
+      App Exposé, left and right change Spaces (turn off the local Mac's own three-finger
+      gestures in System Settings › Trackpad first, or it keeps them).
+- [ ] **Pinch:** pinching out in Safari zooms in one step per quarter of a spread.
+- [ ] **GNOME:** the same Mac client against the GNOME host scrolls exactly as before.

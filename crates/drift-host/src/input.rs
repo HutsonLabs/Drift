@@ -6,6 +6,7 @@
 
 use std::sync::{Arc, Mutex, PoisonError};
 
+use drift_ext::gestures::Gesture;
 use ironrdp_server::{KeyboardEvent, MouseEvent, RdpServerInputHandler};
 
 /// Receives the client's input events.
@@ -14,6 +15,10 @@ pub trait InputSink: Send {
     fn keyboard(&mut self, event: KeyboardEvent);
     /// A mouse event (move, button, wheel).
     fn mouse(&mut self, event: MouseEvent);
+    /// A precise scroll or trackpad gesture from a Drift client (EXT-2).
+    fn gesture(&mut self, gesture: Gesture) {
+        let _ = gesture;
+    }
     /// The session ended: let go of anything held (HOST-pipeline).
     fn session_ended(&mut self) {}
 }
@@ -27,9 +32,15 @@ pub struct InputCounts {
     pub mouse: u64,
 }
 
+#[derive(Debug, Default)]
+struct Recorded {
+    counts: InputCounts,
+    gestures: Vec<Gesture>,
+}
+
 /// Counts events (shared between clones), logging their kind at `debug`. The skeleton's sink.
 #[derive(Debug, Clone, Default)]
-pub struct RecordingInput(Arc<Mutex<InputCounts>>);
+pub struct RecordingInput(Arc<Mutex<Recorded>>);
 
 impl RecordingInput {
     /// Keyboard events so far.
@@ -44,7 +55,12 @@ impl RecordingInput {
 
     /// Both counters.
     pub fn counts(&self) -> InputCounts {
-        *self.0.lock().unwrap_or_else(PoisonError::into_inner)
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).counts
+    }
+
+    /// The precise scrolls and gestures so far (EXT-2), in order.
+    pub fn gestures(&self) -> Vec<Gesture> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).gestures.clone()
     }
 }
 
@@ -56,12 +72,17 @@ impl InputSink for RecordingInput {
             KeyboardEvent::Synchronize(_) => "lock-key sync",
         };
         tracing::debug!(kind, "input");
-        self.0.lock().unwrap_or_else(PoisonError::into_inner).keys += 1;
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).counts.keys += 1;
     }
 
     fn mouse(&mut self, event: MouseEvent) {
         tracing::trace!(?event, "input");
-        self.0.lock().unwrap_or_else(PoisonError::into_inner).mouse += 1;
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).counts.mouse += 1;
+    }
+
+    fn gesture(&mut self, gesture: Gesture) {
+        tracing::trace!(?gesture, "input");
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).gestures.push(gesture);
     }
 }
 

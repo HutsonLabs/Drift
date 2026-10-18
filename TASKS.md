@@ -118,8 +118,9 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 
 - [✓] **EXT-1 Channel framing.** Versioned, length-delimited DVC messages with a fuzz target
   (M9-2 style). Client and host negotiate and fall back to plain RDP when absent.
-- [ ] **EXT-2 Precise scroll and gestures.** Scroll with phase and momentum; swipe and pinch
-  mapped on the host to Mission Control, App Exposé and Spaces shortcuts.
+- [✓] **EXT-2 Precise scroll and gestures.** Scroll with phase and momentum; swipe and pinch
+  mapped on the host to Mission Control, App Exposé and Spaces shortcuts. *ADR
+  `EXT-2-scroll-gestures`; the live Mac behaviour is a manual step in `docs/acceptance.md`.*
 - [✓] **EXT-3 Menu mirroring.** Host reads the frontmost app's menu bar through Accessibility;
   iPad shows it in the iPadOS 26 menu bar and chooses items remotely. *ADR `EXT-3-menu-mirroring`:
   client polls once a second; choosing from the real iPad menu bar is a manual step.*

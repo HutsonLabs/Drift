@@ -752,6 +752,23 @@ impl Actor {
             }
             Some(SessionCommand::Input(event)) => {
                 self.typist.on_input(&event, now);
+                // EXT-2: precise scrolls and gestures go to a Drift Host on its own channel.
+                let negotiated =
+                    self.options.drift_mac.as_ref().and_then(drift_ext::channel::Link::negotiated);
+                if let Some(gesture) = drift_ext::gestures::from_input(&event, negotiated) {
+                    let end =
+                        match graphics::encode_drift_mac(&leg.stage, &[gesture.to_message()])
+                            .map_err(DisconnectReason::ProtocolError)
+                        {
+                            Ok(Some(frame)) => leg.framed.write_all(&frame).await.err().map(|e| {
+                                LegEnd::Ended(connect::classify_io_error(&e, ConnectStage::Activation))
+                            }),
+                            Ok(None) => None,
+                            Err(reason) => Some(LegEnd::Ended(reason)),
+                        };
+                    leg.stats.input_latency(self.clock.now().saturating_duration_since(now));
+                    return end;
+                }
                 let events = self.input.encode(event);
                 let end = self.send_input_events(leg, events).await;
                 // M9-1: input-to-wire is the whole path, encoding included, up to the write.

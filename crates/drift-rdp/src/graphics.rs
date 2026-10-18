@@ -207,14 +207,17 @@ impl Graphics {
                 } else {
                     drift_ext::wire::Capabilities::NONE
                 };
+                // EXT-2: every Drift client sends precise scrolls and gestures to a host that
+                // takes them.
+                let offer = menus | drift_ext::wire::Capabilities::SCROLL | drift_ext::wire::Capabilities::GESTURES;
                 let client = match pairing {
                     // HOST-8: offer pairing and answer the host's challenge on every leg.
                     Some(pairing) => drift_ext::channel::DriftMacClient::new(
                         link.clone(),
-                        drift_ext::pairing::ClientPairing::capabilities() | menus,
+                        drift_ext::pairing::ClientPairing::capabilities() | offer,
                     )
                     .with_responder(pairing.responder()),
-                    None => drift_ext::channel::DriftMacClient::new(link.clone(), menus),
+                    None => drift_ext::channel::DriftMacClient::new(link.clone(), offer),
                 };
                 drdynvc.with_dynamic_channel(client)
             }

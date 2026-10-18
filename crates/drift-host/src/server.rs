@@ -21,7 +21,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::menus::{MenuResponder, MenuSource};
 use drift_core::Size;
-use drift_ext::channel::{Chain, DriftMacServer, Link};
+use drift_ext::channel::{DriftMacServer, Link};
+use drift_ext::gestures::GestureResponder;
 use drift_ext::wire::Capabilities;
 use drift_transport::quic::{QuicError, QuicHost};
 use drift_transport::stream::TransportStream;
@@ -356,6 +357,7 @@ impl Host {
                 host_fingerprint: *identity.fingerprint().as_bytes(),
                 current: Arc::clone(&current),
                 menus,
+                input: Arc::clone(&input),
             }));
             server.set_credentials(Some(Credentials {
                 username,
@@ -1020,26 +1022,42 @@ struct DriftMacFactory {
     host_fingerprint: [u8; 32],
     current: Arc<Mutex<ConnectionAuth>>,
     menus: Option<Arc<dyn MenuSource>>,
+    /// Where precise scrolls and gestures go (EXT-2), like the rest of the input.
+    input: SharedSink,
 }
 
 impl DvcServerFactory for DriftMacFactory {
     fn attach(&self, dvc: DrdynvcServer) -> DrdynvcServer {
         let link = Link::new();
         *lock(&self.link) = Some(link.clone());
-        let mut capabilities = Capabilities::NONE;
-        let mut chain = Chain::new();
+        // EXT-2: gestures reach the input sink only once the connection is authorized, like
+        // keys and the mouse (HOST-8).
+        let gestures = {
+            let (current, input) = (Arc::clone(&self.current), Arc::clone(&self.input));
+            Box::new(GestureResponder::new(move |g| {
+                if lock(&current).is_authorized() {
+                    lock(&input).gesture(g);
+                }
+            }))
+        };
+        let mut capabilities = Capabilities::SCROLL | Capabilities::GESTURES;
+        let mut responders: Vec<Box<dyn drift_ext::channel::Responder>> = Vec::new();
         if let Some(pairing) = &self.pairing {
             capabilities = capabilities | Capabilities::PAIRING;
             let auth = lock(&self.current).clone();
-            chain = chain.with(pairing.responder(self.host_fingerprint, auth));
+            responders.push(pairing.responder(self.host_fingerprint, auth));
         }
+        responders.push(gestures);
         if let Some(menus) = &self.menus {
             capabilities = capabilities | Capabilities::MENUS;
             let current = Arc::clone(&self.current);
             let authorized: crate::gate::Authorized = Arc::new(move || lock(&current).is_authorized());
-            chain = chain.with(Box::new(MenuResponder::new(Arc::clone(menus), authorized)));
+            responders.push(Box::new(MenuResponder::new(Arc::clone(menus), authorized)));
         }
-        dvc.with_dynamic_channel(DriftMacServer::new(link, capabilities).with_responder(Box::new(chain)))
+        let channel = responders
+            .into_iter()
+            .fold(DriftMacServer::new(link, capabilities), DriftMacServer::with_responder);
+        dvc.with_dynamic_channel(channel)
     }
 }
 

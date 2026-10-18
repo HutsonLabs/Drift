@@ -8,7 +8,10 @@
 
 use std::collections::BTreeSet;
 
-use drift_core::{DesktopSize, InputEvent, KeyboardPrefs, MouseButton, Point, Size, ViewGeometry};
+use drift_core::{
+    DesktopSize, InputEvent, KeyboardPrefs, MomentumPhase, MouseButton, Point, ScrollPhase, Size,
+    SwipeDirection, ViewGeometry,
+};
 use drift_input::{
     KeyDown, Keyboard, KeyboardType, MenuShortcut, ModifierFlags, ScaleMode, ScrollAccumulator, ScrollConfig,
     ScrollDelta, Viewport, menu_shortcut,
@@ -58,6 +61,72 @@ fn button_from_index(i: u8) -> MouseButton {
         3 => MouseButton::X1,
         _ => MouseButton::X2,
     }
+}
+
+/// `NSEventPhase` bits (`phase` and `momentumPhase` share them).
+mod phase_bits {
+    pub const BEGAN: u64 = 1;
+    pub const STATIONARY: u64 = 2;
+    pub const CHANGED: u64 = 4;
+    pub const ENDED: u64 = 8;
+    pub const CANCELLED: u64 = 16;
+    pub const MAY_BEGIN: u64 = 32;
+}
+
+/// A scroll or magnify event's `phase` (raw `NSEventPhase` bits) as the wire's phase (EXT-2).
+pub const fn scroll_phase(raw: u64) -> ScrollPhase {
+    use phase_bits::*;
+    if raw & BEGAN != 0 {
+        ScrollPhase::Began
+    } else if raw & (CHANGED | STATIONARY) != 0 {
+        ScrollPhase::Changed
+    } else if raw & ENDED != 0 {
+        ScrollPhase::Ended
+    } else if raw & CANCELLED != 0 {
+        ScrollPhase::Cancelled
+    } else if raw & MAY_BEGIN != 0 {
+        ScrollPhase::MayBegin
+    } else {
+        ScrollPhase::None
+    }
+}
+
+/// A scroll event's `momentumPhase` (raw `NSEventPhase` bits) as the wire's momentum (EXT-2).
+pub const fn momentum_phase(raw: u64) -> MomentumPhase {
+    use phase_bits::*;
+    if raw & BEGAN != 0 {
+        MomentumPhase::Began
+    } else if raw & (CHANGED | STATIONARY) != 0 {
+        MomentumPhase::Changed
+    } else if raw & (ENDED | CANCELLED) != 0 {
+        MomentumPhase::Ended
+    } else {
+        MomentumPhase::None
+    }
+}
+
+/// `swipeWithEvent:`'s `deltaX`/`deltaY` as the way the fingers moved: AppKit reports `+1` for
+/// a swipe to the left or upwards (EXT-2).
+pub fn swipe_direction(dx: f64, dy: f64) -> Option<SwipeDirection> {
+    if dx.abs() >= dy.abs() {
+        if dx > 0.0 {
+            Some(SwipeDirection::Left)
+        } else if dx < 0.0 {
+            Some(SwipeDirection::Right)
+        } else {
+            None
+        }
+    } else if dy > 0.0 {
+        Some(SwipeDirection::Up)
+    } else {
+        Some(SwipeDirection::Down)
+    }
+}
+
+/// `magnifyWithEvent:`'s `magnification` in thousandths (EXT-2).
+pub fn magnification(m: f64) -> i32 {
+    let v = (m * 1000.0).round();
+    if v.is_nan() { 0 } else { v.clamp(-1_000_000.0, 1_000_000.0) as i32 }
 }
 
 /// Input state of one remote view.
@@ -219,6 +288,29 @@ impl InputController {
             self.scroll.reset();
         }
         self.scroll.push(delta)
+    }
+
+    /// A precise (trackpad, Magic Mouse) `scrollWheel:` as one [`InputEvent::PreciseScroll`]
+    /// (EXT-2): the points and phases for a Drift Host, and the same wheel units
+    /// [`Self::scroll`] sends for anyone else.
+    pub fn precise_scroll(
+        &mut self,
+        dx: f64,
+        dy: f64,
+        phase: ScrollPhase,
+        momentum: MomentumPhase,
+    ) -> InputEvent {
+        let fallback = self.scroll(ScrollDelta::Precise { dx, dy }, phase == ScrollPhase::Began);
+        let (wheel_v, wheel_h) = drift_input::scroll::wheel_units(&fallback);
+        let sign = if self.scroll.config().reverse { -1.0 } else { 1.0 };
+        InputEvent::PreciseScroll {
+            dx: drift_input::scroll::centi(sign * dx),
+            dy: drift_input::scroll::centi(sign * dy),
+            phase,
+            momentum,
+            wheel_v,
+            wheel_h,
+        }
     }
 
     /// Key focus gained (first responder in the key window) with the current modifier flags.
