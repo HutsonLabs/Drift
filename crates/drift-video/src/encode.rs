@@ -267,7 +267,7 @@ fn parameter_set(desc: &CMFormatDescription, index: usize) -> Result<Vec<u8>, En
 
 /// A retained `CMSampleBuffer` that may cross threads (encoder callback → caller → writer).
 #[derive(Debug, Clone)]
-struct SharedSample(CFRetained<CMSampleBuffer>);
+pub(crate) struct SharedSample(pub(crate) CFRetained<CMSampleBuffer>);
 
 // SAFETY: a CMSampleBuffer is an atomically reference-counted CF object; once VideoToolbox has
 // emitted a compressed sample it is not mutated, and Drift only reads it.
@@ -276,16 +276,16 @@ unsafe impl Send for SharedSample {}
 unsafe impl Sync for SharedSample {}
 
 /// Output of the compression callback: the sample and when it arrived, or the failing status.
-type Outputs = Mutex<Vec<Result<(SharedSample, Instant), i32>>>;
+pub(crate) type Outputs = Mutex<Vec<Result<(SharedSample, Instant), i32>>>;
 
-struct Session {
-    session: CFRetained<VTCompressionSession>,
-    size: Size<u32>,
-    low_latency: bool,
+pub(crate) struct Session {
+    pub(crate) session: CFRetained<VTCompressionSession>,
+    pub(crate) size: Size<u32>,
+    pub(crate) low_latency: bool,
 }
 
 impl Session {
-    fn finish(&self) -> Result<(), EncodeError> {
+    pub(crate) fn finish(&self) -> Result<(), EncodeError> {
         // SAFETY: valid session; kCMTimeInvalid completes every pending frame.
         let status = unsafe { self.session.complete_frames(kCMTimeInvalid) };
         os("VTCompressionSessionCompleteFrames", status)
@@ -447,15 +447,17 @@ impl VtEncoder {
     }
 }
 
-fn lock(outputs: &Outputs) -> std::sync::MutexGuard<'_, Vec<Result<(SharedSample, Instant), i32>>> {
+pub(crate) fn lock(
+    outputs: &Outputs,
+) -> std::sync::MutexGuard<'_, Vec<Result<(SharedSample, Instant), i32>>> {
     outputs.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-fn os(call: &'static str, status: i32) -> Result<(), EncodeError> {
+pub(crate) fn os(call: &'static str, status: i32) -> Result<(), EncodeError> {
     if status == 0 { Ok(()) } else { Err(EncodeError::Os { call, status }) }
 }
 
-fn force_keyframe_properties() -> CFRetained<CFDictionary<CFString, CFType>> {
+pub(crate) fn force_keyframe_properties() -> CFRetained<CFDictionary<CFString, CFType>> {
     // SAFETY: framework constant key.
     let key: [&CFString; 1] = [unsafe { kVTEncodeFrameOptionKey_ForceKeyFrame }];
     let value: [&CFType; 1] = [CFBoolean::new(true).as_ref()];
@@ -490,7 +492,7 @@ fn frame_from_sample(sample: SharedSample, completed_at: Instant) -> Result<Enco
 }
 
 /// VideoToolbox compression callback: keeps the (retained) sample or the error status.
-unsafe extern "C-unwind" fn output_callback(
+pub(crate) unsafe extern "C-unwind" fn output_callback(
     refcon: *mut c_void,
     _source_frame_refcon: *mut c_void,
     status: i32,
@@ -616,7 +618,7 @@ fn create_session_with(
 /// An IOSurface-backed `CVPixelBuffer` to encode (BGRA from the compositor, or NV12).
 #[derive(Debug, Clone)]
 pub struct PixelBuffer {
-    buffer: SharedPixelBuffer,
+    pub(crate) buffer: SharedPixelBuffer,
 }
 
 impl PixelBuffer {

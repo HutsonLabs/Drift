@@ -43,8 +43,8 @@ pub const OUTPUT_PIXEL_FORMAT: u32 = cv::NV12_FULL_RANGE;
 /// through `CVMetalTextureCache` (zero copy).
 #[derive(Debug, Clone)]
 pub struct DecodedPicture {
-    buffer: SharedPixelBuffer,
-    size: Size<u32>,
+    pub(crate) buffer: SharedPixelBuffer,
+    pub(crate) size: Size<u32>,
 }
 
 impl DecodedPicture {
@@ -80,12 +80,12 @@ impl Nv12Source for DecodedPicture {
 }
 
 /// Where the output callback leaves the decoded picture (or the error status).
-type OutputSlot = Mutex<Option<Result<SharedPixelBuffer, i32>>>;
+pub(crate) type OutputSlot = Mutex<Option<Result<SharedPixelBuffer, i32>>>;
 
 /// One decompression session bound to one format description.
-struct Session {
-    session: CFRetained<VTDecompressionSession>,
-    format: CFRetained<CMFormatDescription>,
+pub(crate) struct Session {
+    pub(crate) session: CFRetained<VTDecompressionSession>,
+    pub(crate) format: CFRetained<CMFormatDescription>,
 }
 
 impl Drop for Session {
@@ -288,12 +288,12 @@ impl drift_core::video::Avc444Decoder for VtAvc444Decoder {
     }
 }
 
-fn lock(slot: &OutputSlot) -> std::sync::MutexGuard<'_, Option<Result<SharedPixelBuffer, i32>>> {
+pub(crate) fn lock(slot: &OutputSlot) -> std::sync::MutexGuard<'_, Option<Result<SharedPixelBuffer, i32>>> {
     slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// VideoToolbox output callback: stores the decoded image (retained) or the error status.
-unsafe extern "C-unwind" fn output_callback(
+pub(crate) unsafe extern "C-unwind" fn output_callback(
     refcon: *mut c_void,
     _source_frame_refcon: *mut c_void,
     status: i32,
@@ -396,7 +396,10 @@ pub(crate) fn format_description(ps: &ParameterSets) -> Result<CFRetained<CMForm
 }
 
 /// Wraps an AVCC sample in a `CMSampleBuffer` (data copied into a CoreMedia-owned block).
-fn make_sample(avcc: &[u8], format: &CMFormatDescription) -> Result<CFRetained<CMSampleBuffer>, DecodeError> {
+pub(crate) fn make_sample(
+    avcc: &[u8],
+    format: &CMFormatDescription,
+) -> Result<CFRetained<CMSampleBuffer>, DecodeError> {
     let mut block: *mut CMBlockBuffer = std::ptr::null_mut();
     // SAFETY: a null memory block with the default allocator makes CoreMedia allocate `len`
     // bytes; `block` is a valid out-pointer.

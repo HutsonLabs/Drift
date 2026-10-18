@@ -8,7 +8,7 @@ use crate::capture::{ScreenFrames, display_map};
 use crate::frames::FrameError;
 use crate::inject::InjectingInput;
 use crate::input::{InputSink, RecordingInput};
-use crate::pipeline::{LiveAvc444Encoder, LiveEncoder, LiveRequest, LiveSource};
+use crate::pipeline::{LiveAvc444Encoder, LiveEncoder, LiveHevcEncoder, LiveRequest, LiveSource};
 use crate::server::LiveFactory;
 
 /// Frames a second the screen is captured and encoded at.
@@ -32,16 +32,22 @@ pub fn capture_or_pattern() -> Option<(LiveFactory, DisplayInfo)> {
     }
     let display = drift_capture::sck::main_display();
     // The request names the display (HOST-10's virtual one, or the main one) and the codec:
-    // AVC444 is encoded from BGRA, AVC420 straight from NV12.
+    // AVC444 and HEVC 4:4:4 are encoded from BGRA, AVC420 and HEVC 4:2:0 straight from NV12.
     let factory: LiveFactory = Box::new(|request: LiveRequest| {
         let config = CaptureConfig {
             max_fps: LIVE_FPS,
             display: request.display.map_or(DisplayChoice::Main, DisplayChoice::Id),
-            format: if request.avc444 { CaptureFormat::Bgra } else { CaptureFormat::Nv12FullRange },
+            format: if request.avc444 || request.hevc.is_some_and(|h| h.profile.full_chroma()) {
+                CaptureFormat::Bgra
+            } else {
+                CaptureFormat::Nv12FullRange
+            },
             ..CaptureConfig::default()
         };
         let screen = ScreenFrames::start(config).map_err(|e| FrameError(e.to_string()))?;
-        if request.avc444 {
+        if let Some(selection) = request.hevc {
+            LiveHevcEncoder::new(screen, LIVE_FPS, selection).map(|e| Box::new(e) as Box<dyn LiveSource>)
+        } else if request.avc444 {
             LiveAvc444Encoder::new(screen, LIVE_FPS).map(|e| Box::new(e) as Box<dyn LiveSource>)
         } else {
             LiveEncoder::new(screen, LIVE_FPS).map(|e| Box::new(e) as Box<dyn LiveSource>)

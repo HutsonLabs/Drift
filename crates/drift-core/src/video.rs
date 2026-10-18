@@ -174,6 +174,122 @@ pub trait Avc444Decoder: Send {
     fn reset(&mut self);
 }
 
+/// The HEVC profiles of Drift's extension codec (EXT-5, ADR `EXT-5-hevc-hdr`), negotiated on
+/// `Drift::Mac::v1` between a Drift client and Drift Host only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum HevcProfile {
+    /// Main: 8-bit 4:2:0.
+    Main,
+    /// Main 10: 10-bit 4:2:0 (HDR).
+    Main10,
+    /// Main 4:4:4: 8-bit full chroma (sharp coloured text, like AVC444 in one stream).
+    Main444,
+    /// Main 4:4:4 10: 10-bit full chroma.
+    Main44410,
+}
+
+impl HevcProfile {
+    /// Every profile, from the plainest.
+    pub const ALL: [Self; 4] = [Self::Main, Self::Main10, Self::Main444, Self::Main44410];
+
+    /// Ten bits per sample (needed for HDR).
+    pub const fn ten_bit(self) -> bool {
+        matches!(self, Self::Main10 | Self::Main44410)
+    }
+
+    /// Full chroma (4:4:4).
+    pub const fn full_chroma(self) -> bool {
+        matches!(self, Self::Main444 | Self::Main44410)
+    }
+
+    /// The wire id.
+    pub const fn id(self) -> u8 {
+        match self {
+            Self::Main => 0,
+            Self::Main10 => 1,
+            Self::Main444 => 2,
+            Self::Main44410 => 3,
+        }
+    }
+
+    /// From a wire id.
+    pub const fn from_id(id: u8) -> Option<Self> {
+        match id {
+            0 => Some(Self::Main),
+            1 => Some(Self::Main10),
+            2 => Some(Self::Main444),
+            3 => Some(Self::Main44410),
+            _ => None,
+        }
+    }
+}
+
+/// A picture's transfer function: SDR, or one of the two HDR ones (BT.2100).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Transfer {
+    /// Standard dynamic range (BT.709).
+    #[default]
+    Sdr,
+    /// Perceptual quantizer (SMPTE ST 2084), BT.2020 primaries.
+    Pq,
+    /// Hybrid log-gamma (ARIB STD-B67), BT.2020 primaries.
+    Hlg,
+}
+
+impl Transfer {
+    /// The wire id.
+    pub const fn id(self) -> u8 {
+        match self {
+            Self::Sdr => 0,
+            Self::Pq => 1,
+            Self::Hlg => 2,
+        }
+    }
+
+    /// From a wire id.
+    pub const fn from_id(id: u8) -> Option<Self> {
+        match id {
+            0 => Some(Self::Sdr),
+            1 => Some(Self::Pq),
+            2 => Some(Self::Hlg),
+            _ => None,
+        }
+    }
+
+    /// High dynamic range.
+    pub const fn is_hdr(self) -> bool {
+        !matches!(self, Self::Sdr)
+    }
+}
+
+/// A decoded picture in the form the compositor takes: NV12 (4:2:0, zero-copy) or BGRA.
+#[derive(Debug, Clone)]
+pub enum VideoPicture {
+    /// 4:2:0, IOSurface-backed in the app.
+    Nv12(Nv12Frame),
+    /// Full chroma, CPU-resident.
+    Bgra(BgraPicture),
+}
+
+/// A decoded HEVC picture and its transfer function (EXT-5).
+#[derive(Debug, Clone)]
+pub struct DecodedVideo {
+    /// The pixels.
+    pub picture: VideoPicture,
+    /// SDR, or the HDR transfer the bitstream signals.
+    pub transfer: Transfer,
+}
+
+/// HEVC decoder seam between `drift-gfx` and `drift-video` (EXT-5): one Annex-B access unit
+/// in, the decoded picture out (`None` until parameter sets and a picture have arrived).
+pub trait HevcDecoder: Send {
+    /// Decodes one Annex-B access unit.
+    fn decode(&mut self, annex_b: &[u8]) -> Result<Option<DecodedVideo>, DecodeError>;
+
+    /// Drops decoder state (e.g. after `ResetGraphics`).
+    fn reset(&mut self);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

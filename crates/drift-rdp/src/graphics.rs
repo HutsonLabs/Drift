@@ -203,7 +203,21 @@ impl Graphics {
             Some(link) => {
                 link.reset();
                 let client = match pairing {
-                    // HOST-8: offer pairing and answer the host's challenge on every leg.
+                    // HOST-8: offer pairing and answer the host's challenge on every leg. EXT-5: a
+                    // paired Drift Host is also offered the HEVC profiles this device decodes.
+                    Some(pairing) if caps == drift_gfx::GfxCaps::DriftHost => {
+                        let codec = drift_ext::codec::ClientCodec::new(hevc_offer());
+                        drift_ext::channel::DriftMacClient::new(
+                            link.clone(),
+                            drift_ext::pairing::ClientPairing::capabilities()
+                                | drift_ext::codec::ClientCodec::capabilities(),
+                        )
+                        .with_responder(Box::new(
+                            drift_ext::compose::Responders::new()
+                                .with(pairing.responder())
+                                .with(codec.responder()),
+                        ))
+                    }
                     Some(pairing) => drift_ext::channel::DriftMacClient::new(
                         link.clone(),
                         drift_ext::pairing::ClientPairing::capabilities(),
@@ -225,6 +239,10 @@ impl Graphics {
                 gfx.set_caps(caps);
                 if caps == drift_gfx::GfxCaps::DriftHost {
                     gfx.set_avc444(Box::new(drift_video::decode::VtAvc444Decoder::new()));
+                    // EXT-5: whatever HEVC a paired Drift Host sends after negotiating it.
+                    if pairing.is_some() {
+                        gfx.set_hevc(Box::new(drift_video::hevc::VtHevcDecoder::new()));
+                    }
                 }
                 let notify = Arc::clone(&self.acks_ready);
                 gfx.acks().set_notifier(move || notify.notify_one());
@@ -264,4 +282,20 @@ pub(crate) fn flush_acks(stage: &ActiveStage) -> Result<Option<Vec<u8>>, Disconn
 /// The graphics pipeline's own error, if the last processing failure came from it.
 pub(crate) fn take_gfx_error(stage: &mut ActiveStage) -> Option<DisconnectReason> {
     stage.get_dvc_mut::<GfxClient>()?.processor_mut().take_error().map(|e| e.disconnect_reason())
+}
+
+/// What this device offers a paired Drift Host on `Drift::Mac::v1` (EXT-5, ADR `EXT-5-hevc-hdr`):
+/// the HEVC profiles it decodes, and SDR only.
+///
+/// The compositor shows 8-bit pictures today, so 10-bit and HDR are not offered yet (the host
+/// picks them only for HDR). 4:4:4 is offered on the Mac, where VideoToolbox decodes it; iPhone
+/// and iPad offer 4:2:0 until a device run confirms 4:4:4 decoding there.
+pub(crate) fn hevc_offer() -> drift_ext::codec::CodecOffer {
+    use drift_ext::codec::{CodecOffer, HevcProfile, Transfer};
+    let hevc = if cfg!(target_os = "macos") {
+        vec![HevcProfile::Main, HevcProfile::Main444]
+    } else {
+        vec![HevcProfile::Main]
+    };
+    CodecOffer { hevc, transfers: vec![Transfer::Sdr] }
 }

@@ -25,7 +25,7 @@ fn text_like(n: u32) -> Vec<u8> {
             let px: [u8; 4] = match (xs % 7, y % 5) {
                 (0, _) => [0, 0, 220, 255],
                 (3, _) if y % 2 == 0 => [220, 0, 0, 255],
-                (_, 2) if xs % 3 == 0 => [0, 160, 0, 255],
+                (_, 2) if xs.is_multiple_of(3) => [0, 160, 0, 255],
                 _ => [255, 255, 255, 255],
             };
             bgra[i..i + 4].copy_from_slice(&px);
@@ -80,13 +80,22 @@ fn chroma_psnr(a: &[u8], b: &[u8]) -> f64 {
     psnr(&ua, &ub).unwrap()
 }
 
-fn luma_psnr(a: &[u8], b: &[u8]) -> f64 {
+/// Luma PSNR of the decoded picture's own Y plane against the source's (measuring luma through
+/// BGRA would count 4:2:0's chroma smear, which clips RGB, as luma error).
+fn luma_psnr(picture: &DecodedVideo, src: &[u8]) -> f64 {
     let size = Size::new(W, H);
-    let (ya, yb) = (
-        bgra_to_yuv444(a, size, (W * 4) as usize).unwrap(),
-        bgra_to_yuv444(b, size, (W * 4) as usize).unwrap(),
-    );
-    psnr(ya.y(), yb.y()).unwrap()
+    let source = bgra_to_yuv444(src, size, (W * 4) as usize).unwrap();
+    let decoded = match &picture.picture {
+        VideoPicture::Nv12(frame) => frame
+            .downcast_ref::<drift_video::decode::DecodedPicture>()
+            .unwrap()
+            .to_planes()
+            .unwrap()
+            .y()
+            .to_vec(),
+        VideoPicture::Bgra(p) => bgra_to_yuv444(p.data(), size, (W * 4) as usize).unwrap().y().to_vec(),
+    };
+    psnr(&decoded, source.y()).unwrap()
 }
 
 #[test]
@@ -100,9 +109,11 @@ fn the_encoder_probe_lists_hevc_main() {
 fn hevc_main_round_trips_through_the_decoder() {
     let (decoded, src, picture) = round_trip(HevcProfile::Main, Transfer::Sdr, 8);
     assert!(matches!(picture.picture, VideoPicture::Nv12(_)), "4:2:0 decodes to NV12 for the zero-copy path");
-    let (y, c) = (luma_psnr(&decoded, &src), chroma_psnr(&decoded, &src));
+    let (y, c) = (luma_psnr(&picture, &src), chroma_psnr(&decoded, &src));
     eprintln!("HEVC Main: luma {y:.2} dB, chroma {c:.2} dB");
-    assert!(y > 30.0, "luma {y:.2} dB");
+    // Hardware encoders give about 42 dB here (M4 Pro), the iOS simulator's software one about
+    // 34 dB at this bit rate; a wrong picture is far below either.
+    assert!(y > 32.0, "luma {y:.2} dB");
 }
 
 #[test]

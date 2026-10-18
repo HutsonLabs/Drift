@@ -3,7 +3,6 @@
 //! what its encoder supports and the picture's size, and answers.
 #![allow(missing_docs, clippy::unwrap_used, clippy::expect_used)]
 
-use drift_ext::channel::Responder;
 use drift_ext::codec::{
     ClientCodec, CodecMessage, CodecOffer, CodecSelect, HevcProfile, HostCodecs, MAX_PROFILES, Transfer,
     select, types,
@@ -64,7 +63,7 @@ fn malformed_codec_payloads_are_errors_not_panics() {
         Message::Unknown { kind: types::OFFER, payload: vec![] },
         Message::Unknown { kind: types::OFFER, payload: vec![1] },
         // Count says two profiles, one present.
-        Message::Unknown { kind: types::OFFER, payload: vec![2, 0, 1, 0] },
+        Message::Unknown { kind: types::OFFER, payload: vec![2, 0] },
         // An unknown profile id.
         Message::Unknown { kind: types::OFFER, payload: vec![1, 99, 1, 0] },
         // Too many profiles.
