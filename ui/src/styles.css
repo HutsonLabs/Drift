@@ -657,3 +657,20 @@ body.titlebar #titlebar, div.titlebar { height: 100%; }
 .ident .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ident .host { color: var(--secondary); font-weight: 500; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
 .ident .status { width: 6px; height: 6px; box-shadow: none; }
+
+/* ---- Pair a Mac (IOS-9) ------------------------------------------------------------------ */
+.pair .cfg-body { display: flex; flex-direction: column; gap: 12px; }
+.pair-hosts { display: flex; flex-direction: column; gap: 6px; }
+.pair-hosts .searching { color: var(--secondary); margin: 4px 0; }
+.pair-host {
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px;
+  text-align: left; padding: 8px 12px;
+}
+.pair-host .icon { grid-row: span 2; align-self: center; }
+.pair-host .host { color: var(--secondary); font-size: 0.9em; }
+.pair-host[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--accent); background: var(--accent-soft); }
+.pair .row { display: flex; flex-direction: column; gap: 4px; }
+.pair .code-row { display: flex; gap: 8px; }
+.pair .code-row input { flex: 1; min-width: 0; font-variant-numeric: tabular-nums; letter-spacing: 0.08em; }
+.pair .field-note { color: var(--secondary); margin: 0; min-height: 1.2em; }
+.pair .pair-error { color: var(--danger, oklch(0.58 0.2 25)); margin: 0; min-height: 1.2em; }

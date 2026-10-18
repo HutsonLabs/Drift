@@ -16,6 +16,7 @@ mod host;
 pub mod manager;
 pub mod menu;
 mod options;
+pub mod pairing;
 pub mod platform;
 pub mod present;
 pub mod profiles;
@@ -66,6 +67,12 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::new_connection,
             commands::window_identity,
             commands::toggle_stats,
+            commands::read_pairing_code,
+            commands::take_pairing_link,
+            commands::pair_host,
+            commands::start_host_discovery,
+            commands::stop_host_discovery,
+            commands::scan_pairing_qr,
         ])
         .events(tauri_specta::collect_events![
             view::SessionViewChanged,
@@ -73,6 +80,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             connections::ThumbnailUpdated,
             connections::ConnectionsIntentRequested,
             connections::WindowIdentityChanged,
+            pairing::HostsDiscovered,
         ])
         .typ::<drift_core::ConnectionProfile>()
         .typ::<drift_core::SessionState>()
@@ -118,6 +126,12 @@ pub fn run_with(options: RunOptions) {
                 None => app.path().app_config_dir()?,
             };
             // Passwords live in the Keychain (drift-apple, M3-2); tests use memory.
+            // Pairing items (IOS-9) follow the passwords: Keychain in production, memory otherwise.
+            let pairing_store: Arc<dyn pairing::PairingStore> = if secret_store.is_some() || memory_secrets {
+                Arc::new(pairing::MemoryPairingStore::new())
+            } else {
+                Arc::new(pairing::KeychainPairingStore::new(drift_apple::Keychain::new()))
+            };
             let secrets: Arc<dyn secrets::SecretStore> = match (&secret_store, memory_secrets) {
                 (Some(store), _) => Arc::clone(store),
                 (None, true) => Arc::new(secrets::MemorySecretStore::new()),
@@ -133,7 +147,16 @@ pub fn run_with(options: RunOptions) {
             // so they belong to the app, not to one window. Managed state keeps them alive.
             app.manage(services::PlatformServices::start(&handle, sessions.clone()));
             let frames = frames::FrameStore::in_dir(&dir);
-            app.manage(commands::AppState::new(profiles.clone(), sessions, frames));
+            let pairing = pairing::PairingService::new(profiles.clone(), pairing_store);
+            app.manage(commands::AppState::new(profiles.clone(), sessions, frames, pairing));
+            // Simulator smoke builds only: stand in for the Camera app opening a drift-pair:
+            // link, which a headless simulator cannot confirm (IOS-9).
+            #[cfg(feature = "smoke-env")]
+            if let Ok(link) = std::env::var("DRIFT_SMOKE_PAIRING_LINK")
+                && let Some(link) = pairing::pairing_link(std::iter::once(link.as_str()))
+            {
+                app.state::<commands::AppState>().set_pairing_link(link);
+            }
             // iOS has no menu bar and no Dock (IOS-5).
             #[cfg(target_os = "macos")]
             {
@@ -178,6 +201,13 @@ pub fn run_with(options: RunOptions) {
             windows::show_connections(handle, None);
         }
         tauri::RunEvent::Exit => windows::shutdown_blocking(handle),
+        // A `drift-pair:` link (the Mac's QR code through the Camera app, IOS-9).
+        tauri::RunEvent::Opened { urls } => {
+            if let Some(uri) = pairing::pairing_link(urls.iter().map(tauri::Url::as_str)) {
+                handle.state::<commands::AppState>().set_pairing_link(uri.clone());
+                windows::show_connections(handle, Some(connections::ConnectionsIntent::Pair { uri }));
+            }
+        }
         _ => {}
     });
 }

@@ -10,6 +10,7 @@
 //! | [`settings`] | the app's page in Settings (Local Network permission) | IOS-3 |
 //! | [`view`] | `RemoteView`: `UIView` + `CAMetalLayer` under the `WKWebView` | IOS-4 |
 //! | [`webview`] | the page's `WKWebView`: picture below it, frames, main-queue dispatch | IOS-5 |
+//! | [`qr`] | the pairing QR scanner (AVFoundation camera, full-screen) | IOS-9 |
 //! | [`pacing`] | `CADisplayLink` asking for up to 120 Hz while a session is visible | IOS-4 |
 //!
 //! UIKit exists only on iOS, so the crate is empty on every other target. Every `unsafe` block
@@ -18,6 +19,7 @@
 
 pub mod lifecycle;
 pub mod pacing;
+pub mod qr;
 pub mod settings;
 pub mod view;
 pub mod webview;

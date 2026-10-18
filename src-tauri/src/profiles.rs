@@ -49,6 +49,12 @@ pub enum CommandError {
     /// The window has no session (or it has already ended).
     #[error("this window has no active session")]
     NoSession,
+    /// Pairing input was refused or a pairing check failed (IOS-9).
+    #[error("{message}")]
+    Pairing {
+        /// Human-readable reason.
+        message: String,
+    },
     /// The command exists for the UI but its backend is not wired yet.
     #[error("{what} is not available yet")]
     NotImplemented {
@@ -68,6 +74,7 @@ impl From<StoreError> for CommandError {
         match e {
             StoreError::Invalid(issues) => Self::Invalid { issues },
             StoreError::NotFound(_) => Self::NotFound,
+            e @ StoreError::PairedHost(_) => Self::Pairing { message: e.to_string() },
             other => Self::storage(other),
         }
     }
@@ -292,6 +299,8 @@ impl ProfileService {
         copy.id = Uuid::new_v4();
         copy.name = format!("{} copy", copy.name.trim());
         copy.cert_pin = None;
+        // The pairing belongs to the original (IOS-9); the copy starts with TOFU.
+        copy.paired_host = None;
         let s = &self.secrets;
         let rdp = s.get(id, SecretRole::rdp_for(copy.mode)).map_err(CommandError::storage)?;
         let linux = match copy.mode {

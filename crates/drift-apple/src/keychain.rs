@@ -135,24 +135,77 @@ impl Keychain {
     }
 
     /// Stores (creates or replaces) the secret for `profile`/`role`.
-    #[cfg(target_os = "macos")]
     pub fn set(&self, profile: Uuid, role: SecretRole, secret: &str) -> Result<(), KeychainError> {
-        Ok(self.keychain()?.set_generic_password(&self.service, &role.account(profile), secret.as_bytes())?)
+        self.set_item(&role.account(profile), secret.as_bytes())
     }
 
     /// Reads the secret for `profile`/`role`; `None` if there is no item.
-    #[cfg(target_os = "macos")]
     pub fn get(&self, profile: Uuid, role: SecretRole) -> Result<Option<Zeroizing<String>>, KeychainError> {
+        let Some(bytes) = self.get_item(&role.account(profile))? else { return Ok(None) };
+        let text = std::str::from_utf8(&bytes)
+            .map_err(|_| KeychainError { code: 0, message: "stored password is not valid UTF-8".into() })?;
+        Ok(Some(Zeroizing::new(text.to_owned())))
+    }
+
+    /// Deletes the secret for `profile`/`role`; deleting a missing item succeeds.
+    pub fn delete(&self, profile: Uuid, role: SecretRole) -> Result<(), KeychainError> {
+        self.delete_item(&role.account(profile))
+    }
+
+    /// Stores (creates or replaces) raw bytes under `account` (pairing keys and pins, IOS-9;
+    /// accounts never look like `<uuid>/<role>`).
+    #[cfg(target_os = "macos")]
+    pub fn set_item(&self, account: &str, bytes: &[u8]) -> Result<(), KeychainError> {
+        Ok(self.keychain()?.set_generic_password(&self.service, account, bytes)?)
+    }
+
+    /// Reads the bytes under `account`; `None` if there is no item.
+    #[cfg(target_os = "macos")]
+    pub fn get_item(&self, account: &str) -> Result<Option<Zeroizing<Vec<u8>>>, KeychainError> {
         let kc = self.keychain()?;
-        match find_generic_password(Some(std::slice::from_ref(&kc)), &self.service, &role.account(profile)) {
-            Ok((password, _item)) => {
-                let text = std::str::from_utf8(password.as_ref()).map_err(|_| KeychainError {
-                    code: 0,
-                    message: "stored password is not valid UTF-8".into(),
-                })?;
-                Ok(Some(Zeroizing::new(text.to_owned())))
-            }
+        match find_generic_password(Some(std::slice::from_ref(&kc)), &self.service, account) {
+            Ok((password, _item)) => Ok(Some(Zeroizing::new(password.as_ref().to_vec()))),
             Err(e) if e.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Deletes the item under `account`; deleting a missing item succeeds.
+    #[cfg(target_os = "macos")]
+    pub fn delete_item(&self, account: &str) -> Result<(), KeychainError> {
+        let kc = self.keychain()?;
+        match find_generic_password(Some(std::slice::from_ref(&kc)), &self.service, account) {
+            Ok((_password, item)) => {
+                item.delete();
+                Ok(())
+            }
+            Err(e) if e.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(()),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Stores (creates or replaces) raw bytes under `account`.
+    #[cfg(not(target_os = "macos"))]
+    pub fn set_item(&self, account: &str, bytes: &[u8]) -> Result<(), KeychainError> {
+        Ok(set_generic_password(&self.service, account, bytes)?)
+    }
+
+    /// Reads the bytes under `account`; `None` if there is no item.
+    #[cfg(not(target_os = "macos"))]
+    pub fn get_item(&self, account: &str) -> Result<Option<Zeroizing<Vec<u8>>>, KeychainError> {
+        match get_generic_password(&self.service, account) {
+            Ok(bytes) => Ok(Some(Zeroizing::new(bytes))),
+            Err(e) if e.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Deletes the item under `account`; deleting a missing item succeeds.
+    #[cfg(not(target_os = "macos"))]
+    pub fn delete_item(&self, account: &str) -> Result<(), KeychainError> {
+        match delete_generic_password(&self.service, account) {
+            Ok(()) => Ok(()),
+            Err(e) if e.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(()),
             Err(e) => Err(e.into()),
         }
     }
@@ -182,43 +235,6 @@ impl Keychain {
         }
     }
 
-    /// Deletes the secret for `profile`/`role`; deleting a missing item succeeds.
-    #[cfg(target_os = "macos")]
-    pub fn delete(&self, profile: Uuid, role: SecretRole) -> Result<(), KeychainError> {
-        let kc = self.keychain()?;
-        match find_generic_password(Some(std::slice::from_ref(&kc)), &self.service, &role.account(profile)) {
-            Ok((_password, item)) => {
-                item.delete();
-                Ok(())
-            }
-            Err(e) if e.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(()),
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    /// Stores (creates or replaces) the secret for `profile`/`role`.
-    #[cfg(not(target_os = "macos"))]
-    pub fn set(&self, profile: Uuid, role: SecretRole, secret: &str) -> Result<(), KeychainError> {
-        Ok(set_generic_password(&self.service, &role.account(profile), secret.as_bytes())?)
-    }
-
-    /// Reads the secret for `profile`/`role`; `None` if there is no item.
-    #[cfg(not(target_os = "macos"))]
-    pub fn get(&self, profile: Uuid, role: SecretRole) -> Result<Option<Zeroizing<String>>, KeychainError> {
-        match get_generic_password(&self.service, &role.account(profile)) {
-            Ok(password) => {
-                let password = Zeroizing::new(password);
-                let text = std::str::from_utf8(&password).map_err(|_| KeychainError {
-                    code: 0,
-                    message: "stored password is not valid UTF-8".into(),
-                })?;
-                Ok(Some(Zeroizing::new(text.to_owned())))
-            }
-            Err(e) if e.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(None),
-            Err(e) => Err(e.into()),
-        }
-    }
-
     /// Whether a secret is stored for `profile`/`role`, **without reading it** (an
     /// attribute-only `SecItemCopyMatching`, as on macOS).
     #[cfg(not(target_os = "macos"))]
@@ -233,16 +249,6 @@ impl Keychain {
         match found {
             Ok(items) => Ok(!items.is_empty()),
             Err(e) if e.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(false),
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    /// Deletes the secret for `profile`/`role`; deleting a missing item succeeds.
-    #[cfg(not(target_os = "macos"))]
-    pub fn delete(&self, profile: Uuid, role: SecretRole) -> Result<(), KeychainError> {
-        match delete_generic_password(&self.service, &role.account(profile)) {
-            Ok(()) => Ok(()),
-            Err(e) if e.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(()),
             Err(e) => Err(e.into()),
         }
     }

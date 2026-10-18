@@ -1,0 +1,268 @@
+//! Pairing a Mac running Drift Host from the Connections page (task **IOS-9**; ADR
+//! `IOS-9-pairing`).
+//!
+//! [`PairingService`] turns what the user gave — a scanned or pasted QR payload, or a Bonjour
+//! [`HostAdvert`] plus the typed code — into a paired profile: pinned to the host's certificate
+//! from the start, marked with the host's id, its account name and optional password saved like
+//! any profile's. The host's pin and the device key go to a [`PairingStore`] (the Keychain in
+//! the app), and [`PairingService::check_before_connect`] refuses a paired profile whose pin no
+//! longer matches what the pairing recorded.
+//!
+//! The handshake that lets the Mac check the code and store the device key runs over the
+//! `Drift::Mac::v1` channel (EXT-1, HOST-8), which does not exist yet: until then pairing records
+//! the host on this side only, and the Mac's account password still authenticates the session.
+
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+use drift_core::CertFingerprint;
+use drift_core::pairing::{HostAdvert, PairingPayload, PairingTarget, ShortCode};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use crate::profiles::{CommandError, LinuxPasswordUpdate, ProfileEntry, ProfileService, SecretsUpdate};
+
+/// Where the device key and the paired hosts' pins live.
+pub trait PairingStore: Send + Sync {
+    /// The device's public key, creating the key pair on first use.
+    fn device_public_key(&self) -> Result<Vec<u8>, CommandError>;
+    /// Records host `host`'s certificate fingerprint.
+    fn pin_host(&self, host: Uuid, fingerprint: CertFingerprint) -> Result<(), CommandError>;
+    /// Host `host`'s recorded fingerprint.
+    fn host_pin(&self, host: Uuid) -> Result<Option<CertFingerprint>, CommandError>;
+    /// Forgets host `host`.
+    fn forget_host(&self, host: Uuid) -> Result<(), CommandError>;
+}
+
+fn storage(e: impl std::fmt::Display) -> CommandError {
+    CommandError::Storage { message: e.to_string() }
+}
+
+fn pairing(e: impl std::fmt::Display) -> CommandError {
+    CommandError::Pairing { message: e.to_string() }
+}
+
+/// The production [`PairingStore`]: items in the Keychain (`drift_apple::pairing`).
+#[derive(Debug, Clone)]
+pub struct KeychainPairingStore(drift_apple::pairing::PairingKeychain);
+
+impl KeychainPairingStore {
+    /// Pairing items in `keychain`'s service.
+    pub fn new(keychain: drift_apple::Keychain) -> Self {
+        Self(drift_apple::pairing::PairingKeychain::new(keychain))
+    }
+}
+
+impl PairingStore for KeychainPairingStore {
+    fn device_public_key(&self) -> Result<Vec<u8>, CommandError> {
+        self.0.device_key().map(|k| k.public_key().to_vec()).map_err(storage)
+    }
+
+    fn pin_host(&self, host: Uuid, fingerprint: CertFingerprint) -> Result<(), CommandError> {
+        self.0.pin_host(host, fingerprint).map_err(storage)
+    }
+
+    fn host_pin(&self, host: Uuid) -> Result<Option<CertFingerprint>, CommandError> {
+        self.0.host_pin(host).map_err(storage)
+    }
+
+    fn forget_host(&self, host: Uuid) -> Result<(), CommandError> {
+        self.0.forget_host(host).map_err(storage)
+    }
+}
+
+/// An in-memory [`PairingStore`] (tests, smoke runs).
+#[derive(Debug, Default)]
+pub struct MemoryPairingStore {
+    device_key: Mutex<Option<Vec<u8>>>,
+    pins: Mutex<HashMap<Uuid, CertFingerprint>>,
+}
+
+impl MemoryPairingStore {
+    /// An empty store.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl PairingStore for MemoryPairingStore {
+    fn device_public_key(&self) -> Result<Vec<u8>, CommandError> {
+        let mut key = self.device_key.lock().map_err(storage)?;
+        // A stand-in uncompressed point; nothing verifies it in memory.
+        Ok(key.get_or_insert_with(|| [vec![4_u8], Uuid::new_v4().as_bytes().repeat(4)].concat()).clone())
+    }
+
+    fn pin_host(&self, host: Uuid, fingerprint: CertFingerprint) -> Result<(), CommandError> {
+        self.pins.lock().map_err(storage)?.insert(host, fingerprint);
+        Ok(())
+    }
+
+    fn host_pin(&self, host: Uuid) -> Result<Option<CertFingerprint>, CommandError> {
+        Ok(self.pins.lock().map_err(storage)?.get(&host).copied())
+    }
+
+    fn forget_host(&self, host: Uuid) -> Result<(), CommandError> {
+        self.pins.lock().map_err(storage)?.remove(&host);
+        Ok(())
+    }
+}
+
+/// What a scanned, pasted or typed pairing code turned out to be.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum PairingInput {
+    /// A QR payload: it names the host, so no Bonjour host needs choosing.
+    Qr {
+        /// The payload, to pass back to [`PairHostRequest::Qr`].
+        uri: String,
+        /// The Mac's name.
+        name: String,
+        /// Host name.
+        host: String,
+        /// RDP port.
+        port: u16,
+    },
+    /// A typed code, formatted `1234 5678`.
+    Code {
+        /// The code.
+        code: String,
+    },
+}
+
+/// A pairing to perform.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum PairHostRequest {
+    /// From a QR payload.
+    Qr {
+        /// The payload.
+        uri: String,
+        /// The account on the Mac.
+        username: String,
+        /// Its password, to store like any profile's (optional).
+        password: Option<String>,
+    },
+    /// A host found with Bonjour and the code typed from its screen.
+    Advert {
+        /// The host.
+        advert: HostAdvert,
+        /// The typed code.
+        code: String,
+        /// The account on the Mac.
+        username: String,
+        /// Its password (optional).
+        password: Option<String>,
+    },
+}
+
+impl std::fmt::Debug for PairHostRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Qr { username, .. } => {
+                f.debug_struct("Qr").field("username", username).finish_non_exhaustive()
+            }
+            Self::Advert { advert, username, .. } => f
+                .debug_struct("Advert")
+                .field("host", &advert.host)
+                .field("username", username)
+                .finish_non_exhaustive(),
+        }
+    }
+}
+
+/// Pairs Mac hosts and guards paired profiles.
+pub struct PairingService {
+    profiles: Arc<ProfileService>,
+    store: Arc<dyn PairingStore>,
+}
+
+impl std::fmt::Debug for PairingService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PairingService").finish_non_exhaustive()
+    }
+}
+
+impl PairingService {
+    /// A service saving profiles to `profiles` and pairing items to `store`.
+    pub fn new(profiles: Arc<ProfileService>, store: Arc<dyn PairingStore>) -> Self {
+        Self { profiles, store }
+    }
+
+    /// Recognises a QR payload (`drift-pair:…`) or a typed code.
+    pub fn read_code(text: &str) -> Result<PairingInput, CommandError> {
+        let text = text.trim();
+        if text.starts_with("drift-pair:") {
+            let target = PairingPayload::parse(text).map_err(pairing)?.target();
+            return Ok(PairingInput::Qr {
+                uri: text.to_owned(),
+                name: target.name,
+                host: target.host,
+                port: target.port,
+            });
+        }
+        let code = ShortCode::parse(text).map_err(pairing)?;
+        Ok(PairingInput::Code { code: code.to_string() })
+    }
+
+    /// Pairs: saves (or updates) the host's profile, records its pin and makes sure the device
+    /// key exists.
+    pub fn pair(&self, request: PairHostRequest) -> Result<ProfileEntry, CommandError> {
+        let (target, username, password) = match request {
+            PairHostRequest::Qr { uri, username, password } => {
+                (PairingPayload::parse(&uri).map_err(pairing)?.target(), username, password)
+            }
+            PairHostRequest::Advert { advert, code, username, password } => {
+                (advert.target(ShortCode::parse(&code).map_err(pairing)?), username, password)
+            }
+        };
+        let profile = self.paired_profile(&target, username.trim())?;
+        // The device key must exist before a host can be told about it (HOST-8).
+        self.store.device_public_key()?;
+        let update = SecretsUpdate {
+            rdp_password: password.filter(|p| !p.is_empty()),
+            linux_password: LinuxPasswordUpdate::Keep,
+        };
+        let entry = self.profiles.save(profile, update)?;
+        self.store.pin_host(target.host_id, target.fingerprint)?;
+        Ok(entry)
+    }
+
+    /// The new profile, or the existing one for this host (same id and preferences) updated.
+    fn paired_profile(
+        &self,
+        target: &PairingTarget,
+        username: &str,
+    ) -> Result<drift_core::ConnectionProfile, CommandError> {
+        let existing = self.profiles.profiles()?.into_iter().find(|p| p.paired_host == Some(target.host_id));
+        let mut profile = existing.unwrap_or_else(|| target.profile());
+        profile.host.clone_from(&target.host);
+        profile.port = target.port;
+        profile.cert_pin = Some(target.fingerprint);
+        profile.paired_host = Some(target.host_id);
+        username.clone_into(&mut profile.rdp_username);
+        Ok(profile)
+    }
+
+    /// Refuses to connect a paired profile whose pin differs from the one the pairing recorded
+    /// (or whose pairing record is gone). Other profiles pass.
+    pub fn check_before_connect(&self, profile: Uuid) -> Result<(), CommandError> {
+        let profile = self.profiles.get(profile)?.profile;
+        let Some(host) = profile.paired_host else { return Ok(()) };
+        match self.store.host_pin(host)? {
+            Some(pin) if Some(pin) == profile.cert_pin => Ok(()),
+            _ => Err(CommandError::Pairing {
+                message: "This Mac's pairing record is missing or does not match. Pair it again.".into(),
+            }),
+        }
+    }
+}
+
+/// The first `drift-pair:` link among URLs the system opened Drift with (the Camera app scanning
+/// the Mac's QR code, or a click on a Mac).
+pub fn pairing_link<'a>(mut urls: impl Iterator<Item = &'a str>) -> Option<String> {
+    urls.find(|u| u.starts_with("drift-pair:")).map(str::to_owned)
+}
+
+/// Emitted to the `connections` page while discovery runs: every Drift Host currently found.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type, tauri_specta::Event)]
+pub struct HostsDiscovered(pub Vec<HostAdvert>);

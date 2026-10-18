@@ -37,6 +37,9 @@ pub enum StoreError {
     /// Two profiles share an id.
     #[error("profiles file contains the id {0} more than once")]
     DuplicateId(Uuid),
+    /// The profile is paired with a Drift Host: its pin only changes by pairing again.
+    #[error("profile {0} is a paired Mac; pair it again to trust a new certificate")]
+    PairedHost(Uuid),
     /// Serialization failed.
     #[error("could not serialize profiles: {0}")]
     Serialize(String),
@@ -133,6 +136,11 @@ impl ProfileStore {
     /// Stores (or clears) the TOFU certificate pin of profile `id`.
     pub fn set_pin(&mut self, id: Uuid, pin: Option<CertFingerprint>) -> Result<(), StoreError> {
         let p = self.profiles.iter_mut().find(|p| p.id == id).ok_or(StoreError::NotFound(id))?;
+        // A paired host's pin came from the pairing (IOS-9): no TOFU prompt or "forget" may
+        // replace it.
+        if p.paired_host.is_some() && p.cert_pin != pin {
+            return Err(StoreError::PairedHost(id));
+        }
         p.cert_pin = pin;
         Ok(())
     }

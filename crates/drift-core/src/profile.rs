@@ -197,9 +197,14 @@ pub struct ConnectionProfile {
     /// RemoteLogin only: the Linux user, shown in the greeter hint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub linux_username: Option<String>,
-    /// TOFU-pinned certificate fingerprint of the first leg.
+    /// TOFU-pinned certificate fingerprint of the first leg; for a paired Mac host, the pin
+    /// taken from the pairing (never trust-on-first-use).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cert_pin: Option<CertFingerprint>,
+    /// The Drift Host this profile was paired with (IOS-9). `None` for GNOME hosts, which keep
+    /// TOFU; absent from `profiles.toml` when `None`, so older files and readers are unaffected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paired_host: Option<Uuid>,
     /// Keyboard preferences.
     #[serde(default)]
     pub keyboard: KeyboardPrefs,
@@ -223,6 +228,7 @@ impl ConnectionProfile {
             rdp_username: String::new(),
             linux_username: None,
             cert_pin: None,
+            paired_host: None,
             keyboard: KeyboardPrefs::default(),
             display: DisplayPrefs::default(),
             clipboard: ClipboardPrefs::default(),

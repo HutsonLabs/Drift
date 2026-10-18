@@ -392,3 +392,22 @@ app is in the background. Still to do by hand:
       a drop to the system rate when Connections is in front.
 - [ ] **H.264 on a device:** `headless_motion.h264` decodes without `-8969` (it fails only in the
       simulator's software decoder, ADR `IOS-0` open question 3).
+
+### IOS-9 — Pairing (ADR `IOS-9-pairing`)
+
+Done in an iPad simulator on 2026-10-18 with `cargo run -p drift-apple --example advertise_host`
+on the Mac: the "Pair a Mac" sheet lists the advertised host, and a `drift-pair:` link
+(`DRIFT_SMOKE_PAIRING_LINK` with the `smoke-env` build) fills the code and names the host. Still
+to do by hand:
+
+- [ ] **Camera:** on a device, Scan Code asks for the camera once, reads the QR code printed by
+      `advertise_host` (any QR generator), fills the link and closes; Cancel closes without a
+      code; with the camera denied, the sheet says so.
+- [ ] **System Camera app:** scanning the same QR code with the Camera app offers to open Drift,
+      which opens "Pair a Mac" with the link (warm and cold launch).
+- [ ] **Local Network prompt:** the first discovery on a device shows iOS's Local Network prompt;
+      after denying it the list stays empty and pairing by link still works.
+- [ ] **Pair and connect:** pair with a typed code and an account; the new card shows Trusted;
+      connecting it reaches the pin check (a wrong certificate fails before credentials are sent).
+- [ ] **After HOST-8:** the Mac accepts the code and lists the device; a wrong code is refused
+      with "The Mac did not accept the code."
