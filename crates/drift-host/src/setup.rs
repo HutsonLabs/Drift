@@ -1,14 +1,14 @@
 //! What the binary plugs in at start: the screen if it can be captured, injection if allowed
 //! (humble wiring; the decisions are [`inject_enabled`]'s and the permission checks').
 
-use drift_capture::config::CaptureConfig;
-use drift_capture::display::DisplayInfo;
+use drift_capture::config::{CaptureConfig, CaptureFormat};
+use drift_capture::display::{DisplayChoice, DisplayInfo};
 
 use crate::capture::{ScreenFrames, display_map};
 use crate::frames::FrameError;
 use crate::inject::InjectingInput;
 use crate::input::{InputSink, RecordingInput};
-use crate::pipeline::{LiveEncoder, LiveSource};
+use crate::pipeline::{LiveAvc444Encoder, LiveEncoder, LiveRequest, LiveSource};
 use crate::server::LiveFactory;
 
 /// Frames a second the screen is captured and encoded at.
@@ -31,10 +31,21 @@ pub fn capture_or_pattern() -> Option<(LiveFactory, DisplayInfo)> {
         return None;
     }
     let display = drift_capture::sck::main_display();
-    let factory: LiveFactory = Box::new(|| {
-        let config = CaptureConfig { max_fps: LIVE_FPS, ..CaptureConfig::default() };
+    // The request names the display (HOST-10's virtual one, or the main one) and the codec:
+    // AVC444 is encoded from BGRA, AVC420 straight from NV12.
+    let factory: LiveFactory = Box::new(|request: LiveRequest| {
+        let config = CaptureConfig {
+            max_fps: LIVE_FPS,
+            display: request.display.map_or(DisplayChoice::Main, DisplayChoice::Id),
+            format: if request.avc444 { CaptureFormat::Bgra } else { CaptureFormat::Nv12FullRange },
+            ..CaptureConfig::default()
+        };
         let screen = ScreenFrames::start(config).map_err(|e| FrameError(e.to_string()))?;
-        LiveEncoder::new(screen, LIVE_FPS).map(|e| Box::new(e) as Box<dyn LiveSource>)
+        if request.avc444 {
+            LiveAvc444Encoder::new(screen, LIVE_FPS).map(|e| Box::new(e) as Box<dyn LiveSource>)
+        } else {
+            LiveEncoder::new(screen, LIVE_FPS).map(|e| Box::new(e) as Box<dyn LiveSource>)
+        }
     });
     Some((factory, display))
 }

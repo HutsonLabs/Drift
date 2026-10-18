@@ -73,7 +73,7 @@ async fn a_live_source_streams_frames_and_input_reaches_the_injector() {
         password: zeroize::Zeroizing::new(PASS.to_owned()),
         desktop: Size::new(1280, 800),
         frames: Box::new(|| Box::new(TestPattern::new())),
-        live: Some(Box::new(move || {
+        live: Some(Box::new(move |_| {
             LiveEncoder::new(MovingSquare::new(size, 60), 60)
                 .map(|e| Box::new(e) as Box<dyn drift_host::pipeline::LiveSource>)
         })),

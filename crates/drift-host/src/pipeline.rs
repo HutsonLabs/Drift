@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 
 use drift_capture::rect::Damage;
 use drift_core::{Nv12Planes, Size};
+use drift_video::avc444::Avc444Encoder;
 use drift_video::encode::{EncoderConfig, PixelBuffer, VtEncoder};
 use ironrdp_egfx::pdu::Avc420Region;
 
@@ -109,6 +110,9 @@ pub struct LiveFrame {
     pub regions: Vec<Avc420Region>,
     /// An IDR picture.
     pub keyframe: bool,
+    /// AVC444's second view (`avc420EncodedBitstream2`, the chroma detail), when the frame is
+    /// AVC444; `au` is then the main view.
+    pub chroma: Option<Vec<u8>>,
 }
 
 /// A live picture for a session.
@@ -123,6 +127,10 @@ pub trait LiveSource: Send {
     /// Pointer changes since the last call.
     fn pointer(&mut self) -> Vec<drift_capture::cursor::CursorEvent> {
         Vec::new()
+    }
+    /// Whether the frames are AVC444.
+    fn avc444(&self) -> bool {
+        false
     }
 }
 
@@ -171,7 +179,7 @@ impl<R: RawFrames> LiveEncoder<R> {
             let regions = self.pending.pop_front().unwrap_or_default();
             let keyframe = frame.is_keyframe();
             let regions = if keyframe { regions_for(&Damage::Full, size) } else { regions };
-            out.push(LiveFrame { au: frame.to_annex_b().map_err(err)?, regions, keyframe });
+            out.push(LiveFrame { au: frame.to_annex_b().map_err(err)?, regions, keyframe, chroma: None });
         }
         Ok(out)
     }
@@ -213,6 +221,96 @@ impl<R: RawFrames> LiveSource for LiveEncoder<R> {
     }
 }
 
+/// BGRA [`RawFrames`] through HOST-4's two-view AVC444 encoder (ADR `AVC444-client`): full
+/// chroma for clients that confirmed AVC444, up to [`crate::codec::AVC444_MAX_PIXELS`]. Both views
+/// carry the same regions; keyframes cover the whole picture.
+pub struct LiveAvc444Encoder<R> {
+    raw: R,
+    encoder: Avc444Encoder,
+    pending: VecDeque<Vec<Avc420Region>>,
+    keyframe_due: bool,
+    last: Option<PixelBuffer>,
+}
+
+impl<R: RawFrames> LiveAvc444Encoder<R> {
+    /// Two real-time encoders for `raw`'s size at `fps`; `raw` must deliver BGRA frames.
+    pub fn new(raw: R, fps: u32) -> Result<Self, FrameError> {
+        let encoder = Avc444Encoder::new(raw.size(), fps).map_err(|e| FrameError(e.to_string()))?;
+        Ok(Self { raw, encoder, pending: VecDeque::new(), keyframe_due: true, last: None })
+    }
+
+    fn encode(
+        &mut self,
+        buffer: &PixelBuffer,
+        damage: &Damage,
+        keyframe: bool,
+    ) -> Result<Vec<LiveFrame>, FrameError> {
+        let size = buffer.size();
+        if keyframe {
+            self.encoder.request_keyframe();
+            self.keyframe_due = false;
+        }
+        let regions = if keyframe { regions_for(&Damage::Full, size) } else { regions_for(damage, size) };
+        let err = |e: drift_video::encode::EncodeError| FrameError(e.to_string());
+        let bgra = buffer.read_bgra().map_err(err)?;
+        self.pending.push_back(regions);
+        let pictures =
+            self.encoder.encode_bgra(&bgra, size.width as usize * 4, Instant::now()).map_err(err)?;
+        let mut out = Vec::with_capacity(pictures.len());
+        for picture in pictures {
+            let regions = self.pending.pop_front().unwrap_or_default();
+            let keyframe = picture.main.is_keyframe();
+            let regions = if keyframe { regions_for(&Damage::Full, size) } else { regions };
+            out.push(LiveFrame {
+                au: picture.main.to_annex_b().map_err(err)?,
+                regions,
+                keyframe,
+                chroma: Some(picture.aux.to_annex_b().map_err(err)?),
+            });
+        }
+        Ok(out)
+    }
+}
+
+impl<R: RawFrames> LiveSource for LiveAvc444Encoder<R> {
+    fn size(&self) -> Size<u32> {
+        self.raw.size()
+    }
+
+    fn request_keyframe(&mut self) {
+        self.keyframe_due = true;
+    }
+
+    fn next(&mut self, timeout: Duration, backpressure: bool) -> Result<Vec<LiveFrame>, FrameError> {
+        if backpressure {
+            std::thread::sleep(timeout.min(Duration::from_millis(4)));
+            return Ok(Vec::new());
+        }
+        match self.raw.next(timeout) {
+            Some(RawFrame { buffer, damage }) => {
+                let out = match decide(false, damage != Damage::None, self.keyframe_due) {
+                    Step::Encode { keyframe } => self.encode(&buffer, &damage, keyframe)?,
+                    Step::Wait => Vec::new(),
+                };
+                self.last = Some(buffer);
+                Ok(out)
+            }
+            None => match (self.keyframe_due, self.last.clone()) {
+                (true, Some(last)) => self.encode(&last, &Damage::Full, true),
+                _ => Ok(Vec::new()),
+            },
+        }
+    }
+
+    fn pointer(&mut self) -> Vec<drift_capture::cursor::CursorEvent> {
+        self.raw.pointer()
+    }
+
+    fn avc444(&self) -> bool {
+        true
+    }
+}
+
 /// A synthetic screen: a square moving over a dark background at a fixed rate, with exact
 /// damage. Stands in for capture in tests (no Screen Recording grant needed).
 #[derive(Debug)]
@@ -222,6 +320,7 @@ pub struct MovingSquare {
     next_at: Instant,
     frame: u32,
     position: Option<(u32, u32)>,
+    bgra: bool,
 }
 
 const SQUARE: u32 = 64;
@@ -230,7 +329,12 @@ impl MovingSquare {
     /// A `size` screen changing `fps` times a second.
     pub fn new(size: Size<u32>, fps: u32) -> Self {
         let interval = Duration::from_secs(1) / fps.max(1);
-        Self { size, interval, next_at: Instant::now(), frame: 0, position: None }
+        Self { size, interval, next_at: Instant::now(), frame: 0, position: None, bgra: false }
+    }
+
+    /// The same screen as BGRA frames (the format AVC444 is encoded from).
+    pub fn bgra(size: Size<u32>, fps: u32) -> Self {
+        Self { bgra: true, ..Self::new(size, fps) }
     }
 
     fn square_at(&self, frame: u32) -> (u32, u32) {
@@ -240,6 +344,15 @@ impl MovingSquare {
     }
 
     fn render(&self, (sx, sy): (u32, u32)) -> Option<PixelBuffer> {
+        if self.bgra {
+            let buffer = PixelBuffer::new_bgra(self.size).ok()?;
+            let inside = |x: u32, y: u32| (sx..sx + SQUARE).contains(&x) && (sy..sy + SQUARE).contains(&y);
+            // A red square on dark grey: sharp chroma edges, what AVC444 is for.
+            buffer
+                .fill_bgra(|x, y| if inside(x, y) { [40, 40, 220, 255] } else { [40, 40, 40, 255] })
+                .ok()?;
+            return Some(buffer);
+        }
         let (w, h) = (self.size.width as usize, self.size.height as usize);
         let mut y = vec![40u8; w * h];
         let mut uv = vec![128u8; w * h.div_ceil(2)];

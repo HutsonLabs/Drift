@@ -654,6 +654,12 @@ impl PixelBuffer {
         cv::fill_bgra(&self.buffer.0, f).map_err(EncodeError::InvalidFrame)
     }
 
+    /// Copies a BGRA buffer's pixels, tightly packed (`4 * width` bytes per row): what AVC444's
+    /// split takes (HOST-pipeline).
+    pub fn read_bgra(&self) -> Result<Vec<u8>, EncodeError> {
+        cv::read_bgra(&self.buffer.0).map_err(EncodeError::InvalidFrame)
+    }
+
     /// Writes NV12 planes into an NV12 buffer.
     pub fn write_nv12(&self, planes: &drift_core::Nv12Planes) -> Result<(), EncodeError> {
         cv::write_nv12(&self.buffer.0, planes).map_err(EncodeError::InvalidFrame)

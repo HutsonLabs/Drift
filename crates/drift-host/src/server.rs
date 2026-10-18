@@ -45,13 +45,15 @@ use crate::identity::HostIdentity;
 use crate::input::{InputSink, SharedSink, SinkHandler};
 use crate::layout::clamp_layout;
 use crate::live::{GfxTarget, Pump};
-use crate::pipeline::{LiveFrame, LiveSource};
+use crate::pipeline::{LiveFrame, LiveRequest, LiveSource};
 
 /// Makes the frame source for a connection.
 pub type FrameSourceFactory = Box<dyn Fn() -> Box<dyn FrameSource> + Send>;
 
-/// Makes the live picture for a connection (the screen); an error falls back to the test pattern.
-pub type LiveFactory = Box<dyn Fn() -> Result<Box<dyn LiveSource>, FrameError> + Send>;
+/// Makes the live picture for a connection (the screen) for what [`LiveRequest`] asks: which
+/// display (HOST-10's virtual one, or the main one) and which codec (AVC444 or AVC420); an error
+/// falls back to the test pattern.
+pub type LiveFactory = Box<dyn Fn(LiveRequest) -> Result<Box<dyn LiveSource>, FrameError> + Send>;
 
 /// Everything [`Host::start`] needs.
 pub struct HostOptions {
@@ -107,6 +109,8 @@ pub struct HostStats {
     pub backlog: crate::link::Backlog,
     /// Heartbeats sent on an idle link (HOST-7).
     pub heartbeats: u64,
+    /// Frames sent as AVC444 (both views), for clients that confirmed it (AVC444-client).
+    pub avc444_frames: u64,
     /// The current connection's clipboard channel is ready (HOST-11).
     pub clipboard_ready: bool,
     /// Sound waves sent (HOST-11).
@@ -189,6 +193,7 @@ impl Host {
                 size: Arc::clone(&size),
                 stats: Arc::clone(&thread_stats),
                 live_factory: Mutex::new(live),
+                request: Mutex::new(LiveRequest::default()),
                 live: Mutex::new(None),
                 pump: Mutex::new(None),
                 surface: Mutex::new(None),
@@ -235,6 +240,8 @@ impl Host {
                 drop(lock(&gfx.pump).take());
                 drop(lock(&gfx.live).take());
                 lock(&input).session_ended();
+                // The next client starts on the main display, codec chosen afresh.
+                *lock(&gfx.request) = LiveRequest::default();
                 *lock(&gfx.probe) = None;
                 *lock(&gfx.last_pointer) = None;
             };
@@ -407,13 +414,26 @@ impl RdpServerDisplay for HostDisplay {
         tracing::info!(?target, "display for the client layout");
         // A virtual display renders exactly its mode; the physical one is letterboxed by the
         // client, so the desktop keeps the client's (clamped) size.
-        let virtual_size = match &target {
-            DisplayTarget::Virtual { plan, .. } => Some(plan.pixels),
-            DisplayTarget::Physical => None,
+        let (virtual_id, virtual_size) = match &target {
+            DisplayTarget::Virtual { display_id, plan } => (Some(*display_id), Some(plan.pixels)),
+            DisplayTarget::Physical => (None, None),
         };
         lock(&self.gfx.stats).display = Some(target);
         if self.gfx.is_live() {
-            // The screen keeps its size until HOST-10's virtual displays; answer with it.
+            if let Some(size) = virtual_size {
+                // HOST-10: capture the client's virtual display at its mode's size.
+                tracing::info!(
+                    width = size.width,
+                    height = size.height,
+                    display_id = ?virtual_id,
+                    "client layout; capturing the virtual display"
+                );
+                lock(&self.gfx.stats).layouts.push(size);
+                let gfx = Arc::clone(&self.gfx);
+                tokio::spawn(async move { gfx.switch_live(virtual_id) });
+                return;
+            }
+            // The physical screen keeps its size; answer with it.
             let size = *lock(&self.size);
             tracing::info!(width, height, "client layout; keeping the screen's size");
             lock(&self.gfx.stats).layouts.push(size);
@@ -459,6 +479,8 @@ struct GfxShared {
     stats: SharedStats,
     /// Makes the live picture for each connection (HOST-pipeline).
     live_factory: Mutex<Option<LiveFactory>>,
+    /// What the live picture captures and how it is encoded now.
+    request: Mutex<LiveRequest>,
     /// This connection's live picture until the pump takes it.
     live: Mutex<Option<Box<dyn LiveSource>>>,
     /// The running pump.
@@ -479,9 +501,10 @@ impl GfxShared {
     /// Makes this connection's live picture; its size, or `None` without one.
     fn open_live(&self) -> Option<Size<u32>> {
         drop(lock(&self.pump).take());
+        let request = *lock(&self.request);
         let factory = lock(&self.live_factory);
         let factory = factory.as_ref()?;
-        match factory() {
+        match factory(request) {
             Ok(source) => {
                 let size = source.size();
                 *lock(&self.live) = Some(source);
@@ -504,8 +527,23 @@ impl GfxShared {
     /// Creates the live picture's surface (after a reset when `resize`), asks for a keyframe and
     /// starts the pump if it is not running.
     fn start_live(self: &Arc<Self>) {
-        if !self.new_live_surface(false) {
+        self.start_live_with(false);
+    }
+
+    fn start_live_with(self: &Arc<Self>, resize: bool) {
+        if !self.new_live_surface(resize) {
             return;
+        }
+        // The client's capabilities are known now: AVC444 when it confirmed it and the picture
+        // is small enough (`codec::choose`), else AVC420. A source of the other kind is reopened.
+        let want_avc444 = self.wants_avc444();
+        let reopen = lock(&self.live).as_ref().is_some_and(|s| s.avc444() != want_avc444);
+        if reopen {
+            lock(&self.request).avc444 = want_avc444;
+            tracing::info!(avc444 = want_avc444, "reopening the live picture for the client's codec");
+            if self.open_live().is_none() {
+                return;
+            }
         }
         let Some(source) = lock(&self.live).take() else { return };
         let target: Arc<dyn GfxTarget> = Arc::clone(self) as Arc<dyn GfxTarget>;
@@ -518,6 +556,27 @@ impl GfxShared {
     /// A client layout on a live desktop: a fresh output and surface at the same size.
     fn reset_live_surface(&self) {
         self.new_live_surface(true);
+    }
+
+    /// Whether the client confirmed AVC444 and the picture is small enough for it.
+    fn wants_avc444(&self) -> bool {
+        let Some(server) = lock(&self.handle).clone() else { return false };
+        let (avc420, avc444) = {
+            let server = lock(&server);
+            (server.supports_avc420(), server.supports_avc444())
+        };
+        crate::codec::choose(avc420, avc444, *lock(&self.size)) == crate::codec::Codec::Avc444
+    }
+
+    /// Moves the live picture to display `display` (HOST-10's virtual display for the client's
+    /// layout): stops the pump, reopens capture there, and starts again on a new output and
+    /// surface at that display's size.
+    fn switch_live(self: &Arc<Self>, display: Option<u32>) {
+        drop(lock(&self.pump).take());
+        lock(&self.request).display = display;
+        let Some(size) = self.open_live() else { return };
+        *lock(&self.size) = size;
+        self.start_live_with(true);
     }
 
     fn new_live_surface(&self, resize: bool) -> bool {
@@ -689,10 +748,26 @@ impl GfxTarget for GfxShared {
             if !server.is_ready() {
                 return Some(false);
             }
-            if server.send_avc420_frame(surface, &frame.au, &frame.regions, timestamp_ms).is_none() {
+            let sent = match &frame.chroma {
+                Some(chroma) => server.send_avc444_frame(
+                    surface,
+                    &frame.au,
+                    &frame.regions,
+                    Some(chroma),
+                    Some(&frame.regions),
+                    timestamp_ms,
+                ),
+                None => server.send_avc420_frame(surface, &frame.au, &frame.regions, timestamp_ms),
+            };
+            if sent.is_none() {
                 return Some(false);
             }
-            lock(&self.stats).frames_sent += 1;
+            let mut stats = lock(&self.stats);
+            stats.frames_sent += 1;
+            if frame.chroma.is_some() {
+                stats.avc444_frames += 1;
+            }
+            drop(stats);
             let channel = server.channel_id()?;
             encode_dvc_messages(channel, server.drain_output(), ChannelFlags::empty())
         };
