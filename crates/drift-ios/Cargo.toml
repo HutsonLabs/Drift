@@ -27,5 +27,9 @@ objc2-quartz-core = { workspace = true, features = ["objc2-core-foundation", "ob
 name = "uikit"
 harness = false
 
+[[test]]
+name = "paste"
+harness = false
+
 [lints]
 workspace = true
