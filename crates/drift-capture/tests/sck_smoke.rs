@@ -69,3 +69,15 @@ fn samples_the_cursor_separately() {
         sample.shape.as_ref().map(|s| (s.size(), s.hotspot()))
     );
 }
+
+#[test]
+fn streams_into_a_mailbox() {
+    if !permitted("streams_into_a_mailbox") {
+        return;
+    }
+    let (tx, rx) = drift_core::mailbox::mailbox();
+    let stream = CaptureStream::start_into(CaptureConfig::default(), tx).unwrap();
+    let frame = rx.take_timeout(Duration::from_secs(10)).expect("a frame through the mailbox");
+    assert_eq!(frame.size, stream.display().pixels);
+    stream.stop().unwrap();
+}
