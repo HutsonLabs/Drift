@@ -107,7 +107,7 @@ impl TestCert {
         &self.public_key
     }
 
-    fn acceptor(&self) -> std::result::Result<TlsAcceptor, rustls::Error> {
+    pub(crate) fn acceptor(&self) -> std::result::Result<TlsAcceptor, rustls::Error> {
         let provider = Arc::new(rustls::crypto::ring::default_provider());
         let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(self.key_pkcs8.clone()));
         let config = rustls::ServerConfig::builder_with_provider(provider)

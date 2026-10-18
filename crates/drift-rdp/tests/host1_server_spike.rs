@@ -130,6 +130,7 @@ async fn ironrdp_server_streams_an_avc420_frame_that_drift_decodes() {
     assert!(psnr >= 40.0, "PSNR {psnr:.2} dB < 40 against ffmpeg's decode");
 
     let log = host.log();
+    eprintln!("HOST-1: PSNR {psnr:.2} dB against ffmpeg; host log {log:?}");
     assert!(log.avc420_negotiated, "the host should negotiate AVC420 with Drift: {log:?}");
     assert_eq!(log.frames_sent, 1, "{log:?}");
     h.close().await;

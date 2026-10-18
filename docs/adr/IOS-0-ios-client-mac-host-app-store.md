@@ -271,6 +271,10 @@ wry 0.55.1), tauri-cli 2.11.4.
    `headless_motion.h264` fails there with `kVTVideoDecoderBadDataErr` (-8969); the simulator
    decodes in software, so this needs a check on a device before it counts as a bug.
 4. How complete is `ironrdp-server` with `egfx` for AVC420/AVC444 streaming? (HOST-1)
+   **Answered (ADR `HOST-1-server-spike`):** AVC420 works end to end against Drift's client, and
+   the decoded frame equals ffmpeg's. The server can pack AVC444, but Drift's client only offers
+   V8.1 and rejects AVC444 codec ids, and no encoder produces the two streams yet. DISP layouts
+   reach the host, which must resize the GFX surface itself; CLIPRDR's server role exists.
 5. Can VideoToolbox's real-time H.264 encoder produce AVC444's two streams at 60 fps on M1? (HOST-4)
 6. Is `ironrdp-rdpeudp`'s lossy mode usable for GFX, or do Drift-to-Drift sessions need the
    QUIC fallback? (HOST-12)
