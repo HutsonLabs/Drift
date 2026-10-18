@@ -19,8 +19,9 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use crate::menus::{MenuResponder, MenuSource};
 use drift_core::Size;
-use drift_ext::channel::{DriftMacServer, Link};
+use drift_ext::channel::{Chain, DriftMacServer, Link};
 use drift_ext::wire::Capabilities;
 use drift_transport::quic::{QuicError, QuicHost};
 use drift_transport::stream::TransportStream;
@@ -88,6 +89,9 @@ pub struct HostOptions {
     /// not within [`Pairing::auth_timeout`]. Without it (the HOST-2 skeleton, tests), every
     /// connection that passes NLA is served.
     pub pairing: Option<Pairing>,
+    /// The frontmost app's menu bar, mirrored to clients that ask over `Drift::Mac::v1`
+    /// (EXT-3); `None` offers no menus. Answered only while the connection is authorized.
+    pub menus: Option<Arc<dyn MenuSource>>,
 }
 
 /// What the host has done so far.
@@ -187,6 +191,7 @@ impl Host {
             audio,
             displays,
             pairing,
+            menus,
         } = options;
         let displays: SharedDisplays = Arc::new(Mutex::new(displays));
         let listener = std::net::TcpListener::bind(listen)?;
@@ -271,6 +276,7 @@ impl Host {
                 pairing: pairing.clone(),
                 host_fingerprint: *identity.fingerprint().as_bytes(),
                 current: Arc::clone(&current),
+                menus,
             }));
             server.set_credentials(Some(Credentials {
                 username,
@@ -903,27 +909,34 @@ impl GraphicsPipelineHandler for HostGfxHandler {
 }
 
 /// Offers `Drift::Mac::v1` (EXT-1) on every connection and keeps the latest link; with pairing,
-/// the channel also carries the device's pairing or authentication (HOST-8).
+/// the channel also carries the device's pairing or authentication (HOST-8), and with menus the
+/// mirrored menu bar (EXT-3).
 struct DriftMacFactory {
     link: Arc<Mutex<Option<Link>>>,
     pairing: Option<Pairing>,
     host_fingerprint: [u8; 32],
     current: Arc<Mutex<ConnectionAuth>>,
+    menus: Option<Arc<dyn MenuSource>>,
 }
 
 impl DvcServerFactory for DriftMacFactory {
     fn attach(&self, dvc: DrdynvcServer) -> DrdynvcServer {
         let link = Link::new();
         *lock(&self.link) = Some(link.clone());
-        let channel = match &self.pairing {
-            Some(pairing) => {
-                let auth = lock(&self.current).clone();
-                DriftMacServer::new(link, Capabilities::PAIRING)
-                    .with_responder(pairing.responder(self.host_fingerprint, auth))
-            }
-            None => DriftMacServer::new(link, Capabilities::NONE),
-        };
-        dvc.with_dynamic_channel(channel)
+        let mut capabilities = Capabilities::NONE;
+        let mut chain = Chain::new();
+        if let Some(pairing) = &self.pairing {
+            capabilities = capabilities | Capabilities::PAIRING;
+            let auth = lock(&self.current).clone();
+            chain = chain.with(pairing.responder(self.host_fingerprint, auth));
+        }
+        if let Some(menus) = &self.menus {
+            capabilities = capabilities | Capabilities::MENUS;
+            let current = Arc::clone(&self.current);
+            let authorized: crate::gate::Authorized = Arc::new(move || lock(&current).is_authorized());
+            chain = chain.with(Box::new(MenuResponder::new(Arc::clone(menus), authorized)));
+        }
+        dvc.with_dynamic_channel(DriftMacServer::new(link, capabilities).with_responder(Box::new(chain)))
     }
 }
 

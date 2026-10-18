@@ -46,6 +46,7 @@ async fn a_client_layout_reaches_the_display_manager() {
         audio: None,
         displays: Box::new(recorder.clone()),
         pairing: None,
+        menus: None,
     })
     .unwrap();
     let mut profile = ConnectionProfile::new("Drift Host", "127.0.0.1", ConnectMode::Headless);

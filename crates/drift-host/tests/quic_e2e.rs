@@ -62,6 +62,7 @@ fn start_host(dir: &std::path::Path, quic: bool) -> (Host, HostIdentity, Pairing
         audio: None,
         displays: Box::new(drift_host::display::PhysicalOnly),
         pairing: Some(pairing.clone()),
+        menus: None,
     })
     .unwrap();
     if !quic {

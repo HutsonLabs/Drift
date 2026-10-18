@@ -53,6 +53,7 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `IOS-7-touch-modes` | trackpad and direct touch, two-finger scroll and right click, `ConnectionProfile::touch`, iPhone pinch zoom as a view transform |
 | `IOS-8-iphone-layout` | iPhone portrait (picture, trackpad, key row) and landscape (full screen, auto-hiding key row); web key row with `send_keys`/`type_text`/`set_touch_mode`; `ResizeWatcher` |
 | `HOST-6-input-injection` | `drift-inject`: `kvk_for` from the same table, injection plan (flags, drags, clicks, 40 px per notch), CGEventPost at the HID tap, Accessibility |
+| `EXT-3-menu-mirroring` | client polls `0x02xx` menu messages, strict bounded snapshots, lazy Accessibility reader, responder `Chain` with pairing, `UIMainMenuSystem` build handler, `UIAction` items, no Mac mirroring |
 | `EXT-1-channel-framing` | `drift-ext`: `DRFT` v1 header, types by task, Hello negotiation, fallback without DVC errors, `SessionOptions::drift_mac`, fuzz target |
 | `HOST-1-server-spike` | `ironrdp-server` + `egfx` on loopback: AVC420 bit-exact to Drift, DISP layouts reach the host, what is missing for AVC444 (client caps and decode, encoder) |
 | `HOST-8-pairing` | pairing on `Drift::Mac::v1` after TLS + NLA: challenge, signed pair/auth requests, nothing shown before authorization, `devices.toml`, loopback-only without pairing |

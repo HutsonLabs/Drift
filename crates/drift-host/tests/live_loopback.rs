@@ -82,6 +82,7 @@ async fn a_live_source_streams_frames_and_input_reaches_the_injector() {
         audio: None,
         displays: Box::new(drift_host::display::PhysicalOnly),
         pairing: None,
+        menus: None,
     })
     .unwrap();
 

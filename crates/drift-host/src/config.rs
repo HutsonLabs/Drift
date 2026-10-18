@@ -33,6 +33,9 @@ pub struct HostConfig {
     /// Device pairing (HOST-8): only devices that paired with a code shown on this Mac are served.
     /// On by default; turning it off keeps the host on loopback.
     pub pairing: bool,
+    /// Mirror the frontmost app's menu bar to clients that ask (EXT-3; an iPad shows it in its
+    /// menu bar). Needs Accessibility, like input injection.
+    pub menus: bool,
     /// The host's stable id in Bonjour adverts and pairing codes (created on first start).
     pub host_id: Uuid,
     /// The name devices see; empty means the Mac's name.
@@ -48,6 +51,7 @@ impl Default for HostConfig {
             inject_input: None,
             virtual_display: true,
             pairing: true,
+            menus: true,
             host_id: Uuid::nil(),
             name: String::new(),
         }
