@@ -60,8 +60,11 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   GFX frame. The client tries UDP first with a paired Drift Host and falls back to TCP.
   *Measured and decided (ADR `HOST-12-quic-transport`): no lossy RDP-UDP in the vendored tree;
   reliable RDP-UDP2 collapses at 0.5 % loss; QUIC with BBR holds. `drift-transport` has the QUIC
-  session (pinned host, stream per frame) and the QUIC-then-TCP order. Left: the host listening
-  on UDP (HOST-2) and `drift-rdp` connecting over QUIC with the paired-host flag (HOST-8).*
+  session (pinned host, stream per frame) and the QUIC-then-TCP order. Wired end to end after
+  HOST-8: Drift Host listens on UDP on its RDP port, and a paired profile connects over QUIC
+  first and falls back to TCP (tested through a 2 % lossy link). Left: GFX still rides the main
+  stream; one stream per frame needs the client to reorder frames and ask for a keyframe when
+  one is lost, because AVC P-frames depend on the previous frame (ADR amendment).*
 - [✓] **HOST-2 Host skeleton.** New `drift-host` crate and binary: TLS listener, one session,
   fast-path input logged only. Menu-bar shell later (HOST-9).
   *The screen, pointer and injection are wired in (ADR `HOST-pipeline`); the test pattern stays

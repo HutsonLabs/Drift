@@ -56,6 +56,9 @@ pub enum QuicError {
     /// A frame stream was malformed or too large.
     #[error("bad frame stream: {0}")]
     Frame(String),
+    /// The endpoint was closed ([`QuicHost::close`]).
+    #[error("the QUIC endpoint is closed")]
+    Closed,
 }
 
 fn provider() -> Arc<CryptoProvider> {
@@ -134,8 +137,7 @@ impl QuicHost {
 
     /// Waits for the next client and its main stream.
     pub async fn accept(&self) -> Result<QuicSession, QuicError> {
-        let incoming =
-            self.endpoint.accept().await.ok_or_else(|| QuicError::Connection("endpoint closed".into()))?;
+        let incoming = self.endpoint.accept().await.ok_or(QuicError::Closed)?;
         let connection = incoming.await.map_err(|e| QuicError::Connection(e.to_string()))?;
         let (send, recv) = connection.accept_bi().await.map_err(|e| QuicError::Connection(e.to_string()))?;
         Ok(QuicSession::new(connection, send, recv, false))
@@ -318,5 +320,81 @@ impl ServerCertVerifier for PinnedVerifier {
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
         self.provider.signature_verification_algorithms.supported_schemes()
+    }
+}
+
+impl QuicSession {
+    /// The main stream as one byte stream (reads from the receiving half, writes to the sending
+    /// half), keeping the connection alive: what the RDP connector and server run over, exactly
+    /// as over TCP (HOST-12).
+    pub fn into_stream(self) -> QuicStream {
+        QuicStream { session: self }
+    }
+
+    /// The peer's address.
+    pub fn remote_addr(&self) -> SocketAddr {
+        self.connection.remote_address()
+    }
+
+    /// The local address of the connection's UDP socket.
+    pub fn local_addr(&self) -> Option<SocketAddr> {
+        match &self.endpoint {
+            Some(endpoint) => endpoint.local_addr().ok(),
+            None => self.connection.local_ip().map(|ip| SocketAddr::new(ip, 0)),
+        }
+    }
+}
+
+/// [`QuicSession::into_stream`].
+#[derive(Debug)]
+pub struct QuicStream {
+    session: QuicSession,
+}
+
+impl QuicStream {
+    /// The session (frame streams, round-trip time).
+    pub fn session(&self) -> &QuicSession {
+        &self.session
+    }
+}
+
+impl tokio::io::AsyncRead for QuicStream {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        tokio::io::AsyncRead::poll_read(std::pin::Pin::new(&mut self.get_mut().session.recv), cx, buf)
+    }
+}
+
+impl tokio::io::AsyncWrite for QuicStream {
+    fn poll_write(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        tokio::io::AsyncWrite::poll_write(std::pin::Pin::new(&mut self.get_mut().session.send), cx, buf)
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        tokio::io::AsyncWrite::poll_flush(std::pin::Pin::new(&mut self.get_mut().session.send), cx)
+    }
+
+    fn poll_shutdown(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        tokio::io::AsyncWrite::poll_shutdown(std::pin::Pin::new(&mut self.get_mut().session.send), cx)
+    }
+}
+
+impl QuicHost {
+    /// Stops accepting: pending and future [`Self::accept`]s fail, open connections close.
+    pub fn close(&self) {
+        self.endpoint.close(0u32.into(), b"closed");
     }
 }

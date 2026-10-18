@@ -21,6 +21,8 @@ drift-capture.workspace = true
 drift-inject.workspace = true
 drift-input.workspace = true
 drift-macos.workspace = true
+# RDP over QUIC for paired devices (HOST-12).
+drift-transport.workspace = true
 # The VideoToolbox H.264 encoder: the real-time profile for the screen (HOST-4) and the test pattern.
 drift-video.workspace = true
 ironrdp-core.workspace = true

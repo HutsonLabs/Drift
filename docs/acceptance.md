@@ -461,6 +461,9 @@ Verified on loopback by `crates/drift-host/tests/pairing_e2e.rs`. Still to do by
       runs, and `dns-sd -L` shows the TXT record (`v`, `id`, `name`, `host`, `port`, `fp`).
 - [ ] **Lockout:** five wrong codes in a row are refused with "Too many wrong codes"; a minute
       later pairing needs a new `drift-host pair`.
+- [ ] **QUIC (HOST-12):** a paired iPad on Wi-Fi connects over QUIC (`drift-host` logs
+      `session starting … quic=true`); block UDP 3389 in the Mac's firewall and connect again: it
+      falls back to TCP within about 3 s.
 - [ ] **Pairing off:** `pairing = false` in `host.toml` with `listen = "0.0.0.0:3389"`: the host
       listens on 127.0.0.1 only (`lsof -iTCP:3389`).
 

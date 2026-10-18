@@ -82,3 +82,32 @@ async fn a_host_with_another_certificate_is_refused() {
     let err = connect(addr, "drift-host.local", other.fingerprint()).await.expect_err("pin mismatch");
     assert!(matches!(err, QuicError::PinMismatch { .. }), "{err:?}");
 }
+
+// ---- HOST-12 wiring: the main stream as a plain byte stream for the RDP connector and server ----
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_main_stream_is_an_async_byte_stream_on_both_ends() {
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+
+    let cert = TestCert::generate("drift-host.local");
+    let host = host(&cert);
+    let addr = host.local_addr();
+    let server = tokio::spawn(async move {
+        let mut stream = host.accept().await.unwrap().into_stream();
+        let mut buf = [0u8; 5];
+        stream.read_exact(&mut buf).await.unwrap();
+        stream.write_all(&buf.map(|b| b + 1)).await.unwrap();
+        stream.flush().await.unwrap();
+        let mut rest = Vec::new();
+        let _ = stream.read_to_end(&mut rest).await;
+        drop(host);
+    });
+    let mut client = connect(addr, "drift-host.local", cert.fingerprint()).await.unwrap().into_stream();
+    client.write_all(&[1, 2, 3, 4, 5]).await.unwrap();
+    let mut back = [0u8; 5];
+    client.read_exact(&mut back).await.unwrap();
+    assert_eq!(back, [2, 3, 4, 5, 6]);
+    client.shutdown().await.unwrap();
+    drop(client);
+    server.await.unwrap();
+}

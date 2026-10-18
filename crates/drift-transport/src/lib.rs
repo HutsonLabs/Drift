@@ -7,6 +7,7 @@
 //! |---|---|
 //! | [`plan`] | the transport order: QUIC first with a paired Drift Host, TCP otherwise; fallback with a timeout |
 //! | [`quic`] | RDP over QUIC: the RDP byte stream on one reliable stream, one unidirectional stream per GFX frame, the host certificate pinned |
+//! | [`stream`] | one byte-stream type for TCP and QUIC, which the RDP client and server run over |
 //! | [`lossy`] | a deterministic lossy-link model and a loopback UDP proxy for measurements and tests |
 //!
 //! GNOME hosts and third-party RDP clients never see any of this: they keep TLS over TCP.
@@ -14,3 +15,4 @@
 pub mod lossy;
 pub mod plan;
 pub mod quic;
+pub mod stream;

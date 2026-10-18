@@ -78,6 +78,11 @@ impl HostIdentity {
         CertFingerprint::of_der(&self.cert_der)
     }
 
+    /// The private key (PKCS#8 DER), for QUIC's TLS (HOST-12).
+    pub fn key_pkcs8(&self) -> &[u8] {
+        &self.key_pkcs8
+    }
+
     /// The certificate, DER.
     pub fn cert_der(&self) -> &[u8] {
         &self.cert_der

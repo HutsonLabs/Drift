@@ -103,9 +103,30 @@ Reading it:
 - Done here: the measurement, the `drift-transport` crate (QUIC session with pinned host and
   per-frame streams, the fallback policy, the lossy proxy), and tests, including a QUIC session
   at 5 % loss that delivers the RDP stream and 50 frames intact.
-- **Not done yet (HOST-12 stays `[~]`):** Drift Host listening on UDP (needs HOST-2), and
-  `drift-rdp` connecting over a `QuicSession` main stream and feeding per-frame streams to the
-  GFX client. Both ends need the paired-host flag from HOST-8 to know when to try QUIC.
+- **Not done yet (HOST-12 stays `[~]`):** feeding per-frame streams to the GFX client (see the
+  amendment below).
+
+## Amendment (2026-10-18, after HOST-8): wiring
+
+- **Host.** With pairing on, `drift-host` binds a `QuicHost` on its RDP port over UDP with the
+  host certificate and serves its main stream with the same `RdpServer` as TCP
+  (`drift_transport::stream::TransportStream`, an enum: rustc could not prove the client actor's
+  future `Send` through a boxed trait object). One session at a time across both transports.
+  `HostStats` counts QUIC and TCP sessions; `Host::stop_quic` turns UDP off.
+- **Client.** `LegRequest::quic_pin` is the pinned certificate of a profile with `paired_host`
+  (first leg only; redirect targets are never Drift Hosts). `TokioDialer` then tries QUIC for
+  3 s (`connect::QUIC_ATTEMPT`) and falls back to TCP. Pairing (HOST-8) still runs inside, over
+  `Drift::Mac::v1`.
+- **Tests.** `crates/drift-host/tests/quic_e2e.rs`: a paired client pairs and sees the picture
+  through a `LossyUdpProxy` at 2 % loss that carries UDP only, and falls back to TCP when the host
+  does not listen on UDP.
+- **Per-frame GFX streams are not wired yet.** EGFX still rides the main stream. Carrying each
+  frame on its own stream needs the host to send EGFX outside the RDP connection and the client
+  to feed it into its GFX channel; and because AVC P-frames depend on the frame before, the
+  client must either reorder frames (which brings head-of-line blocking back within video) or
+  drop a late frame and ask for a keyframe. The measurement above found BBR, not per-frame
+  streams, to be the main win (p99 52 vs 78 ms at 1 % loss), so this waits for HOST-4's encoder
+  to be in the host (keyframes on demand) and is the remaining part of HOST-12.
 - The RDP TLS upgrade still happens inside the main stream, so a QUIC session is encrypted twice.
   That keeps the connector unchanged; removing it is a later optimisation.
 - The host listens on UDP as well as TCP; the threat model and firewall guidance (ADR IOS-0

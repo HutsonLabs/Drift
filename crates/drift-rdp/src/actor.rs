@@ -394,6 +394,8 @@ impl Actor {
             client_name: self.options.client_name.clone(),
             desktop,
             scale: self.scale,
+            // A paired Drift Host is tried over QUIC first (HOST-12); every other host gets TCP.
+            quic_pin: self.profile.paired_host.and(self.profile.cert_pin),
         }
     }
 
@@ -476,6 +478,8 @@ impl Actor {
                         client_name: self.options.client_name.clone(),
                         desktop,
                         scale: self.scale,
+                        // Redirect targets are never Drift Hosts.
+                        quic_pin: None,
                     };
                 }
             }

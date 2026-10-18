@@ -22,6 +22,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use drift_core::Size;
 use drift_ext::channel::{DriftMacServer, Link};
 use drift_ext::wire::Capabilities;
+use drift_transport::quic::{QuicError, QuicHost};
+use drift_transport::stream::TransportStream;
 use ironrdp_displaycontrol::pdu::DisplayControlMonitorLayout;
 use ironrdp_dvc::{DrdynvcServer, DvcMessage, encode_dvc_messages};
 use ironrdp_egfx::pdu::{Avc420Region, CapabilitiesAdvertisePdu, CapabilitySet};
@@ -129,6 +131,10 @@ pub struct HostStats {
     pub auth_refused: u32,
     /// Connections dropped for not authenticating in time.
     pub auth_timeouts: u32,
+    /// Sessions served over QUIC (HOST-12).
+    pub quic_sessions: u32,
+    /// Sessions served over TCP.
+    pub tcp_sessions: u32,
 }
 
 type SharedStats = Arc<Mutex<HostStats>>;
@@ -141,6 +147,8 @@ fn lock<T: ?Sized>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 /// A running host. Dropping it (or [`Host::stop`]) stops the listener and the session.
 pub struct Host {
     addr: SocketAddr,
+    /// The QUIC endpoint on the same port (UDP), with pairing (HOST-12).
+    quic: Option<Arc<QuicHost>>,
     stats: SharedStats,
     drift_mac: Arc<Mutex<Option<Link>>>,
     clipboard_ready: Option<Arc<Mutex<bool>>>,
@@ -201,10 +209,24 @@ impl Host {
         let drift_mac: Arc<Mutex<Option<Link>>> = Arc::default();
         let (stop, mut stopped) = tokio::sync::oneshot::channel::<()>();
         let (thread_stats, thread_mac) = (Arc::clone(&stats), Arc::clone(&drift_mac));
+        let (quic_tx, quic_ready) = std::sync::mpsc::channel::<Option<Arc<QuicHost>>>();
         let thread = std::thread::Builder::new().name("drift-host".into()).spawn(move || {
             let Ok(runtime) = tokio::runtime::Builder::new_current_thread().enable_all().build() else {
+                let _ = quic_tx.send(None);
                 return;
             };
+            // QUIC on the same port for paired devices (HOST-12); quinn needs the runtime.
+            let quic = pairing.as_ref().and_then(|_| {
+                let _guard = runtime.enter();
+                match QuicHost::bind(addr, identity.cert_der().to_vec(), identity.key_pkcs8().to_vec()) {
+                    Ok(host) => Some(Arc::new(host)),
+                    Err(e) => {
+                        tracing::warn!(error = %e, "no QUIC listener; devices use TCP");
+                        None
+                    }
+                }
+            });
+            let _ = quic_tx.send(quic.clone());
             let size = Arc::new(Mutex::new(desktop));
             let gfx = Arc::new(GfxShared {
                 auth: Arc::clone(&current),
@@ -255,8 +277,14 @@ impl Host {
                 password: password.to_string(),
                 domain: None,
             }));
-            let on_start = |stream: &tokio::net::TcpStream| {
+            let on_start = |stream: &TransportStream| {
                 use std::os::fd::AsRawFd as _;
+                // HOST-7 on TCP; QUIC's UDP socket is the endpoint's, shared by every connection.
+                let TransportStream::Tcp(stream) = stream else {
+                    lock(&thread_stats).video_service_class = false;
+                    *lock(&gfx.probe) = None;
+                    return;
+                };
                 let fd = stream.as_raw_fd();
                 let video = crate::link::set_service_class(fd, crate::link::NET_SERVICE_TYPE_VI)
                     .inspect_err(|e| tracing::warn!(error = %e, "could not set the video service class"))
@@ -274,7 +302,7 @@ impl Host {
                 *lock(&gfx.probe) = None;
                 *lock(&gfx.last_pointer) = None;
             };
-            let connections = Connections { pairing, current, gfx: Arc::clone(&gfx), displays };
+            let connections = Connections { pairing, current, gfx: Arc::clone(&gfx), displays, quic };
             runtime.block_on(serve(
                 &mut server,
                 listener,
@@ -285,8 +313,10 @@ impl Host {
                 &connections,
             ));
         })?;
+        let quic = quic_ready.recv().unwrap_or(None);
         Ok(Self {
             addr,
+            quic,
             stats,
             drift_mac,
             clipboard_ready,
@@ -294,6 +324,18 @@ impl Host {
             stop: Some(stop),
             thread: Some(thread),
         })
+    }
+
+    /// The QUIC endpoint's address (the same port over UDP), while it listens.
+    pub fn quic_addr(&self) -> Option<SocketAddr> {
+        self.quic.as_ref().map(|q| q.local_addr())
+    }
+
+    /// Stops listening on QUIC; paired devices then connect over TCP.
+    pub fn stop_quic(&mut self) {
+        if let Some(quic) = self.quic.take() {
+            quic.close();
+        }
     }
 
     /// The bound address.
@@ -344,6 +386,8 @@ struct Connections {
     gfx: Arc<GfxShared>,
     /// The display manager; each session's virtual display is released when it ends (HOST-10).
     displays: SharedDisplays,
+    /// The QUIC endpoint for paired devices (HOST-12).
+    quic: Option<Arc<QuicHost>>,
 }
 
 /// How long a refused connection stays up so the refusal reaches the client.
@@ -363,26 +407,54 @@ async fn serve(
     listener: std::net::TcpListener,
     stats: &SharedStats,
     stopped: &mut tokio::sync::oneshot::Receiver<()>,
-    on_start: &dyn Fn(&tokio::net::TcpStream),
+    on_start: &dyn Fn(&TransportStream),
     on_end: &dyn Fn(),
     connections: &Connections,
 ) {
     let Ok(listener) = TcpListener::from_std(listener) else { return };
+    // QUIC handshakes run on their own task, so a slow one never holds up TCP.
+    let (quic_tx, mut quic_rx) = mpsc::channel::<(TransportStream, SocketAddr)>(4);
+    if let Some(quic) = connections.quic.clone() {
+        tokio::spawn(async move {
+            loop {
+                match quic.accept().await {
+                    Ok(session) => {
+                        let peer = session.remote_addr();
+                        if quic_tx.send((TransportStream::Quic(session.into_stream()), peer)).await.is_err() {
+                            return;
+                        }
+                    }
+                    Err(QuicError::Closed) => return,
+                    Err(e) => tracing::info!(error = %e, "QUIC connection failed"),
+                }
+            }
+        });
+    }
     let gate = SessionGate::new();
     loop {
         let (stream, peer) = tokio::select! {
             accepted = listener.accept() => match accepted {
-                Ok(pair) => pair,
+                Ok((tcp, peer)) => (TransportStream::Tcp(tcp), peer),
                 Err(e) => {
                     tracing::warn!(error = %e, "accept failed");
                     continue;
                 }
             },
+            Some(accepted) = quic_rx.recv() => accepted,
             _ = &mut *stopped => return,
         };
         let Some(ticket) = gate.try_begin() else { continue };
-        tracing::info!(%peer, "session starting");
-        lock(stats).sessions_served += 1;
+        let over_quic = matches!(stream, TransportStream::Quic(_));
+        tracing::info!(%peer, quic = over_quic, "session starting");
+        {
+            let mut s = lock(stats);
+            s.sessions_served += 1;
+            if over_quic {
+                s.quic_sessions += 1;
+            } else {
+                s.tcp_sessions += 1;
+            }
+        }
         on_start(&stream);
         let auth = match &connections.pairing {
             Some(_) => ConnectionAuth::pending(),
@@ -435,6 +507,11 @@ async fn serve(
                         lock(stats).refused += 1;
                         drop(extra);
                     }
+                }
+                Some((extra, extra_peer)) = quic_rx.recv() => {
+                    tracing::info!(peer = %extra_peer, "refused over QUIC: a session is already running");
+                    lock(stats).refused += 1;
+                    drop(extra);
                 }
                 _ = &mut *stopped => return,
             }
