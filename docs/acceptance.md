@@ -494,3 +494,17 @@ realtime_bench -- <width> <height> <frames>` while other builds ran. Still to do
       else running; update the ADR's table if the CPU-split or AVC444 rows move.
 - [ ] **M1:** run it on an M1 Mac (ADR `IOS-0` open question 5 asked about M1).
 
+### HOST-9 — Menu-bar app (ADR `HOST-9-menu-bar`)
+
+`cargo xtask host-bundle`, then open `target/release/bundle/Drift Host.app`:
+
+- [ ] A display icon appears in the menu bar and no Dock icon. The menu starts with the status
+      line ("Waiting on 127.0.0.1:3389 (this Mac only)", or "Stopped: no password stored…" before
+      `drift-host set-password`), then paired devices, Start at Login and Quit Drift Host.
+- [ ] On a Mac without the grants, an alert explains Screen Recording first; "Open Settings" opens
+      Privacy › Screen & System Audio Recording. The icon shows a warning triangle until Screen
+      Recording and Accessibility are granted, and "Allow …" items disappear once they are.
+- [ ] Connect from Drift: the status line says "A device is connected"; disconnect: back to waiting.
+- [ ] Start at Login checks and unchecks; System Settings › General › Login Items lists Drift Host.
+- [ ] Quit Drift Host stops the listener (the port is free again).
+

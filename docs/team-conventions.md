@@ -58,6 +58,7 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `HOST-12-quic-transport` | no lossy RDP-UDP; reliable RDP-UDP2 collapses under loss; QUIC (quinn, BBR, pinned host, stream per GFX frame) for Drift-to-Drift; QUIC-then-TCP order |
 | `HOST-4-realtime-encoder` | real-time VideoToolbox profile (low-latency RC up to 2560×1600), NV12 input, AVC444 v1 split/combine with chroma filter, AVC420/444 stream writers, 4K measurements |
 | `HOST-2-host-skeleton` | `drift-host` crate + binary: loopback default listener, one NLA account (Keychain), self-signed identity, one session (extra refused), `FrameSource` test pattern, DISP resize, input counted only, `add_dvc_factory` for `Drift::Mac::v1` |
+| `HOST-9-menu-bar` | Drift Host menu-bar app in Rust/AppKit (`drift-host-app`): pure menu model, permissions guidance, first-run alert, `SMAppService` login item, `cargo xtask host-bundle` |
 | `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility |
 
 ## Commands

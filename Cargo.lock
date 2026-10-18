@@ -1642,9 +1642,15 @@ dependencies = [
 name = "drift-host-app"
 version = "0.2.0"
 dependencies = [
+ "block2",
+ "drift-host",
  "objc2",
  "objc2-app-kit",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
  "objc2-foundation",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

@@ -127,7 +127,7 @@ fn start_at_login_is_a_checkbox() {
     };
     assert_eq!(find(&menu(&i)), (false, MenuAction::ToggleStartAtLogin));
     i.start_at_login = true;
-    assert_eq!(find(&menu(&i)).0, true);
+    assert!(find(&menu(&i)).0);
 }
 
 #[test]
@@ -177,4 +177,28 @@ fn first_run_lists_only_what_is_still_needed_in_order() {
     let titles: Vec<_> = first_run(&p).into_iter().map(|g| g.title).collect();
     assert_eq!(titles, ["Allow Accessibility"]);
     assert!(first_run(&all_granted()).is_empty());
+}
+
+#[test]
+fn the_first_run_alert_explains_the_first_missing_permission() {
+    use drift_host_app::model::first_run_alert;
+    let p = Permissions {
+        screen_recording: Grant::Missing,
+        accessibility: Grant::Missing,
+        local_network: Grant::Unknown,
+    };
+    let alert = first_run_alert(&p).expect("something is missing");
+    assert_eq!(alert.title, "Drift Host needs 2 permissions");
+    assert!(alert.body.starts_with("Drift Host needs it to see your screen"), "{}", alert.body);
+    assert!(alert.body.contains("1. Open System Settings"), "{}", alert.body);
+    assert_eq!(alert.open, Permission::ScreenRecording);
+    let mut p = all_granted();
+    p.accessibility = Grant::Missing;
+    let alert = first_run_alert(&p).unwrap();
+    assert_eq!(alert.title, "Drift Host needs Accessibility");
+    assert_eq!(alert.open, Permission::Accessibility);
+    // Local Network alone is asked by macOS itself when a device connects: no alert.
+    let mut p = all_granted();
+    p.local_network = Grant::Unknown;
+    assert_eq!(first_run_alert(&p), None);
 }

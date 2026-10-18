@@ -71,6 +71,12 @@ enum Cmd {
     },
     /// Build the Apple silicon .app/.dmg (task M9-5).
     Bundle,
+    /// Build `Drift Host.app` (the menu-bar host) into `target/<profile>/bundle/` (HOST-9).
+    HostBundle {
+        /// Use the debug build instead of release.
+        #[arg(long)]
+        debug: bool,
+    },
     /// Verify the GNOME host configuration over SSH, read-only (task M0-4).
     HostSetupCheck {
         /// SSH destination (default `$DRIFT_E2E_SSH` or `homelab@10.1.2.40`).
@@ -124,11 +130,37 @@ fn run(cmd: Cmd) -> Result<()> {
             e2e(&root, &args, bench.then_some(BenchOptions { update_baseline }))
         }
         Cmd::Bundle => not_yet("bundle", "M9-5"),
+        Cmd::HostBundle { debug } => host_bundle(&root, if debug { "debug" } else { "release" }),
         Cmd::HostSetupCheck { host, headless, report, save_report } => {
             host_setup_check(host, &headless, report.as_deref(), save_report.as_deref())
         }
         Cmd::ImportFixtures { staging, secrets } => import_fixtures(&root, staging, secrets),
     }
+}
+
+fn host_bundle(root: &Path, profile: &str) -> Result<()> {
+    let plan = xtask::host_bundle::plan(root, profile);
+    let status = Command::new(cargo()).args(&plan.build_args).current_dir(root).status()?;
+    if !status.success() {
+        bail!("cargo {} failed", plan.build_args.join(" "));
+    }
+    if plan.app.exists() {
+        std::fs::remove_dir_all(&plan.app).with_context(|| format!("removing {}", plan.app.display()))?;
+    }
+    for (from, to) in &plan.copies {
+        if let Some(dir) = to.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        std::fs::copy(from, to).with_context(|| format!("copying {} to {}", from.display(), to.display()))?;
+    }
+    // Ad-hoc signature so the bundle runs locally; Developer ID signing is STORE-4.
+    let status =
+        Command::new("codesign").args(["--force", "--deep", "--sign", "-"]).arg(&plan.app).status()?;
+    if !status.success() {
+        bail!("codesign failed");
+    }
+    println!("{}", plan.app.display());
+    Ok(())
 }
 
 fn not_yet(name: &str, task: &str) -> Result<()> {

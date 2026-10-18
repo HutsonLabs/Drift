@@ -7,16 +7,14 @@ fn plist() -> String {
 }
 
 fn value(plist: &str, key: &str) -> Option<String> {
-    let at = plist.find(&format!("<key>{key}</key>"))?;
-    let rest = &plist[at..];
-    let open = rest.find('<').and_then(|_| rest[1..].find('<').map(|i| i + 1))?;
-    let tag_rest = &rest[open..];
-    if tag_rest.starts_with("<true/>") {
+    let marker = format!("<key>{key}</key>");
+    let rest = plist[plist.find(&marker)? + marker.len()..].trim_start();
+    if rest.starts_with("<true/>") {
         return Some("true".into());
     }
-    let start = tag_rest.find('>')? + 1;
-    let end = tag_rest.find("</")?;
-    Some(tag_rest[start..end].to_owned())
+    let start = rest.find('>')? + 1;
+    let end = rest.find("</")?;
+    Some(rest[start..end].to_owned())
 }
 
 #[test]
