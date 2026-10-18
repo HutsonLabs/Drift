@@ -23,9 +23,17 @@ pub struct HostConfig {
     pub username: String,
     /// The desktop size offered before a client sends its own layout.
     pub desktop: Size<u32>,
+<<<<<<< HEAD
     /// Inject the client's keyboard and mouse into this Mac (HOST-6). Unset means automatic: on
     /// when the host has Accessibility, off (input logged only) when it has not.
     pub inject_input: Option<bool>,
+=======
+    /// Inject the client's keyboard and mouse into this Mac (HOST-6). Off in the skeleton.
+    pub inject_input: bool,
+    /// Give each client a virtual display at its own size (HOST-10). Falls back to the physical
+    /// display when macOS does not offer one.
+    pub virtual_display: bool,
+>>>>>>> task/HOST-10-virtual-display
 }
 
 impl Default for HostConfig {
@@ -34,7 +42,12 @@ impl Default for HostConfig {
             listen: SocketAddr::from((Ipv4Addr::LOCALHOST, DEFAULT_PORT)),
             username: "drift".to_owned(),
             desktop: Size::new(1920, 1080),
+<<<<<<< HEAD
             inject_input: None,
+=======
+            inject_input: false,
+            virtual_display: true,
+>>>>>>> task/HOST-10-virtual-display
         }
     }
 }

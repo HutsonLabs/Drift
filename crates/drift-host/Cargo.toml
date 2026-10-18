@@ -46,6 +46,14 @@ tracing-subscriber.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
 
+# HOST-10: the private CGVirtualDisplay API through the Objective-C runtime.
+[target.'cfg(target_os = "macos")'.dependencies]
+dispatch2 = "0.3.1"
+objc2.workspace = true
+objc2-core-foundation.workspace = true
+objc2-core-graphics.workspace = true
+objc2-foundation = { workspace = true, features = ["NSArray", "NSString"] }
+
 [dev-dependencies]
 drift-ext.workspace = true
 drift-rdp.workspace = true

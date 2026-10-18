@@ -36,9 +36,14 @@ use ironrdp_svc::ChannelFlags;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
+<<<<<<< HEAD
 use crate::audio::{AudioSourceFactory, HostSound};
 use crate::clipboard::{HostClipboard, PasteboardFactory};
 use crate::frames::{FrameError, FrameSource};
+=======
+use crate::display::{DisplayManager, DisplayTarget, LayoutRequest};
+use crate::frames::FrameSource;
+>>>>>>> task/HOST-10-virtual-display
 use crate::gate::SessionGate;
 use crate::identity::HostIdentity;
 use crate::input::{InputSink, SharedSink, SinkHandler};
@@ -70,10 +75,16 @@ pub struct HostOptions {
     pub live: Option<LiveFactory>,
     /// Where input goes.
     pub input: Box<dyn InputSink>,
+<<<<<<< HEAD
     /// The Mac pasteboard to share over CLIPRDR (HOST-11); `None` offers no clipboard.
     pub clipboard: Option<PasteboardFactory>,
     /// The sound to stream over rdpsnd (HOST-11); `None` offers no sound.
     pub audio: Option<AudioSourceFactory>,
+=======
+    /// Turns client layouts into the display to capture: a virtual display sized to the client,
+    /// or the physical one (HOST-10).
+    pub displays: Box<dyn DisplayManager>,
+>>>>>>> task/HOST-10-virtual-display
 }
 
 /// What the host has done so far.
@@ -97,6 +108,7 @@ pub struct HostStats {
     pub drift_mac: String,
     /// The latest connection or encoder error.
     pub last_error: Option<String>,
+<<<<<<< HEAD
     /// The session socket carries the interactive-video service class (HOST-7).
     pub video_service_class: bool,
     /// How far behind the current client is (HOST-7; EXT-4 turns it into quality hints).
@@ -107,9 +119,14 @@ pub struct HostStats {
     pub clipboard_ready: bool,
     /// Sound waves sent (HOST-11).
     pub audio_waves: u32,
+=======
+    /// The display the host captures since the latest client layout (HOST-10); `None` before one.
+    pub display: Option<DisplayTarget>,
+>>>>>>> task/HOST-10-virtual-display
 }
 
 type SharedStats = Arc<Mutex<HostStats>>;
+type SharedDisplays = Arc<Mutex<Box<dyn DisplayManager>>>;
 
 fn lock<T: ?Sized>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
@@ -143,6 +160,7 @@ impl Drop for Host {
 impl Host {
     /// Binds the listener and starts serving on a thread of its own.
     pub fn start(options: HostOptions) -> std::io::Result<Self> {
+<<<<<<< HEAD
         let HostOptions {
             listen,
             identity,
@@ -155,6 +173,10 @@ impl Host {
             clipboard,
             audio,
         } = options;
+=======
+        let HostOptions { listen, identity, username, password, desktop, frames, input, displays } = options;
+        let displays: SharedDisplays = Arc::new(Mutex::new(displays));
+>>>>>>> task/HOST-10-virtual-display
         let listener = std::net::TcpListener::bind(listen)?;
         listener.set_nonblocking(true)?;
         let addr = listener.local_addr()?;
@@ -193,8 +215,18 @@ impl Host {
             let mut server = RdpServer::builder()
                 .with_addr(addr)
                 .with_hybrid(acceptor, identity.public_key().to_vec())
+<<<<<<< HEAD
                 .with_input_handler(SinkHandler(Arc::clone(&input)))
                 .with_display_handler(HostDisplay { size: Arc::clone(&size), desktop, gfx: Arc::clone(&gfx) })
+=======
+                .with_input_handler(SinkHandler(input))
+                .with_display_handler(HostDisplay {
+                    size: Arc::clone(&size),
+                    desktop,
+                    gfx: Arc::clone(&gfx),
+                    displays: Arc::clone(&displays),
+                })
+>>>>>>> task/HOST-10-virtual-display
                 .with_gfx_factory(Some(Box::new(HostGfx(Arc::clone(&gfx)))))
                 .with_cliprdr_factory(
                     clipboard.map(|c| Box::new(c) as Box<dyn ironrdp_server::CliprdrServerFactory>),
@@ -207,6 +239,7 @@ impl Host {
                 password: password.to_string(),
                 domain: None,
             }));
+<<<<<<< HEAD
             let on_start = |stream: &tokio::net::TcpStream| {
                 use std::os::fd::AsRawFd as _;
                 let fd = stream.as_raw_fd();
@@ -225,6 +258,9 @@ impl Host {
                 *lock(&gfx.last_pointer) = None;
             };
             runtime.block_on(serve(&mut server, listener, &thread_stats, &mut stopped, &on_start, &on_end));
+=======
+            runtime.block_on(serve(&mut server, listener, &thread_stats, &displays, &mut stopped));
+>>>>>>> task/HOST-10-virtual-display
         })?;
         Ok(Self {
             addr,
@@ -282,6 +318,7 @@ async fn serve(
     server: &mut RdpServer,
     listener: std::net::TcpListener,
     stats: &SharedStats,
+    displays: &SharedDisplays,
     stopped: &mut tokio::sync::oneshot::Receiver<()>,
     on_start: &dyn Fn(&tokio::net::TcpStream),
     on_end: &dyn Fn(),
@@ -327,6 +364,9 @@ async fn serve(
         }
         on_end();
         drop(ticket);
+        // The virtual display goes with the session; the next client gets its own size.
+        lock(displays).release();
+        lock(stats).display = None;
         lock(stats).sessions_ended += 1;
         tracing::info!(%peer, "session ended");
     }
@@ -338,6 +378,7 @@ struct HostDisplay {
     size: Arc<Mutex<Size<u32>>>,
     desktop: Size<u32>,
     gfx: Arc<GfxShared>,
+    displays: SharedDisplays,
 }
 
 struct NoUpdates;
@@ -371,6 +412,7 @@ impl RdpServerDisplay for HostDisplay {
         let primary = layout.monitors().iter().find(|m| m.is_primary()).or_else(|| layout.monitors().first());
         let Some(monitor) = primary else { return };
         let (width, height) = monitor.dimensions();
+<<<<<<< HEAD
         if self.gfx.is_live() {
             // The screen keeps its size until HOST-10's virtual displays; answer with it.
             let size = *lock(&self.size);
@@ -381,6 +423,22 @@ impl RdpServerDisplay for HostDisplay {
             return;
         }
         let size = clamp_layout(Size::new(width, height));
+=======
+        let request = LayoutRequest {
+            pixels: Size::new(width, height),
+            desktop_scale: monitor.desktop_scale_factor(),
+            physical_mm: monitor.physical_dimensions(),
+        };
+        let target = lock(&self.displays).apply(&request);
+        // A virtual display renders exactly its mode; the physical one is letterboxed by the
+        // client, so the desktop keeps the client's (clamped) size.
+        let size = match &target {
+            DisplayTarget::Virtual { plan, .. } => plan.pixels,
+            DisplayTarget::Physical => clamp_layout(Size::new(width, height)),
+        };
+        tracing::info!(?target, "display for the client layout");
+        lock(&self.gfx.stats).display = Some(target);
+>>>>>>> task/HOST-10-virtual-display
         tracing::info!(width = size.width, height = size.height, "client layout");
         *lock(&self.size) = size;
         lock(&self.gfx.stats).layouts.push(size);

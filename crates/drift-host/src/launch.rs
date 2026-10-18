@@ -43,6 +43,25 @@ pub fn set_password(dir: &Path, password: &str) -> Result<(), String> {
     config.save(dir).map_err(|e| e.to_string())
 }
 
+/// Virtual displays when enabled and the private API passes its self-test; otherwise the
+/// physical display (HOST-10).
+fn display_manager(config: &HostConfig) -> Box<dyn crate::display::DisplayManager> {
+    if !config.virtual_display {
+        return Box::new(crate::display::PhysicalOnly);
+    }
+    if let Err(e) = crate::cg_virtual::self_test() {
+        tracing::warn!(error = %e, "CGVirtualDisplay unavailable; capturing the physical display");
+        return Box::new(crate::display::PhysicalOnly);
+    }
+    match crate::display::VirtualDisplays::start("Drift Host") {
+        Ok(d) => Box::new(d),
+        Err(e) => {
+            tracing::warn!(error = %e, "could not start the virtual display thread");
+            Box::new(crate::display::PhysicalOnly)
+        }
+    }
+}
+
 /// Loads `dir`'s configuration, the password and the identity, and starts listening.
 pub fn start(dir: &Path, listen: Option<SocketAddr>) -> Result<Launched, String> {
     let mut config = HostConfig::load(dir).map_err(|e| e.to_string())?;
@@ -68,11 +87,16 @@ pub fn start(dir: &Path, listen: Option<SocketAddr>) -> Result<Launched, String>
         password,
         desktop: config.desktop,
         frames: Box::new(|| Box::new(TestPattern::new())),
+<<<<<<< HEAD
         live: live.map(|l| l.0),
         input,
         // HOST-11: the Mac's pasteboard over CLIPRDR, its system audio over rdpsnd.
         clipboard: Some(Box::new(|| Box::new(drift_clipboard::pasteboard::NsPasteboard::general()))),
         audio: Some(Box::new(|| Box::new(crate::audio::SystemAudio::default()))),
+=======
+        input: Box::new(RecordingInput::default()),
+        displays: display_manager(&config),
+>>>>>>> task/HOST-10-virtual-display
     })
     .map_err(|e| format!("cannot listen on {}: {e}", config.listen))?;
     Ok(Launched { host, config, fingerprint: identity.fingerprint() })
