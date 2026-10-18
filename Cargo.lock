@@ -1585,6 +1585,7 @@ dependencies = [
 name = "drift-ext"
 version = "0.2.0"
 dependencies = [
+ "drift-core",
  "ironrdp-core",
  "ironrdp-dvc",
  "ironrdp-pdu",
