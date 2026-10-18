@@ -1609,6 +1609,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "drift-host"
+version = "0.2.0"
+dependencies = [
+ "async-trait",
+ "drift-apple",
+ "drift-core",
+ "drift-ext",
+ "drift-rdp",
+ "drift-testkit",
+ "drift-video",
+ "ironrdp-displaycontrol",
+ "ironrdp-dvc",
+ "ironrdp-egfx",
+ "ironrdp-pdu",
+ "ironrdp-server",
+ "ironrdp-svc",
+ "rcgen",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-rustls",
+ "toml 0.9.12+spec-1.1.0",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
 name = "drift-inject"
 version = "0.2.0"
 dependencies = [

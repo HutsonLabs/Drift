@@ -446,6 +446,19 @@ to do by hand:
 
 ## HOST — Drift Host (Mac)
 
+### HOST-2 — Host skeleton (ADR `HOST-2-host-skeleton`)
+
+- [ ] `cargo run -p drift-host -- set-password` (type a test password), then `cargo run -p drift-host`:
+      it prints the listen address (127.0.0.1:3389), the certificate fingerprint and the account.
+- [ ] **Drift for Mac:** add a profile for 127.0.0.1 with that account, accept the certificate
+      (its fingerprint matches the one printed); the colour-bar test pattern shows; resizing the
+      window resizes the desktop (the host logs `client layout`); typing and clicking show up as
+      `input` lines with `RUST_LOG=drift_host=debug`, with no key values in the log.
+- [ ] **A second client** while the first is connected fails at once; the first keeps going.
+- [ ] **Microsoft Windows App** (if installed): connect to 127.0.0.1 with the same account; the
+      pattern shows (AVC420 over EGFX).
+- [ ] With `listen = "0.0.0.0:3389"` in `host.toml`, the host warns that it listens beyond loopback.
+
 ### HOST-3 — Capture (ADR `HOST-3-capture`)
 
 Needs a Mac where the process running the tests (Terminal, or the CI runner) has Screen

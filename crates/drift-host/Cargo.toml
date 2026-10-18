@@ -1,0 +1,49 @@
+[package]
+name = "drift-host"
+description = "Drift Host: the Mac RDP host (listener, one session, test-pattern display; capture, encode and injection plug in later)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "drift-host"
+path = "src/main.rs"
+
+[dependencies]
+drift-apple.workspace = true
+drift-core.workspace = true
+drift-ext.workspace = true
+# The VideoToolbox H.264 encoder (behind `recording` today) draws the skeleton's test pattern;
+# HOST-4's real-time encoder replaces it.
+drift-video = { workspace = true, features = ["recording"] }
+ironrdp-displaycontrol.workspace = true
+ironrdp-dvc.workspace = true
+ironrdp-egfx.workspace = true
+ironrdp-pdu.workspace = true
+ironrdp-server = { workspace = true, features = ["egfx"] }
+ironrdp-svc.workspace = true
+async-trait = "0.1"
+# The host's self-signed certificate (generated once, pinned by paired devices in HOST-8).
+rcgen.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "net", "sync", "macros", "time"] }
+tokio-rustls.workspace = true
+toml.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+drift-ext.workspace = true
+drift-rdp.workspace = true
+drift-testkit.workspace = true
+tempfile.workspace = true
+zeroize.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+
+[lints]
+workspace = true

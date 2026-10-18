@@ -14,6 +14,7 @@ applying all of them to the pristine vendored tree reproduces `third_party/ironr
 | `0005-fix-cliprdr-validate-CB_TEMP_DIRECTORY-and-make-it-optional.patch` | cliprdr | `dataLen`/terminator validation; skip the optional PDU when the backend has no temp directory |
 | `0006-feat-connector-zeroize-RdstlsCredentials-on-drop.patch` | connector | Zeroize the one-time RDSTLS credentials (GUID, user, domain, password) on drop (M3-1) |
 | `0007-fix-never-log-credentials.patch` | connector, pdu | Stop logging credentials at DEBUG: the RDSTLS request no longer names the one-time user, and `Credentials`'s `Debug` prints the user name's length instead of its value (M9-3) |
+| `0008-feat-ironrdp-server-per-connection-dvc-factories.patch` | server | `RdpServer::add_dvc_factory`: an embedder attaches its own dynamic virtual channels to each connection (Drift Host offers `Drift::Mac::v1`, HOST-2; covered by `drift-host`'s loopback test) |
 
 Each patch squashes the Red test commit and the implementation commit of one change; the tests
 live in `ironrdp-testsuite-core`. Regenerate them after changing a commit pair:
