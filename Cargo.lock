@@ -1619,6 +1619,7 @@ dependencies = [
  "drift-ext",
  "drift-rdp",
  "drift-testkit",
+ "drift-transport",
  "drift-video",
  "ironrdp-displaycontrol",
  "ironrdp-dvc",

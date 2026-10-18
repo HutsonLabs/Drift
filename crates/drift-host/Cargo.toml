@@ -43,6 +43,7 @@ uuid.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
+drift-transport.workspace = true
 drift-ext.workspace = true
 drift-rdp.workspace = true
 drift-testkit.workspace = true
