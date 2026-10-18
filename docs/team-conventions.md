@@ -46,6 +46,7 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `IOS-5-ios-app-shell` | the app on iOS: `windows_ios.rs` shell, one window (scene on iPad) per connection, tracked Xcode project, `smoke-env`, `fake_host` |
 | `IOS-6-ios-input` | iPad input in Rust (not a Swift plugin): HID table, `Pointer`, `GCKeyboard`/`GCMouse`, hover, pointer lock per view controller, shortcuts iPadOS keeps |
 | `IOS-7-touch-modes` | trackpad and direct touch, two-finger scroll and right click, `ConnectionProfile::touch`, iPhone pinch zoom as a view transform |
+| `IOS-8-iphone-layout` | iPhone portrait (picture, trackpad, key row) and landscape (full screen, auto-hiding key row); web key row with `send_keys`/`type_text`/`set_touch_mode`; `ResizeWatcher` |
 | `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility |
 
 ## Commands

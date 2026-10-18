@@ -67,6 +67,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::new_connection,
             commands::window_identity,
             commands::toggle_stats,
+            commands::send_keys,
+            commands::type_text,
+            commands::set_touch_mode,
+            commands::phone_controls,
         ])
         .events(tauri_specta::collect_events![
             view::SessionViewChanged,
@@ -74,6 +78,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             connections::ThumbnailUpdated,
             connections::ConnectionsIntentRequested,
             connections::WindowIdentityChanged,
+            phone::PhoneControlsChanged,
         ])
         .typ::<drift_core::ConnectionProfile>()
         .typ::<drift_core::SessionState>()

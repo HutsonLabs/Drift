@@ -76,12 +76,32 @@ export const commands = {
 	windowIdentity: () => typedError<WindowIdentity, CommandError>(__TAURI_INVOKE("window_identity")),
 	/**  Turns the calling session window's statistics HUD on or off (the title bar's gauge). */
 	toggleStats: () => typedError<null, CommandError>(__TAURI_INVOKE("toggle_stats")),
+	/**
+	 *  iPhone key row (IOS-8): presses `keys` as one chord in the calling window's session.
+	 *  Names are `phone::SoftKey` names plus single letters and digits.
+	 */
+	sendKeys: (keys: string[]) => typedError<null, CommandError>(__TAURI_INVOKE("send_keys", { keys })),
+	/**  iPhone (IOS-8): text typed on the iOS keyboard, sent to the calling window's session. */
+	typeText: (text: string) => typedError<null, CommandError>(__TAURI_INVOKE("type_text", { text })),
+	/**  iPhone and iPad (IOS-7/IOS-8): switches the calling window's touch mode for this session. */
+	setTouchMode: (mode: TouchMode) => typedError<null, CommandError>(__TAURI_INVOKE("set_touch_mode", { mode })),
+	/**
+	 *  iPhone (IOS-8): what the calling window's page should show of the controls; `None` on the
+	 *  Mac and iPad. The page asks once when it loads, in case it missed `PhoneControlsChanged`.
+	 */
+	phoneControls: () => __TAURI_INVOKE<{
+	/**  The key row is on screen (the page is laid out as its strip). */
+	visible: boolean,
+	/**  The session's touch mode (resolved: `trackpad` or `direct`). */
+	touch: TouchMode,
+} | null>("phone_controls"),
 };
 
 /** Events */
 export const events = {
 	connectionsChanged: makeEvent<ConnectionsChanged>("connections-changed"),
 	connectionsIntentRequested: makeEvent<ConnectionsIntentRequested>("connections-intent-requested"),
+	phoneControlsChanged: makeEvent<PhoneControlsChanged>("phone-controls-changed"),
 	sessionViewChanged: makeEvent<SessionViewChanged_Deserialize>("session-view-changed"),
 	thumbnailUpdated: makeEvent<ThumbnailUpdated>("thumbnail-updated"),
 	windowIdentityChanged: makeEvent<WindowIdentityChanged>("window-identity-changed"),
@@ -370,6 +390,17 @@ export type OpenConnection = {
 	/**  The reconnect attempt while reconnecting. */
 	attempt: number | null,
 };
+
+/**  What the session page shows of the iPhone controls (the `PhoneControlsChanged` event). */
+export type PhoneControls = {
+	/**  The key row is on screen (the page is laid out as its strip). */
+	visible: boolean,
+	/**  The session's touch mode (resolved: `trackpad` or `direct`). */
+	touch: TouchMode,
+};
+
+/**  Emitted to an iPhone session window whenever its controls change. Never sent on the Mac. */
+export type PhoneControlsChanged = PhoneControls;
 
 /**  A profile plus which passwords are stored for it (never the passwords themselves). */
 export type ProfileEntry = ProfileEntry_Serialize | ProfileEntry_Deserialize;

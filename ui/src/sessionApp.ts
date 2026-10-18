@@ -4,12 +4,13 @@
 // has a session: Cancel while connecting and the error sheet's Close close the window, and Edit
 // Connection… opens this profile's edit sheet on the Connections window.
 import type { Result } from "./api";
-import type { ErrorAction, SessionView_Serialize, WindowIdentity, commands } from "./bindings";
+import type { ErrorAction, PhoneControls, SessionView_Serialize, TouchMode, WindowIdentity, commands } from "./bindings";
 import { mount } from "./dom";
 import { renderCertificatePrompt } from "./views/certificate";
 import { renderConnecting } from "./views/connecting";
 import { renderError } from "./views/error";
 import { renderGreeterHint } from "./views/greeter";
+import { renderKeyRow } from "./views/keyRow";
 import { renderReconnectOverlay } from "./views/reconnect";
 import { renderStatsHud } from "./views/stats";
 
@@ -24,6 +25,10 @@ export type SessionApi = Pick<
   | "closeSession"
   | "showConnections"
   | "windowIdentity"
+  | "sendKeys"
+  | "typeText"
+  | "setTouchMode"
+  | "phoneControls"
 >;
 
 /**
@@ -43,6 +48,8 @@ export class SessionApp {
   /** This window's profile (for Edit Connection…); it never changes for a window. */
   private profileId: string | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
+  /** iPhone: whether the key row shows, and the session's touch mode (IOS-8). */
+  private controls: PhoneControls = { visible: false, touch: "auto" };
 
   constructor(
     private readonly root: HTMLElement,
@@ -54,12 +61,21 @@ export class SessionApp {
   async start(): Promise<void> {
     const r = (await this.api.windowIdentity()) as Result<WindowIdentity>;
     if (r.status === "ok") this.profileId = r.data.profile_id;
+    // iPhone: the controls may have been announced before this page listened (IOS-8).
+    const controls = await this.api.phoneControls?.();
+    if (controls) this.onPhoneControls(controls);
   }
 
   /** A new view snapshot for this window's session (the `sessionViewChanged` event). */
   onSessionView(view: SessionView_Serialize): void {
     this.session = view;
     this.sessionAt = this.now();
+    this.render();
+  }
+
+  /** The iPhone controls changed (the `phoneControlsChanged` event; never sent on the Mac). */
+  onPhoneControls(controls: PhoneControls): void {
+    this.controls = controls;
     this.render();
   }
 
@@ -91,6 +107,8 @@ export class SessionApp {
     document.body.dataset.screen = view.screen;
     // Which panel (if any) floats over the live picture; Rust shrinks the web view to match.
     document.body.dataset.hud = hud(view);
+    const keys = this.controls.visible && view.screen === "live";
+    document.body.dataset.controls = keys ? "keys" : "";
     if (view.screen === "reconnecting") this.startTimer();
     else this.stopTimer();
 
@@ -117,12 +135,21 @@ export class SessionApp {
         if (view.explanation) renderError(this.root, view.explanation, view.profile_name, (a) => this.act(a));
         break;
       case "live":
-        if (hud(view) === "stats" && view.stats) renderStatsHud(this.root, view.stats);
+        if (keys) this.renderKeys();
+        else if (hud(view) === "stats" && view.stats) renderStatsHud(this.root, view.stats);
         else mount(this.root);
         break;
       default:
         mount(this.root);
     }
+  }
+
+  private renderKeys(): void {
+    renderKeyRow(this.root, this.controls.touch, {
+      sendKeys: (keys) => void this.api.sendKeys(keys),
+      typeText: (text) => void this.api.typeText(text),
+      setTouchMode: (mode) => void this.api.setTouchMode(mode as TouchMode),
+    });
   }
 
   private renderReconnect(): void {

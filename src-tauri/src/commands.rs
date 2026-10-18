@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use drift_core::{
     CertFingerprint, ConnectMode, ConnectionProfile, DisconnectReason, ErrorExplanation, ProfileIssue,
-    explain_disconnect,
+    TouchMode, explain_disconnect,
 };
 use serde::Serialize;
 use tauri::State;
@@ -314,6 +314,61 @@ pub fn window_identity(app: tauri::AppHandle, window: tauri::Window) -> Result<W
 #[specta::specta]
 pub fn toggle_stats(state: State<'_, AppState>, window: tauri::Window) -> Result<(), CommandError> {
     state.sessions.toggle_stats(window.label())
+}
+
+/// iPhone key row (IOS-8): presses `keys` as one chord in the calling window's session.
+/// Names are `phone::SoftKey` names plus single letters and digits.
+#[tauri::command]
+#[specta::specta]
+pub fn send_keys(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    window: tauri::Window,
+    keys: Vec<String>,
+) -> Result<(), CommandError> {
+    let events = crate::phone::named_chord_events(&keys)
+        .ok_or_else(|| CommandError::Platform { message: format!("unknown key in {keys:?}") })?;
+    for event in events {
+        state.sessions.send(window.label(), drift_rdp::SessionCommand::Input(event))?;
+    }
+    crate::windows::controls_used(&app, window.label());
+    Ok(())
+}
+
+/// iPhone (IOS-8): text typed on the iOS keyboard, sent to the calling window's session.
+#[tauri::command]
+#[specta::specta]
+pub fn type_text(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    window: tauri::Window,
+    text: String,
+) -> Result<(), CommandError> {
+    for event in crate::phone::text_events(&text) {
+        state.sessions.send(window.label(), drift_rdp::SessionCommand::Input(event))?;
+    }
+    crate::windows::controls_used(&app, window.label());
+    Ok(())
+}
+
+/// iPhone (IOS-8): what the calling window's page should show of the controls; `None` on the
+/// Mac and iPad. The page asks once when it loads, in case it missed `PhoneControlsChanged`.
+#[tauri::command]
+#[specta::specta]
+pub fn phone_controls(window: tauri::Window) -> Option<crate::phone::PhoneControls> {
+    crate::windows::phone_controls(window.label())
+}
+
+/// iPhone and iPad (IOS-7/IOS-8): switches the calling window's touch mode for this session.
+#[tauri::command]
+#[specta::specta]
+pub fn set_touch_mode(
+    app: tauri::AppHandle,
+    window: tauri::Window,
+    mode: TouchMode,
+) -> Result<(), CommandError> {
+    crate::windows::set_touch_mode(&app, window.label(), mode);
+    Ok(())
 }
 
 /// Gives the keyboard back to the calling window's page or live picture (the title bar never

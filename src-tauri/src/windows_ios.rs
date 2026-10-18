@@ -45,6 +45,10 @@ use crate::present::{self, CloseAction, Surface};
 use crate::profiles::CommandError;
 use crate::view::{SessionView, SessionViewChanged};
 
+#[path = "windows_ios_phone.rs"]
+mod phone_shell;
+pub(crate) use phone_shell::{controls_used, phone_controls, set_touch_mode};
+
 /// Label of the Connections window template in tauri.conf.json (it is also the window's label).
 pub const CONNECTIONS_TEMPLATE: &str = CONNECTIONS_WINDOW;
 
@@ -413,6 +417,7 @@ fn build_session_window<R: Runtime>(
     let web = SendView(page_view_of(&window)?);
     let (cmd_as, touch) = (profile.keyboard.cmd_as, profile.touch);
     let label2 = label.to_owned();
+    let app2 = app.clone();
     on_main(app, move |mtm| -> Result<(), CommandError> {
         let web = web.into_inner();
         let view = drift_ios::webview::attach_below(mtm, &web).map_err(|e| platform_error(e.to_string()))?;
@@ -421,6 +426,8 @@ fn build_session_window<R: Runtime>(
         view.set_cmd_as(cmd_as);
         view.set_touch(touch, drift_ios::view::is_phone(mtm));
         view.setHidden(true);
+        let app3 = app2.clone();
+        phone_shell::attach(mtm, &app3, &label2, &view, &web);
         PLATFORM.with(|p| {
             p.borrow_mut()
                 .insert(label2, WindowPlatform { view, web, surface: Surface::Webview, link, render: None });
@@ -530,7 +537,9 @@ pub(crate) fn apply_view<R: Runtime>(app: &AppHandle<R>, label: &str, view: &Ses
                 None => plat.view.clear_desktop(),
             }
             plat.surface = surface;
-            layout(plat);
+            if !phone_shell::layout(&app2, &label, plat) {
+                layout(plat);
+            }
             route_input(mtm, plat);
         });
         let went_live = SHELL.with(|s| {
@@ -673,6 +682,7 @@ pub fn close_session_window<R: Runtime>(app: &AppHandle<R>, label: &str) {
         let (app2, label2) = (app.clone(), label.clone());
         let _ = on_main(&app, move |_| {
             PLATFORM.with(|p| p.borrow_mut().remove(&label2));
+            phone_shell::remove(&label2);
             SHELL.with(|s| {
                 if let Ok(mut shell) = s.try_borrow_mut() {
                     shell.live.remove(&label2);

@@ -73,7 +73,16 @@ pub struct Ivars {
     touches: RefCell<Touches>,
     /// Local pinch zoom (iPhone).
     zoom: RefCell<Zoom>,
+    /// The on-screen trackpad below the picture (iPhone portrait, IOS-8); always trackpad mode.
+    pad_touches: RefCell<Touches>,
+    /// A strip at the bottom edge whose touches reveal the landscape controls (IOS-8).
+    reveal: RefCell<Option<RevealStrip>>,
+    /// The finger that hit the reveal strip; the rest of its gesture is ignored.
+    revealing: Cell<Option<u64>>,
 }
+
+/// A bottom strip's height in points and what touching it does.
+type RevealStrip = (f64, Box<dyn Fn()>);
 
 /// Where an indirect-pointer touch is in its life.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -190,6 +199,9 @@ impl RemoteView {
             pressed_secondary: Cell::new(false),
             touches: RefCell::new(Touches::new(TouchInputMode::Direct, false)),
             zoom: RefCell::new(Zoom::default()),
+            pad_touches: RefCell::new(Touches::new(TouchInputMode::Trackpad, false)),
+            reveal: RefCell::new(None),
+            revealing: Cell::new(None),
         });
         // SAFETY: `initWithFrame:` is UIView's designated initializer.
         let this: Retained<Self> = unsafe { msg_send![super(this), initWithFrame: frame] };
@@ -379,8 +391,23 @@ impl RemoteView {
         }
     }
 
+    /// Makes touches that start in the bottom `strip` points call `reveal` instead of reaching
+    /// the remote (iPhone landscape, IOS-8); `None` turns it off.
+    pub fn set_reveal_strip(&self, strip: Option<f64>, reveal: Box<dyn Fn()>) {
+        *self.ivars().reveal.borrow_mut() = strip.map(|s| (s, reveal));
+    }
+
     /// A finger (or the Pencil) touched down at `at` (screen points: the superview's space).
     pub fn finger_began(&self, id: u64, at: Point<f64>, t: f64) {
+        let height = self.bounds().size.height;
+        let hit = self.ivars().reveal.borrow().as_ref().is_some_and(|(strip, _)| at.y >= height - strip);
+        if hit {
+            self.ivars().revealing.set(Some(id));
+            if let Some((_, reveal)) = self.ivars().reveal.borrow().as_ref() {
+                reveal();
+            }
+            return;
+        }
         let zoom = *self.ivars().zoom.borrow();
         let out =
             self.ivars().touches.borrow_mut().began(&mut self.ivars().pointer.borrow_mut(), &zoom, id, at, t);
@@ -389,6 +416,9 @@ impl RemoteView {
 
     /// A finger moved.
     pub fn finger_moved(&self, id: u64, at: Point<f64>, t: f64) {
+        if self.ivars().revealing.get() == Some(id) {
+            return;
+        }
         let zoom = *self.ivars().zoom.borrow();
         let out =
             self.ivars().touches.borrow_mut().moved(&mut self.ivars().pointer.borrow_mut(), &zoom, id, at, t);
@@ -397,6 +427,10 @@ impl RemoteView {
 
     /// A finger lifted.
     pub fn finger_ended(&self, id: u64, at: Point<f64>, t: f64) {
+        if self.ivars().revealing.get() == Some(id) {
+            self.ivars().revealing.set(None);
+            return;
+        }
         let zoom = *self.ivars().zoom.borrow();
         let out =
             self.ivars().touches.borrow_mut().ended(&mut self.ivars().pointer.borrow_mut(), &zoom, id, at, t);
@@ -405,8 +439,54 @@ impl RemoteView {
 
     /// UIKit cancelled a finger.
     pub fn finger_cancelled(&self, id: u64) {
+        if self.ivars().revealing.get() == Some(id) {
+            self.ivars().revealing.set(None);
+            return;
+        }
         let out = self.ivars().touches.borrow_mut().cancelled(&mut self.ivars().pointer.borrow_mut(), id);
         self.apply_touch(out);
+    }
+
+    /// A finger on the on-screen trackpad went down (the pad's own points; only deltas matter).
+    pub fn pad_began(&self, id: u64, at: Point<f64>, t: f64) {
+        let out = self.ivars().pad_touches.borrow_mut().began(
+            &mut self.ivars().pointer.borrow_mut(),
+            &Zoom::default(),
+            id,
+            at,
+            t,
+        );
+        self.send_input(&out.events);
+    }
+
+    /// A finger on the trackpad moved.
+    pub fn pad_moved(&self, id: u64, at: Point<f64>, t: f64) {
+        let out = self.ivars().pad_touches.borrow_mut().moved(
+            &mut self.ivars().pointer.borrow_mut(),
+            &Zoom::default(),
+            id,
+            at,
+            t,
+        );
+        self.send_input(&out.events);
+    }
+
+    /// A finger on the trackpad lifted.
+    pub fn pad_ended(&self, id: u64, at: Point<f64>, t: f64) {
+        let out = self.ivars().pad_touches.borrow_mut().ended(
+            &mut self.ivars().pointer.borrow_mut(),
+            &Zoom::default(),
+            id,
+            at,
+            t,
+        );
+        self.send_input(&out.events);
+    }
+
+    /// UIKit cancelled a finger on the trackpad.
+    pub fn pad_cancelled(&self, id: u64) {
+        let out = self.ivars().pad_touches.borrow_mut().cancelled(&mut self.ivars().pointer.borrow_mut(), id);
+        self.send_input(&out.events);
     }
 
     fn apply_touch(&self, out: TouchOutput) {
@@ -510,4 +590,94 @@ pub fn insert_below(reference: &UIView, view: &UIView) -> Result<(), AttachError
     reference.setOpaque(false);
     reference.setBackgroundColor(Some(&UIColor::clearColor()));
     Ok(())
+}
+
+/// Instance variables of [`TrackpadView`].
+pub struct PadIvars {
+    target: objc2::rc::Weak<RemoteView>,
+}
+
+define_class!(
+    /// The on-screen trackpad under the picture on an iPhone in portrait (IOS-8). Its fingers
+    /// drive the picture's pointer as a trackpad, whatever the picture's own touch mode is.
+    #[unsafe(super(UIView))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "DriftTrackpadView"]
+    #[ivars = PadIvars]
+    pub struct TrackpadView;
+
+    impl TrackpadView {
+        #[unsafe(method(touchesBegan:withEvent:))]
+        fn touches_began(&self, touches: &NSSet<UITouch>, _event: Option<&UIEvent>) {
+            self.pad_touches(touches, TouchPhase::Began);
+        }
+
+        #[unsafe(method(touchesMoved:withEvent:))]
+        fn touches_moved(&self, touches: &NSSet<UITouch>, _event: Option<&UIEvent>) {
+            self.pad_touches(touches, TouchPhase::Moved);
+        }
+
+        #[unsafe(method(touchesEnded:withEvent:))]
+        fn touches_ended(&self, touches: &NSSet<UITouch>, _event: Option<&UIEvent>) {
+            self.pad_touches(touches, TouchPhase::Ended);
+        }
+
+        #[unsafe(method(touchesCancelled:withEvent:))]
+        fn touches_cancelled(&self, touches: &NSSet<UITouch>, _event: Option<&UIEvent>) {
+            self.pad_touches(touches, TouchPhase::Cancelled);
+        }
+    }
+);
+
+impl TrackpadView {
+    /// A trackpad with `frame` driving `target`'s pointer.
+    pub fn new(mtm: MainThreadMarker, frame: CGRect, target: &RemoteView) -> Retained<Self> {
+        let this = Self::alloc(mtm).set_ivars(PadIvars { target: objc2::rc::Weak::from(target) });
+        // SAFETY: `initWithFrame:` is UIView's designated initializer.
+        let this: Retained<Self> = unsafe { msg_send![super(this), initWithFrame: frame] };
+        this.setMultipleTouchEnabled(true);
+        this.setBackgroundColor(Some(&UIColor::secondarySystemBackgroundColor()));
+        this.setIsAccessibilityElement(true, mtm);
+        this.setAccessibilityLabel(Some(&objc2_foundation::NSString::from_str("Trackpad")), mtm);
+        this
+    }
+
+    fn pad_touches(&self, touches: &NSSet<UITouch>, phase: TouchPhase) {
+        for touch in touches.iter() {
+            let id = Retained::as_ptr(&touch) as usize as u64;
+            let p = touch.locationInView(Some(self));
+            let (at, t) = (Point::new(p.x, p.y), touch.timestamp());
+            match phase {
+                TouchPhase::Began => self.finger_began(id, at, t),
+                TouchPhase::Moved => self.finger_moved(id, at, t),
+                TouchPhase::Ended => self.finger_ended(id, at, t),
+                TouchPhase::Cancelled => {
+                    if let Some(target) = self.ivars().target.load() {
+                        target.pad_cancelled(id);
+                    }
+                }
+            }
+        }
+    }
+
+    /// A finger went down at `at` (the pad's points).
+    pub fn finger_began(&self, id: u64, at: Point<f64>, t: f64) {
+        if let Some(target) = self.ivars().target.load() {
+            target.pad_began(id, at, t);
+        }
+    }
+
+    /// A finger moved.
+    pub fn finger_moved(&self, id: u64, at: Point<f64>, t: f64) {
+        if let Some(target) = self.ivars().target.load() {
+            target.pad_moved(id, at, t);
+        }
+    }
+
+    /// A finger lifted.
+    pub fn finger_ended(&self, id: u64, at: Point<f64>, t: f64) {
+        if let Some(target) = self.ivars().target.load() {
+            target.pad_ended(id, at, t);
+        }
+    }
 }

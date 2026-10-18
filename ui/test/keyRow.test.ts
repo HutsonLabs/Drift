@@ -94,6 +94,7 @@ describe("session page on iPhone", () => {
       sendKeys: (keys: string[]) => (calls.push(["sendKeys", keys]), ok(null)),
       typeText: (t: string) => (calls.push(["typeText", t]), ok(null)),
       setTouchMode: (m: string) => (calls.push(["setTouchMode", m]), ok(null)),
+      phoneControls: () => Promise.resolve(null),
     } as unknown as SessionApi;
     const root = document.createElement("main");
     document.body.replaceChildren(root);
@@ -109,5 +110,20 @@ describe("session page on iPhone", () => {
     app.onPhoneControls({ visible: false, touch: "trackpad" });
     expect(hasButton(root, "Esc")).toBe(false);
     expect(document.body.dataset.controls).toBe("");
+  });
+});
+
+describe("session page start on iPhone", () => {
+  test("asks for the controls it may have missed", async () => {
+    const api = {
+      windowIdentity: () => Promise.resolve({ status: "ok", data: identity({}) }),
+      phoneControls: () => Promise.resolve({ visible: true, touch: "direct" }),
+    } as unknown as SessionApi;
+    const root = document.createElement("main");
+    document.body.replaceChildren(root);
+    const app = new SessionApp(root, api);
+    await app.start();
+    app.onSessionView(sessionView("live", { state: "connected", desktop: { width: 1280, height: 800 }, scale: 100 }));
+    expect(hasButton(root, "Touch: tap where you touch")).toBe(true);
   });
 });

@@ -37,7 +37,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 - [✓] **IOS-7 Touch modes.** Trackpad mode (relative pointer, two-finger scroll, tap to click,
   two-finger tap for right click) and direct mode (tap where you touch). Pinch zooms the viewport
   on iPhone.
-- [ ] **IOS-8 iPhone layout.** Portrait: picture on top, trackpad and key row below. Landscape:
+- [✓] **IOS-8 iPhone layout.** Portrait: picture on top, trackpad and key row below. Landscape:
   full screen with auto-hiding controls.
 - [ ] **IOS-9 Pairing UI.** Bonjour list of Drift Hosts, QR scan or typed code, pinned host key
   stored in the Keychain (pairs with HOST-8).
