@@ -14,7 +14,9 @@
 #![cfg(target_os = "ios")]
 
 pub mod lifecycle;
+pub mod pacing;
 pub mod settings;
+pub mod view;
 
 pub use drift_apple::{Keychain, KeychainError, PathMonitor, PathStatus, TriggerFeed};
 pub use lifecycle::{ForegroundObserver, ReconnectTriggers};
