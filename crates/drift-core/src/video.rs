@@ -121,6 +121,59 @@ pub trait H264Decoder: Send {
     fn reset(&mut self);
 }
 
+/// A CPU-resident BGRA picture, `width × 4` bytes per row (AVC444 output, ADR `AVC444-client`).
+#[derive(Clone, PartialEq, Eq)]
+pub struct BgraPicture {
+    size: Size<u32>,
+    data: Vec<u8>,
+}
+
+impl BgraPicture {
+    /// Builds a picture; `None` unless `data` is exactly `width × height × 4` bytes.
+    pub fn new(size: Size<u32>, data: Vec<u8>) -> Option<Self> {
+        let len = usize::try_from(size.width)
+            .ok()?
+            .checked_mul(usize::try_from(size.height).ok()?)?
+            .checked_mul(4)?;
+        (data.len() == len).then_some(Self { size, data })
+    }
+
+    /// Picture size in pixels.
+    pub fn size(&self) -> Size<u32> {
+        self.size
+    }
+
+    /// Bytes per row.
+    pub fn stride(&self) -> usize {
+        usize::try_from(self.size.width).unwrap_or(0) * 4
+    }
+
+    /// The pixels, row by row.
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+}
+
+impl fmt::Debug for BgraPicture {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BgraPicture").field("size", &self.size).finish_non_exhaustive()
+    }
+}
+
+/// Decodes `RFX_AVC444_BITMAP_STREAM` pictures (MS-RDPEGFX 2.2.4.5): the main (luma) view and
+/// the auxiliary (chroma) view are two AVC420 streams, recombined into one full-chroma picture.
+///
+/// A view that is absent (`LC` = luma only or chroma only) keeps the decoder's last picture of
+/// that view. Returns `None` until a main view has been decoded.
+pub trait Avc444Decoder: Send {
+    /// Decodes the views present (Annex-B access units) and returns the combined picture.
+    fn decode(&mut self, main: Option<&[u8]>, aux: Option<&[u8]>)
+    -> Result<Option<BgraPicture>, DecodeError>;
+
+    /// Drops decoder state (e.g. after `ResetGraphics`).
+    fn reset(&mut self);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -51,7 +51,7 @@ fn chroma_psnr(a: &[u8], b: &[u8]) -> f64 {
 }
 
 #[test]
-fn yuv444_to_bgra_inverts_the_grd_matrix_within_three() {
+fn yuv444_to_bgra_inverts_the_grd_matrix_within_four() {
     let size = Size::new(16, 8);
     let mut src = Vec::new();
     for i in 0..(16 * 8) {
@@ -65,7 +65,8 @@ fn yuv444_to_bgra_inverts_the_grd_matrix_within_three() {
         if i % 4 == 3 {
             assert_eq!(*b, 255, "alpha is opaque");
         } else {
-            assert!(a.abs_diff(*b) <= 3, "byte {i}: {a} vs {b}");
+            // g-r-d's forward matrix truncates (>> 8) and its luma gains sum to 255/256.
+            assert!(a.abs_diff(*b) <= 4, "byte {i}: {a} vs {b}");
         }
     }
 }

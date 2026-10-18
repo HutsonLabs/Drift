@@ -193,6 +193,7 @@ impl Graphics {
         display_control: DisplayControlClient,
         clipboard: Option<CliprdrClient>,
         drift_mac: Option<&drift_ext::channel::Link>,
+        caps: drift_gfx::GfxCaps,
     ) -> impl FnOnce(ClientConnector) -> ClientConnector + Send + use<> {
         let drdynvc = DrdynvcClient::new().with_dynamic_channel(display_control);
         // EXT-1: offered only when the app asked for it; a non-Drift server never opens it.
@@ -208,7 +209,12 @@ impl Graphics {
         };
         let drdynvc = match tile_pool() {
             Some(pool) => {
-                let gfx = GfxClient::new(Box::new(self.sink.clone()), Box::new(VtDecoder::new()), pool);
+                let mut gfx = GfxClient::new(Box::new(self.sink.clone()), Box::new(VtDecoder::new()), pool);
+                // AVC444 only where V10 is advertised: a paired Drift Host (ADR `AVC444-client`).
+                gfx.set_caps(caps);
+                if caps == drift_gfx::GfxCaps::DriftHost {
+                    gfx.set_avc444(Box::new(drift_video::decode::VtAvc444Decoder::new()));
+                }
                 let notify = Arc::clone(&self.acks_ready);
                 gfx.acks().set_notifier(move || notify.notify_one());
                 drdynvc.with_dynamic_channel(gfx)

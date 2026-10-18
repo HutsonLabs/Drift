@@ -18,9 +18,12 @@ use support::{create, end, harness, map, rect16, reset, start, w2s1, wire};
 
 /// Records what it was asked to decode (rectangles are exclusive, as on the wire) and returns a 64×32 picture whose pixel (x, y) is
 /// `[x, y, 7, 255]`.
+/// The main and auxiliary access units of one decode call.
+type Views = (Option<Vec<u8>>, Option<Vec<u8>>);
+
 #[derive(Clone, Default)]
 struct FakeAvc444 {
-    seen: Arc<Mutex<Vec<(Option<Vec<u8>>, Option<Vec<u8>>)>>>,
+    seen: Arc<Mutex<Vec<Views>>>,
     resets: Arc<Mutex<u32>>,
 }
 
