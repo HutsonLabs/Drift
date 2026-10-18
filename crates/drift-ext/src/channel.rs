@@ -170,6 +170,16 @@ impl Chain {
     pub fn push(&mut self, responder: Box<dyn Responder>) {
         self.0.push(responder);
     }
+
+    /// How many responders the chain holds.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Whether the chain holds none.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 impl Responder for Chain {

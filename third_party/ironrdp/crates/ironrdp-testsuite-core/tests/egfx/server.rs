@@ -853,3 +853,46 @@ fn test_a_suspending_acknowledgement_still_acknowledges_its_frame() {
         "the suspending acknowledgement was not counted, so no round-trip sample exists"
     );
 }
+
+#[test]
+fn drift_hevc_sender_uses_the_private_codec_id_and_the_avc420_metablock() {
+    let handler = Box::new(TestHandler::new());
+    let mut server = GraphicsPipelineServer::new(handler);
+    let client_caps_pdu = GfxPdu::CapabilitiesAdvertise(CapabilitiesAdvertisePdu::from_typed(&[CapabilitySet::V8_1 {
+        flags: CapabilitiesV81Flags::AVC420_ENABLED,
+    }]));
+    server
+        .process(0, &encode_pdu(&client_caps_pdu))
+        .expect("process capabilities");
+    let surface_id = server.create_surface(64, 64).expect("create surface");
+    server.drain_output();
+
+    // An HEVC VPS NAL unit header (type 32) after the start code.
+    let data = [0x00, 0x00, 0x00, 0x01, 0x40, 0x01];
+    let regions = [Avc420Region::new(0, 0, 32, 16, 22, 100)];
+    server
+        .send_drift_hevc_frame(surface_id, &data, &regions, 7)
+        .expect("queue a Drift HEVC frame");
+
+    let output = server.drain_output();
+    let mut decompressor = Decompressor::new();
+    let encoded = encode_vec(output[1].as_ref()).expect("encode DVC message");
+    let mut decoded = Vec::new();
+    decompressor
+        .decompress(&encoded, &mut decoded)
+        .expect("decompress WireToSurface1");
+    let mut cursor = ReadCursor::new(&decoded);
+    let GfxPdu::WireToSurface1(wire) = GfxPdu::decode(&mut cursor).expect("decode WireToSurface1") else {
+        panic!("expected WireToSurface1");
+    };
+    assert_eq!(wire.codec_id, Codec1Type::DriftHevc);
+    assert_eq!(
+        u16::from(Codec1Type::DriftHevc),
+        0xD001,
+        "outside MS-RDPEGFX's 0x0000-0x000F"
+    );
+    let mut cursor = ReadCursor::new(&wire.bitmap_data);
+    let stream = ironrdp_egfx::pdu::Avc420BitmapStream::decode(&mut cursor).expect("decode the metablock");
+    assert_eq!(stream.data, &data);
+    assert_eq!(stream.rectangles[0].right, 32);
+}

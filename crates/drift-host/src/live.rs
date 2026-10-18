@@ -60,6 +60,34 @@ impl Drop for Pump {
     }
 }
 
+/// Keeps the reference chain intact: once the server refused a picture, the pictures after it
+/// (still in the batch or already out of the encoder) reference one the client never got, so
+/// nothing but a keyframe may follow. H.264's decoder shows such frames with artifacts; HEVC's
+/// rejects them (`kVTVideoDecoderBadDataErr`), which would end the session (EXT-5).
+#[derive(Debug, Default)]
+pub(crate) struct KeyframeGate {
+    waiting: bool,
+}
+
+impl KeyframeGate {
+    /// Whether a picture may be offered to the server.
+    pub(crate) fn admit(&self, keyframe: bool) -> bool {
+        keyframe || !self.waiting
+    }
+
+    /// The server refused the picture just offered.
+    pub(crate) fn refused(&mut self) {
+        self.waiting = true;
+    }
+
+    /// The server queued the picture just offered.
+    pub(crate) fn sent(&mut self, keyframe: bool) {
+        if keyframe {
+            self.waiting = false;
+        }
+    }
+}
+
 /// Starts pumping `source` to `target`.
 pub(crate) fn start(mut source: Box<dyn LiveSource>, target: Arc<dyn GfxTarget>) -> std::io::Result<Pump> {
     let stop = Arc::new(AtomicBool::new(false));
@@ -70,6 +98,7 @@ pub(crate) fn start(mut source: Box<dyn LiveSource>, target: Arc<dyn GfxTarget>)
         let mut sent: u64 = 0;
         let mut idle = IdleHeartbeat::new(HEARTBEAT_INTERVAL);
         let mut backlog = BacklogMeter::default();
+        let mut gate = KeyframeGate::default();
         while !stopped.load(Ordering::Relaxed) {
             if target.take_keyframe_request() {
                 source.request_keyframe();
@@ -98,14 +127,21 @@ pub(crate) fn start(mut source: Box<dyn LiveSource>, target: Arc<dyn GfxTarget>)
             };
             let timestamp = u32::try_from(started.elapsed().as_millis()).unwrap_or(u32::MAX);
             for frame in &frames {
+                if !gate.admit(frame.keyframe) {
+                    continue;
+                }
                 match target.send(frame, timestamp) {
                     Some(true) => {
                         sent += 1;
+                        gate.sent(frame.keyframe);
                         idle.sent(Instant::now());
                     }
                     // The picture never reached the client, so later P-frames would reference
-                    // nothing: start again from a keyframe.
-                    Some(false) => source.request_keyframe(),
+                    // nothing: start again from a keyframe and send nothing else until it.
+                    Some(false) => {
+                        gate.refused();
+                        source.request_keyframe();
+                    }
                     None => return,
                 }
             }
@@ -171,6 +207,84 @@ mod tests {
             std::thread::sleep(timeout);
             Ok(Vec::new())
         }
+    }
+
+    #[test]
+    fn after_a_refused_frame_only_a_keyframe_goes_out_next() {
+        let mut gate = KeyframeGate::default();
+        assert!(gate.admit(true) && gate.admit(false), "a running stream goes out");
+        gate.refused();
+        assert!(!gate.admit(false), "a P-frame after the gap would reference nothing");
+        assert!(!gate.admit(false));
+        assert!(gate.admit(true), "the keyframe restarts the stream");
+        gate.sent(true);
+        assert!(gate.admit(false));
+    }
+
+    /// Frames K P P, then P P K P; the target refuses the second frame it is offered.
+    struct Script(Vec<Vec<bool>>);
+
+    impl LiveSource for Script {
+        fn size(&self) -> Size<u32> {
+            Size::new(64, 64)
+        }
+        fn request_keyframe(&mut self) {}
+        fn next(&mut self, timeout: Duration, _: bool) -> Result<Vec<LiveFrame>, FrameError> {
+            if self.0.is_empty() {
+                std::thread::sleep(timeout);
+                return Ok(Vec::new());
+            }
+            Ok(self
+                .0
+                .remove(0)
+                .into_iter()
+                .map(|keyframe| LiveFrame {
+                    au: vec![u8::from(keyframe)],
+                    regions: Vec::new(),
+                    keyframe,
+                    chroma: None,
+                    hevc: true,
+                })
+                .collect())
+        }
+    }
+
+    #[derive(Default)]
+    struct Refusing {
+        offered: Mutex<Vec<bool>>,
+    }
+
+    impl GfxTarget for Refusing {
+        fn backpressure(&self) -> bool {
+            false
+        }
+        fn send(&self, frame: &LiveFrame, _: u32) -> Option<bool> {
+            let mut offered = self.offered.lock().unwrap();
+            offered.push(frame.keyframe);
+            Some(offered.len() != 2)
+        }
+        fn pointer(&self, _: DisplayUpdate) {}
+        fn take_keyframe_request(&self) -> bool {
+            false
+        }
+        fn sample(&self) -> BacklogSample {
+            BacklogSample::default()
+        }
+        fn report_backlog(&self, _: Backlog) {}
+        fn heartbeat(&self) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn the_pump_skips_p_frames_after_a_refusal_until_a_keyframe() {
+        let target = Arc::new(Refusing::default());
+        let source = Script(vec![vec![true, false, false], vec![false, false, true, false]]);
+        let pump = start(Box::new(source), Arc::clone(&target) as Arc<dyn GfxTarget>).unwrap();
+        std::thread::sleep(Duration::from_millis(300));
+        drop(pump);
+        // K sent, P refused, P P P skipped, K sent, P sent.
+        assert_eq!(target.offered.lock().unwrap().as_slice(), &[true, false, true, false]);
     }
 
     #[test]

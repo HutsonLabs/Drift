@@ -11,11 +11,13 @@
 //! | [`gestures`] | precise scroll and trackpad gestures (EXT-2) |
 //! | [`status`] | host status and quality hints (EXT-4) |
 //! | [`pairing`] | pairing and device authentication messages, and the client's side (HOST-8) |
+//! | [`codec`] | HEVC / HDR codec negotiation and the host's choice (EXT-5) |
 //! | [`menus`] | the mirrored menu bar: snapshot, polls and presses, and the client's side (EXT-3) |
 //!
 //! [`negotiate`] settles the version and the shared capabilities from two [`wire::Hello`]s.
 
 pub mod channel;
+pub mod codec;
 pub mod gestures;
 pub mod menus;
 pub mod pairing;

@@ -3,7 +3,7 @@
 use drift_codec::{
     BgraTile, ClearCodec, ProgressiveCodec, TilePool, UncompressedFormat, decode_planar, decode_uncompressed,
 };
-use drift_core::video::{Avc444Decoder, H264Decoder};
+use drift_core::video::{Avc444Decoder, H264Decoder, HevcDecoder, VideoPicture};
 use drift_core::{Bgra, Point, Rect, Size};
 use ironrdp_core::{Decode as _, ReadCursor};
 use ironrdp_dvc::{DvcClientProcessor, DvcMessage, DvcProcessor};
@@ -46,6 +46,9 @@ pub struct GfxClient {
     h264: Box<dyn H264Decoder>,
     /// AVC444 (ADR `AVC444-client`); `None` keeps the codec unsupported, as for GNOME.
     avc444: Option<Box<dyn Avc444Decoder>>,
+    /// Drift's private HEVC codec (ADR `EXT-5-hevc-hdr`); `None` keeps it unsupported, as for
+    /// every host that is not a Drift Host.
+    hevc: Option<Box<dyn HevcDecoder>>,
     caps: GfxCaps,
     progressive: ProgressiveCodec,
     clear: ClearCodec,
@@ -77,6 +80,7 @@ impl GfxClient {
             sink,
             h264,
             avc444: None,
+            hevc: None,
             caps: GfxCaps::Gnome,
             progressive: ProgressiveCodec::new(pool),
             clear: ClearCodec::new(),
@@ -93,6 +97,12 @@ impl GfxClient {
     /// Decodes AVC444 with `decoder` (sessions for a Drift Host; ADR `AVC444-client`).
     pub fn set_avc444(&mut self, decoder: Box<dyn Avc444Decoder>) {
         self.avc444 = Some(decoder);
+    }
+
+    /// Decodes Drift's private HEVC codec with `decoder` (sessions that negotiated it with a
+    /// Drift Host on `Drift::Mac::v1`; ADR `EXT-5-hevc-hdr`).
+    pub fn set_hevc(&mut self, decoder: Box<dyn HevcDecoder>) {
+        self.hevc = Some(decoder);
     }
 
     /// Advertises `caps` when the channel starts (default [`GfxCaps::Gnome`]).
@@ -261,6 +271,9 @@ impl GfxClient {
         if let Some(avc444) = self.avc444.as_mut() {
             avc444.reset();
         }
+        if let Some(hevc) = self.hevc.as_mut() {
+            hevc.reset();
+        }
         self.output = output;
         self.sink.reset(output);
     }
@@ -350,7 +363,14 @@ impl GfxClient {
             Codec1Type::Avc444 if self.avc444.is_some() => {
                 return self.avc444(w.surface_id, surface.size, &w.bitmap_data);
             }
-            Codec1Type::RemoteFx | Codec1Type::Alpha | Codec1Type::Avc444 | Codec1Type::Avc444v2 => {
+            Codec1Type::DriftHevc if self.hevc.is_some() => {
+                return self.drift_hevc(w.surface_id, surface.size, &w.bitmap_data);
+            }
+            Codec1Type::RemoteFx
+            | Codec1Type::Alpha
+            | Codec1Type::Avc444
+            | Codec1Type::Avc444v2
+            | Codec1Type::DriftHevc => {
                 return Err(GfxError::UnsupportedCodec(format!("{:?}", w.codec_id)));
             }
         };
@@ -421,6 +441,41 @@ impl GfxClient {
                 let offset = r.y as usize * stride + r.x as usize * 4;
                 if let Some(rows) = picture.data().get(offset..) {
                     self.sink.blit_bgra(id, r, stride, rows);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Drift's private HEVC codec (ADR `EXT-5-hevc-hdr`): the AVC420 metablock says what changed,
+    /// the rest is one HEVC access unit. 4:2:0 pictures go to the sink as NV12, 4:4:4 as BGRA.
+    fn drift_hevc(&mut self, id: u16, bounds: Size<u32>, data: &[u8]) -> Result<(), GfxError> {
+        let stream = Avc420BitmapStream::decode(&mut ReadCursor::new(data))
+            .map_err(|e| GfxError::Decode(e.to_string()))?;
+        let mut regions = Vec::with_capacity(stream.rectangles.len());
+        for r in &stream.rectangles {
+            if let Some(r) = clip(rect(r)?, bounds) {
+                regions.push(r);
+            }
+        }
+        let Some(decoder) = self.hevc.as_mut() else {
+            return Err(GfxError::UnsupportedCodec("DriftHevc".into()));
+        };
+        // Always decode: later pictures reference this one.
+        let Some(video) = decoder.decode(stream.data)? else { return Ok(()) };
+        if regions.is_empty() {
+            return Ok(());
+        }
+        match video.picture {
+            VideoPicture::Nv12(frame) => self.sink.blit_nv12(id, &frame, &regions),
+            VideoPicture::Bgra(picture) => {
+                let stride = picture.stride();
+                for r in &regions {
+                    let Some(r) = clip(*r, picture.size()) else { continue };
+                    let offset = r.y as usize * stride + r.x as usize * 4;
+                    if let Some(rows) = picture.data().get(offset..) {
+                        self.sink.blit_bgra(id, r, stride, rows);
+                    }
                 }
             }
         }

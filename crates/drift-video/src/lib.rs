@@ -14,6 +14,7 @@
 //! | [`decode`] | M1-3 | FFI: `VTDecompressionSession` |
 //! | [`encode`] | M8-2, HOST-4 | FFI: `VTCompressionSession` (recording and real-time profiles) |
 //! | [`avc444`] | HOST-4 | pure: YUV444 ↔ main + auxiliary YUV420 views; FFI: the two-stream encoder |
+//! | [`hevc`] | EXT-5 | pure: HEVC NAL types, SPS fields; FFI: encoder probe, real-time encoder, decoder |
 //! | `mp4` (feature `recording`) | M8-3 | FFI: `AVAssetWriter` passthrough |
 
 pub mod annexb;
@@ -26,6 +27,7 @@ pub mod quality;
 pub mod sps;
 
 pub mod encode;
+pub mod hevc;
 #[cfg(feature = "recording")]
 pub mod mp4;
 

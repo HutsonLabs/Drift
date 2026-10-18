@@ -74,6 +74,9 @@ HEVC and HDR are not part of RDP GFX, but Screen Sharing has both, so they are p
 left out: a Drift extension codec (HEVC Main 10, 4:4:4 where VideoToolbox allows it, HDR
 metadata) negotiated over the `Drift::Mac::v1` DVC between Drift ends (EXT-5). AVC444 stays the
 default and the fallback for every other client. EXT-5 starts once AVC444 is measured (HOST-4).
+*Update (EXT-5, ADR `EXT-5-hevc-hdr`): HEVC Main and 4:4:4 hold 4K60 on an M4 Pro and travel as
+`WireToSurface1` frames with a private codec id, only after negotiation between paired Drift ends;
+HDR is tagged by the encoder but not yet captured or shown.*
 
 ### 3. Mac-specific features ride a Drift dynamic virtual channel
 

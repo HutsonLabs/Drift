@@ -32,3 +32,21 @@ pub fn choose(avc420: bool, avc444: bool, size: Size<u32>) -> Codec {
         Codec::None
     }
 }
+
+/// The largest picture (pixels) sent as HEVC 4:2:0 at full rate (EXT-5; measured, see ADR
+/// `EXT-5-hevc-hdr`).
+pub const HEVC_MAX_PIXELS: u64 = 3840 * 2160;
+
+/// The largest picture (pixels) sent as HEVC 4:4:4 at full rate (EXT-5; measured).
+pub const HEVC_444_MAX_PIXELS: u64 = 3840 * 2160;
+
+/// What this Mac offers for Drift's HEVC codec: the encoder's profiles at the desktop size, SDR
+/// only (screen capture in HDR is not wired yet; ADR `EXT-5-hevc-hdr`), and the size limits.
+pub fn host_codecs(desktop: Size<u32>) -> drift_ext::codec::HostCodecs {
+    drift_ext::codec::HostCodecs {
+        hevc: drift_video::hevc::probe_encoder(desktop),
+        transfers: vec![drift_core::video::Transfer::Sdr],
+        max_pixels: HEVC_MAX_PIXELS,
+        max_444_pixels: HEVC_444_MAX_PIXELS,
+    }
+}

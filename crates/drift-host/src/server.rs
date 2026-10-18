@@ -145,6 +145,10 @@ pub struct HostStats {
     pub quality: crate::quality::QualityLevel,
     /// The client's cap on it (EXT-4).
     pub quality_max: crate::quality::QualityLevel,
+    /// Frames sent with Drift's HEVC extension codec (EXT-5).
+    pub hevc_frames: u64,
+    /// The HEVC profile the current client gets, when it negotiated one (EXT-5).
+    pub hevc_profile: Option<drift_core::video::HevcProfile>,
 }
 
 type SharedStats = Arc<Mutex<HostStats>>;
@@ -337,6 +341,8 @@ impl Host {
                 quality: Mutex::new(crate::quality::QualityPolicy::new(crate::quality::QualityLevel::Best)),
                 applied_quality: Mutex::new(None),
                 drift_mac: Arc::clone(&thread_mac),
+                codec_offer: Mutex::new(None),
+                host_codecs: crate::codec::host_codecs(desktop),
             });
             let input: SharedSink = Arc::new(Mutex::new(input));
             // `RdpServer` holds non-`Send` parts, so it is built on this thread.
@@ -395,6 +401,8 @@ impl Host {
                 lock(&input).session_ended();
                 // The next client starts on the main display, codec chosen afresh.
                 *lock(&gfx.request) = LiveRequest::default();
+                *lock(&gfx.codec_offer) = None;
+                lock(&gfx.stats).hevc_profile = None;
                 *lock(&gfx.probe) = None;
                 *lock(&gfx.last_pointer) = None;
             };
@@ -789,6 +797,10 @@ struct GfxShared {
     applied_quality: Mutex<Option<crate::quality::QualityLevel>>,
     /// The latest `Drift::Mac::v1` link, to send the host's status on (EXT-4).
     drift_mac: Arc<Mutex<Option<Link>>>,
+    /// What the current client offered on `Drift::Mac::v1` (EXT-5); `None` without one.
+    codec_offer: Mutex<Option<drift_ext::codec::CodecOffer>>,
+    /// What this Mac's HEVC encoder and screen can do (probed at start).
+    host_codecs: drift_ext::codec::HostCodecs,
 }
 
 impl GfxShared {
@@ -874,13 +886,21 @@ impl GfxShared {
         if !lock(&self.auth).is_authorized() || !self.new_live_surface(resize) {
             return;
         }
-        // The client's capabilities are known now: AVC444 when it confirmed it and the picture
-        // is small enough (`codec::choose`), else AVC420. A source of the other kind is reopened.
-        let want_avc444 = self.wants_avc444();
-        let reopen = lock(&self.live).as_ref().is_some_and(|s| s.avc444() != want_avc444);
+        // The client's capabilities are known now: Drift's HEVC when a paired client negotiated it
+        // (EXT-5), else AVC444 when it confirmed it and the picture is small enough
+        // (`codec::choose`), else AVC420. A source of another kind is reopened.
+        let want_hevc = self.wants_hevc();
+        let want_avc444 = want_hevc.is_none() && self.wants_avc444();
+        lock(&self.stats).hevc_profile = want_hevc.map(|h| h.profile);
+        let reopen =
+            lock(&self.live).as_ref().is_some_and(|s| s.avc444() != want_avc444 || s.hevc() != want_hevc);
         if reopen {
-            lock(&self.request).avc444 = want_avc444;
-            tracing::info!(avc444 = want_avc444, "reopening the live picture for the client's codec");
+            {
+                let mut request = lock(&self.request);
+                request.avc444 = want_avc444;
+                request.hevc = want_hevc;
+            }
+            tracing::info!(avc444 = want_avc444, hevc = ?want_hevc, "reopening the live picture for the client's codec");
             if self.open_live().is_none() {
                 return;
             }
@@ -896,6 +916,48 @@ impl GfxShared {
     /// A client layout on a live desktop: a fresh output and surface at the same size.
     fn reset_live_surface(&self) {
         self.new_live_surface(true);
+    }
+
+    /// The HEVC profile for the current client: `None` unless it offered HEVC on
+    /// `Drift::Mac::v1` and this Mac's encoder shares a profile that fits the picture (EXT-5).
+    fn wants_hevc(&self) -> Option<crate::pipeline::HevcSelection> {
+        let offer = lock(&self.codec_offer).clone()?;
+        let size = *lock(&self.size);
+        let choice = drift_ext::codec::select(&offer, &self.host_codecs, (size.width, size.height));
+        choice.hevc.map(|profile| crate::pipeline::HevcSelection { profile, transfer: choice.transfer })
+    }
+
+    /// A paired client's codec offer arrived (EXT-5): remember it, answer with the host's choice
+    /// and, if the live picture is already running with another codec, restart it with this one.
+    fn codec_offered(self: &Arc<Self>, offer: drift_ext::codec::CodecOffer) -> drift_ext::codec::CodecSelect {
+        let size = *lock(&self.size);
+        let choice = drift_ext::codec::select(&offer, &self.host_codecs, (size.width, size.height));
+        tracing::info!(offer = ?offer, choice = ?choice, "codec offer");
+        *lock(&self.codec_offer) = Some(offer);
+        if lock(&self.pump).is_some() {
+            // Off the channel's thread: restarting the picture talks to the graphics channel.
+            let gfx = Arc::clone(self);
+            std::thread::spawn(move || gfx.restart_for_codec());
+        }
+        choice
+    }
+
+    /// Restarts a running live picture if the codec it should use changed.
+    fn restart_for_codec(self: &Arc<Self>) {
+        let want_hevc = self.wants_hevc();
+        let running = lock(&self.request).hevc;
+        if running == want_hevc {
+            return;
+        }
+        drop(lock(&self.pump).take());
+        {
+            let mut request = lock(&self.request);
+            request.hevc = want_hevc;
+            request.avc444 = want_hevc.is_none() && self.wants_avc444();
+        }
+        if self.open_live().is_some() {
+            self.start_live_with(false);
+        }
     }
 
     /// Whether the client confirmed AVC444 and the picture is small enough for it.
@@ -1076,10 +1138,41 @@ struct DriftMacFactory {
     gfx: Arc<GfxShared>,
 }
 
+/// Answers a paired client's codec offer (EXT-5) with the host's choice.
+#[derive(Debug)]
+struct HostCodecResponder(Arc<GfxShared>);
+
+impl std::fmt::Debug for GfxShared {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GfxShared").finish_non_exhaustive()
+    }
+}
+
+impl drift_ext::channel::Responder for HostCodecResponder {
+    fn on_message(&mut self, message: &drift_ext::wire::Message) -> Option<Vec<drift_ext::wire::Message>> {
+        use drift_ext::codec::CodecMessage;
+        match CodecMessage::from_message(message)? {
+            Ok(CodecMessage::Offer(offer)) => {
+                let choice = self.0.codec_offered(offer);
+                Some(vec![CodecMessage::Select(choice).to_message()])
+            }
+            Ok(CodecMessage::Select(_)) => {
+                tracing::warn!("ignoring a codec selection from the client");
+                Some(Vec::new())
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "malformed codec message");
+                Some(Vec::new())
+            }
+        }
+    }
+}
+
 impl DvcServerFactory for DriftMacFactory {
     fn attach(&self, dvc: DrdynvcServer) -> DrdynvcServer {
         let link = Link::new();
         *lock(&self.link) = Some(link.clone());
+        *lock(&self.gfx.codec_offer) = None;
         // EXT-2: gestures reach the input sink only once the connection is authorized, like
         // keys and the mouse (HOST-8).
         let gestures = {
@@ -1114,9 +1207,11 @@ impl DvcServerFactory for DriftMacFactory {
         let mut capabilities = Capabilities::SCROLL | Capabilities::GESTURES | Capabilities::STATUS;
         let mut responders: Vec<Box<dyn drift_ext::channel::Responder>> = Vec::new();
         if let Some(pairing) = &self.pairing {
-            capabilities = capabilities | Capabilities::PAIRING;
+            // EXT-5: a paired client may also negotiate Drift's HEVC codec.
+            capabilities = capabilities | Capabilities::PAIRING | Capabilities::CODEC;
             let auth = lock(&self.current).clone();
             responders.push(pairing.responder(self.host_fingerprint, auth));
+            responders.push(Box::new(HostCodecResponder(Arc::clone(&self.gfx))));
         }
         responders.push(gestures);
         responders.push(status);
@@ -1169,6 +1264,9 @@ impl GfxTarget for GfxShared {
                 return Some(false);
             }
             let sent = match &frame.chroma {
+                _ if frame.hevc => {
+                    server.send_drift_hevc_frame(surface, &frame.au, &frame.regions, timestamp_ms)
+                }
                 Some(chroma) => server.send_avc444_frame(
                     surface,
                     &frame.au,
@@ -1186,6 +1284,9 @@ impl GfxTarget for GfxShared {
             stats.frames_sent += 1;
             if frame.chroma.is_some() {
                 stats.avc444_frames += 1;
+            }
+            if frame.hevc {
+                stats.hevc_frames += 1;
             }
             drop(stats);
             let channel = server.channel_id()?;

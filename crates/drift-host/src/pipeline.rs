@@ -12,9 +12,11 @@ use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 use drift_capture::rect::Damage;
+use drift_core::video::{HevcProfile, Transfer};
 use drift_core::{Nv12Planes, Size};
 use drift_video::avc444::Avc444Encoder;
 use drift_video::encode::{EncoderConfig, PixelBuffer, VtEncoder, realtime_bitrate};
+use drift_video::hevc::{HevcConfig, HevcEncoder};
 use ironrdp_egfx::pdu::Avc420Region;
 
 use crate::frames::FrameError;
@@ -122,6 +124,18 @@ pub struct LiveRequest {
     pub display: Option<u32>,
     /// Encode AVC444 (two views from BGRA) instead of AVC420.
     pub avc444: bool,
+    /// Encode Drift's HEVC extension codec instead of H.264 (EXT-5): the profile and transfer
+    /// the host picked from a paired client's offer. 4:4:4 profiles are encoded from BGRA.
+    pub hevc: Option<HevcSelection>,
+}
+
+/// The HEVC profile and transfer function a live picture is encoded with (EXT-5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HevcSelection {
+    /// The profile.
+    pub profile: HevcProfile,
+    /// SDR or HDR.
+    pub transfer: Transfer,
 }
 
 /// One raw frame and what changed since the previous one.
@@ -157,6 +171,8 @@ pub struct LiveFrame {
     /// AVC444's second view (`avc420EncodedBitstream2`, the chroma detail), when the frame is
     /// AVC444; `au` is then the main view.
     pub chroma: Option<Vec<u8>>,
+    /// `au` is an HEVC access unit for Drift's private codec (EXT-5), not H.264.
+    pub hevc: bool,
 }
 
 /// A live picture for a session.
@@ -179,6 +195,10 @@ pub trait LiveSource: Send {
     /// Applies a quality level (EXT-4): bit rate and frame-rate cap.
     fn set_quality(&mut self, level: crate::quality::QualityLevel) {
         let _ = level;
+    }
+    /// The HEVC profile the frames are encoded with, if they are HEVC (EXT-5).
+    fn hevc(&self) -> Option<HevcSelection> {
+        None
     }
 }
 
@@ -237,7 +257,13 @@ impl<R: RawFrames> LiveEncoder<R> {
             let regions = self.pending.pop_front().unwrap_or_default();
             let keyframe = frame.is_keyframe();
             let regions = if keyframe { regions_for(&Damage::Full, size) } else { regions };
-            out.push(LiveFrame { au: frame.to_annex_b().map_err(err)?, regions, keyframe, chroma: None });
+            out.push(LiveFrame {
+                au: frame.to_annex_b().map_err(err)?,
+                regions,
+                keyframe,
+                chroma: None,
+                hevc: false,
+            });
         }
         Ok(out)
     }
@@ -346,6 +372,7 @@ impl<R: RawFrames> LiveAvc444Encoder<R> {
                 regions,
                 keyframe,
                 chroma: Some(picture.aux.to_annex_b().map_err(err)?),
+                hevc: false,
             });
         }
         Ok(out)
@@ -400,6 +427,97 @@ impl<R: RawFrames> LiveSource for LiveAvc444Encoder<R> {
             tracing::warn!(error = %e, "could not change the bit rate");
         }
         self.pacer.set_fps(q.fps);
+    }
+}
+
+/// [`RawFrames`] through the real-time HEVC encoder (EXT-5, ADR `EXT-5-hevc-hdr`), for a paired
+/// Drift client that negotiated it. The frames carry the same AVC420 regions as H.264's; 4:4:4
+/// and 10-bit profiles are converted by VideoToolbox from whatever the source delivers (BGRA for
+/// 4:4:4, so chroma is not lost before the encoder).
+pub struct LiveHevcEncoder<R> {
+    raw: R,
+    encoder: HevcEncoder,
+    selection: HevcSelection,
+    pending: VecDeque<Vec<Avc420Region>>,
+    keyframe_due: bool,
+    last: Option<PixelBuffer>,
+}
+
+impl<R> std::fmt::Debug for LiveHevcEncoder<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LiveHevcEncoder").field("selection", &self.selection).finish_non_exhaustive()
+    }
+}
+
+impl<R: RawFrames> LiveHevcEncoder<R> {
+    /// A real-time HEVC encoder for `raw` at up to `fps` frames a second.
+    pub fn new(raw: R, fps: u32, selection: HevcSelection) -> Result<Self, FrameError> {
+        let config = HevcConfig::realtime(raw.size(), fps, selection.profile, selection.transfer);
+        let encoder = HevcEncoder::new(config).map_err(|e| FrameError(e.to_string()))?;
+        Ok(Self { raw, encoder, selection, pending: VecDeque::new(), keyframe_due: true, last: None })
+    }
+
+    fn encode(
+        &mut self,
+        buffer: &PixelBuffer,
+        damage: &Damage,
+        keyframe: bool,
+    ) -> Result<Vec<LiveFrame>, FrameError> {
+        let size = buffer.size();
+        if keyframe {
+            self.encoder.request_keyframe();
+            self.keyframe_due = false;
+        }
+        let regions = if keyframe { regions_for(&Damage::Full, size) } else { regions_for(damage, size) };
+        self.pending.push_back(regions);
+        let encoded = self.encoder.encode(buffer, Instant::now()).map_err(|e| FrameError(e.to_string()))?;
+        let mut out = Vec::with_capacity(encoded.len());
+        for frame in encoded {
+            let regions = self.pending.pop_front().unwrap_or_default();
+            let keyframe = frame.is_keyframe();
+            let regions = if keyframe { regions_for(&Damage::Full, size) } else { regions };
+            out.push(LiveFrame { au: frame.into_annex_b(), regions, keyframe, chroma: None, hevc: true });
+        }
+        Ok(out)
+    }
+}
+
+impl<R: RawFrames> LiveSource for LiveHevcEncoder<R> {
+    fn size(&self) -> Size<u32> {
+        self.raw.size()
+    }
+
+    fn request_keyframe(&mut self) {
+        self.keyframe_due = true;
+    }
+
+    fn next(&mut self, timeout: Duration, backpressure: bool) -> Result<Vec<LiveFrame>, FrameError> {
+        if backpressure {
+            std::thread::sleep(timeout.min(Duration::from_millis(4)));
+            return Ok(Vec::new());
+        }
+        match self.raw.next(timeout) {
+            Some(RawFrame { buffer, damage }) => {
+                let out = match decide(false, damage != Damage::None, self.keyframe_due) {
+                    Step::Encode { keyframe } => self.encode(&buffer, &damage, keyframe)?,
+                    Step::Wait => Vec::new(),
+                };
+                self.last = Some(buffer);
+                Ok(out)
+            }
+            None => match (self.keyframe_due, self.last.clone()) {
+                (true, Some(last)) => self.encode(&last, &Damage::Full, true),
+                _ => Ok(Vec::new()),
+            },
+        }
+    }
+
+    fn pointer(&mut self) -> Vec<drift_capture::cursor::CursorEvent> {
+        self.raw.pointer()
+    }
+
+    fn hevc(&self) -> Option<HevcSelection> {
+        Some(self.selection)
     }
 }
 

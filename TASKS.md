@@ -127,9 +127,12 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 - [✓] **EXT-4 Quality hints.** Host reports backlog and suggests a quality; a separate default
   quality for devices away from the local network. *ADR `EXT-4-quality-hints`; a real slowed
   link is a manual step in `docs/acceptance.md`.*
-- [ ] **EXT-5 HEVC and HDR.** After HOST-4 measures AVC444: a Drift extension codec (HEVC Main 10,
+- [~] **EXT-5 HEVC and HDR.** After HOST-4 measures AVC444: a Drift extension codec (HEVC Main 10,
   4:4:4 where VideoToolbox allows it, HDR metadata) negotiated over the channel, encoded by
   VideoToolbox on the host and decoded on the client, with AVC444 as the fallback (ADR decision 2).
+  *HEVC done (ADR `EXT-5-hevc-hdr`): negotiation on `Drift::Mac::v1`, Main and 4:4:4 at 4K60 on an
+  M4 Pro, decoded on Mac and iOS, private GFX codec id. HDR: encoder tags and metadata only;
+  HDR screen capture and EDR rendering on the client are not done, so sessions stay SDR.*
 
 ## STORE — Distribution
 

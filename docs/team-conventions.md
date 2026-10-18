@@ -58,6 +58,7 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `HOST-1-server-spike` | `ironrdp-server` + `egfx` on loopback: AVC420 bit-exact to Drift, DISP layouts reach the host, what is missing for AVC444 (client caps and decode, encoder) |
 | `HOST-8-pairing` | pairing on `Drift::Mac::v1` after TLS + NLA: challenge, signed pair/auth requests, nothing shown before authorization, `devices.toml`, loopback-only without pairing |
 | `HOST-12-quic-transport` | no lossy RDP-UDP; reliable RDP-UDP2 collapses under loss; QUIC (quinn, BBR, pinned host, stream per GFX frame) for Drift-to-Drift; QUIC-then-TCP order |
+| `EXT-5-hevc-hdr` | HEVC Main / 4:4:4 between paired Drift ends: `0x05xx` offer/select, `Codec1Type::DriftHevc` (0xD001), pixel transfer to 4:4:4/10-bit sources, low-latency RC ≤ 2560×1600, HDR tags only |
 | `AVC444-client` | V10 caps only for paired Drift Hosts (GNOME keeps V8.1: V10 makes g-r-d send AVC444v2), AVC444 v1 decode with two VT sessions + CPU combine to BGRA, `drift_host::codec::choose` |
 | `HOST-4-realtime-encoder` | real-time VideoToolbox profile (low-latency RC up to 2560×1600), NV12 input, AVC444 v1 split/combine with chroma filter, AVC420/444 stream writers, 4K measurements |
 | `HOST-2-host-skeleton` | `drift-host` crate + binary: loopback default listener, one NLA account (Keychain), self-signed identity, one session (extra refused), `FrameSource` test pattern, DISP resize, input counted only, `add_dvc_factory` for `Drift::Mac::v1` |
