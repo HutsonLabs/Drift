@@ -6,8 +6,9 @@
 //!   real-time, no frame reordering, 8 Mbit/s average, a keyframe at least every 2 s.
 //! * **Real-time** ([`EncoderConfig::realtime`], HOST-4, ADR `HOST-4-realtime-encoder`): what
 //!   the Mac host streams with. Adds VideoToolbox's low-latency rate control (Constrained High,
-//!   no B-frames, one frame in flight), a bit rate scaled to the picture ([`realtime_bitrate`]),
-//!   and a keyframe at least every 4 s or on request ([`VtEncoder::request_keyframe`]).
+//!   one frame in flight) up to [`LOW_LATENCY_MAX_PIXELS`], a bit rate scaled to the picture
+//!   ([`realtime_bitrate`]), and a keyframe at least every 4 s or on request
+//!   ([`VtEncoder::request_keyframe`]).
 //!
 //! Both use a variable frame rate: each frame's presentation time comes from a
 //! [`drift_core::Clock`] instant, relative to the first frame. A frame whose size differs from
@@ -90,6 +91,19 @@ pub struct EncoderConfig {
     pub low_latency: bool,
 }
 
+/// The largest picture (in pixels) the real-time profile encodes with low-latency rate control.
+///
+/// Measured on an M4 Pro (ADR `HOST-4-realtime-encoder`): with low-latency rate control
+/// `VTCompressionSessionEncodeFrame` returns only when the frame is done, 0.1 ms at 1080p and
+/// 8.8 ms at 2560×1600 but 18.6 ms at 4K, which caps 4K near 54 fps. The normal rate control
+/// (still real-time, no reordering) holds 60 fps at 4K with a p50 latency of 23 ms.
+pub const LOW_LATENCY_MAX_PIXELS: u64 = 2560 * 1600;
+
+/// Whether the real-time profile uses low-latency rate control for `size`.
+pub fn low_latency_for(size: Size<u32>) -> bool {
+    u64::from(size.width) * u64::from(size.height) <= LOW_LATENCY_MAX_PIXELS
+}
+
 /// Lowest and highest bit rate [`realtime_bitrate`] picks.
 pub const REALTIME_BITRATE_RANGE: (u32, u32) = (2_000_000, 80_000_000);
 
@@ -121,7 +135,7 @@ impl EncoderConfig {
             average_bitrate: realtime_bitrate(size, fps),
             max_keyframe_interval: Duration::from_secs(4),
             expected_fps: fps.max(1),
-            low_latency: true,
+            low_latency: low_latency_for(size),
         }
     }
 
@@ -665,6 +679,8 @@ mod tests {
     fn realtime_profile() {
         let c = EncoderConfig::realtime(Size::new(1920, 1080), 60);
         assert!(c.low_latency);
+        assert!(EncoderConfig::realtime(Size::new(2560, 1600), 60).low_latency);
+        assert!(!EncoderConfig::realtime(Size::new(3840, 2160), 60).low_latency, "4K: normal rate control");
         assert_eq!(c.average_bitrate, 6_220_800);
         assert_eq!(c.max_keyframe_interval_frames(), 240);
         assert_eq!(EncoderConfig::realtime(Size::new(16, 16), 0).expected_fps, 1);

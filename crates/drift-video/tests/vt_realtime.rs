@@ -30,7 +30,13 @@ fn bgra_frame(size: Size<u32>, n: u32) -> Vec<u8> {
 #[test]
 fn realtime_config_bounds_latency_and_keyframes() {
     let c = EncoderConfig::realtime(Size::new(3840, 2160), 60);
-    assert!(c.low_latency, "low-latency rate control");
+    // Measured (ADR HOST-4): low-latency rate control can't hold 60 fps at 4K; below that size it
+    // has the tightest latency.
+    assert!(!c.low_latency, "4K uses the normal rate control");
+    assert!(
+        EncoderConfig::realtime(Size::new(1920, 1080), 60).low_latency,
+        "1080p: low-latency rate control"
+    );
     assert_eq!(c.expected_fps, 60);
     assert!(c.max_keyframe_interval <= Duration::from_secs(4), "bounded keyframe interval");
     assert_eq!(c.average_bitrate, realtime_bitrate(Size::new(3840, 2160), 60));

@@ -272,6 +272,11 @@ wry 0.55.1), tauri-cli 2.11.4.
    decodes in software, so this needs a check on a device before it counts as a bug.
 4. How complete is `ironrdp-server` with `egfx` for AVC420/AVC444 streaming? (HOST-1)
 5. Can VideoToolbox's real-time H.264 encoder produce AVC444's two streams at 60 fps on M1? (HOST-4)
+   **Answered for an M4 Pro, not M1** (ADR `HOST-4-realtime-encoder`): one 4K60 stream is fine
+   (p50 23 ms), but AVC444's two streams hold 60 fps only up to about 1080p, about 45 fps at
+   2560×1600 and about 25 fps at 4K; the media engine is the limit. M1, with a smaller media
+   engine, will do no better; measuring it is a manual step. Drift's client also does not decode
+   AVC444 yet (`drift-gfx` treats it as unsupported), contrary to this ADR's context.
 6. Is `ironrdp-rdpeudp`'s lossy mode usable for GFX, or do Drift-to-Drift sessions need the
    QUIC fallback? (HOST-12)
 7. Does App Store review accept wry's transparent webview? (STORE-2)

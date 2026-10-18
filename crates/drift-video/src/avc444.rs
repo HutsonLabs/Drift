@@ -347,8 +347,18 @@ impl Avc444Encoder {
         main_buf.write_nv12(&main)?;
         let aux_buf = PixelBuffer::new_nv12(aux.size())?;
         aux_buf.write_nv12(&aux)?;
-        self.main_out.extend(self.main.encode(&main_buf, at)?);
-        self.aux_out.extend(self.aux.encode(&aux_buf, at)?);
+        // Both views at once: with low-latency rate control an encode call returns only when
+        // the frame is done, so one after the other would double the time per frame.
+        let (main_enc, aux_enc) = (&mut self.main, &mut self.aux);
+        let (main_frames, aux_frames) = std::thread::scope(|s| {
+            let aux = s.spawn(|| aux_enc.encode(&aux_buf, at));
+            let main = main_enc.encode(&main_buf, at);
+            (main, aux.join())
+        });
+        let aux_frames =
+            aux_frames.map_err(|_| EncodeError::InvalidFrame("auxiliary encoder panicked".into()))?;
+        self.main_out.extend(main_frames?);
+        self.aux_out.extend(aux_frames?);
         self.submitted += 1;
         Ok(self.pairs())
     }

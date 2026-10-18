@@ -62,9 +62,10 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   fast-path input logged only. Menu-bar shell later (HOST-9).
 - [ ] **HOST-3 Capture.** New `drift-capture` crate: ScreenCaptureKit `SCStream` per display,
   IOSurface frames, dirty rects, cursor shape and position reported separately.
-- [ ] **HOST-4 Real-time encoder.** Extend `drift-video::encode` with a real-time profile (no
+- [✓] **HOST-4 Real-time encoder.** Extend `drift-video::encode` with a real-time profile (no
   reordering, low-latency rate control, bounded keyframe interval) and an AVC444 mode. Measure
-  60 fps at 4K on M1 (ADR open question 5).
+  60 fps at 4K on M1 (ADR open question 5). *Measured on an M4 Pro (ADR `HOST-4-realtime-encoder`): 4K60
+  AVC420 yes; AVC444 60 fps up to about 1080p, about 25 fps at 4K. M1 not measured.*
 - [ ] **HOST-5 Frame mailbox.** One-slot newest-frame mailbox between capture and encode, and
   between encode and the socket. Stats for dropped frames.
 - [ ] **HOST-6 Input injection.** Inverse of `drift-input::keymap` (set-1 scancodes → `kVK_*`),

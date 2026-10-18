@@ -110,16 +110,23 @@ fn bench_avc420(size: Size<u32>, sources: &[Vec<u8>], frames: u32, input: Input,
     let mut out: Vec<EncodedFrame> = Vec::new();
     let start = Instant::now();
     let mut first_pts = None;
+    let mut call = Duration::ZERO;
     for n in 0..frames {
         pace(start, n);
         let at = Instant::now();
         let got = enc.encode(&buffers[n as usize % buffers.len()], at).unwrap();
+        call += at.elapsed();
         let pts = at.duration_since(*first_pts.get_or_insert(at));
         submitted.insert(pts, at);
         out.extend(got);
     }
     out.extend(enc.flush().unwrap());
     let elapsed = start.elapsed();
+    println!(
+        "  encode call {:.1} ms mean, low-latency rate control: {}",
+        call.as_secs_f64() * 1e3 / f64::from(frames),
+        enc.is_low_latency()
+    );
     let latencies = out
         .iter()
         .filter_map(|f| {
@@ -128,6 +135,52 @@ fn bench_avc420(size: Size<u32>, sources: &[Vec<u8>], frames: u32, input: Input,
         })
         .collect();
     Stats { latencies, bytes: out.iter().map(|f| f.avcc().len()).sum(), elapsed, frames: out.len() }
+}
+
+/// AVC444's two encodes alone: both views split once up front, so this measures VideoToolbox,
+/// not the CPU split (which the host should run on the GPU).
+fn bench_avc444_hw(size: Size<u32>, sources: &[Vec<u8>], frames: u32) -> Stats {
+    use drift_video::avc444::{aux_height, split_bgra};
+    let stride = (size.width * 4) as usize;
+    let aux_size = Size::new(size.width, aux_height(size.height));
+    let views: Vec<(PixelBuffer, PixelBuffer)> = sources
+        .iter()
+        .map(|src| {
+            let (main, aux) = split_bgra(src, size, stride).unwrap();
+            let a = PixelBuffer::new_nv12(size).unwrap();
+            a.write_nv12(&main).unwrap();
+            let b = PixelBuffer::new_nv12(aux_size).unwrap();
+            b.write_nv12(&aux).unwrap();
+            (a, b)
+        })
+        .collect();
+    let mut main = VtEncoder::new(EncoderConfig::realtime(size, 60)).unwrap();
+    let mut aux = VtEncoder::new(EncoderConfig::realtime(aux_size, 60)).unwrap();
+    let (mut main_out, mut aux_out, mut submitted) = (Vec::new(), Vec::new(), Vec::new());
+    let start = Instant::now();
+    for n in 0..frames {
+        pace(start, n);
+        let at = Instant::now();
+        submitted.push(at);
+        let (a, b) = &views[n as usize % views.len()];
+        let (m, x) = std::thread::scope(|s| {
+            let x = s.spawn(|| aux.encode(b, at).unwrap());
+            (main.encode(a, at).unwrap(), x.join().unwrap())
+        });
+        main_out.extend(m);
+        aux_out.extend(x);
+    }
+    main_out.extend(main.flush().unwrap());
+    aux_out.extend(aux.flush().unwrap());
+    let elapsed = start.elapsed();
+    let latencies = main_out
+        .iter()
+        .zip(&aux_out)
+        .zip(&submitted)
+        .map(|((m, x), at)| m.completed_at().max(x.completed_at()).saturating_duration_since(*at))
+        .collect();
+    let bytes = main_out.iter().chain(&aux_out).map(|f| f.avcc().len()).sum();
+    Stats { latencies, bytes, elapsed, frames: main_out.len().min(aux_out.len()) }
 }
 
 fn bench_avc444(size: Size<u32>, sources: &[Vec<u8>], frames: u32) -> Stats {
@@ -236,5 +289,6 @@ fn main() {
     ] {
         bench_avc420(size, &sources, frames, input, ll).report(name);
     }
-    bench_avc444(size, &sources, frames).report("AVC444 (two streams)");
+    bench_avc444_hw(size, &sources, frames).report("AVC444 encoders only (views split up front)");
+    bench_avc444(size, &sources, frames).report("AVC444 (two streams, CPU split per frame)");
 }
