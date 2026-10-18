@@ -68,6 +68,7 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `STORE-1-mac-app-store` | `tauri.mas.conf.json` + `entitlements.mas.plist`, universal build, `cargo xtask mas-package`, what the account still lacks, export compliance |
 | `STORE-2-review-risk` | `drawsBackground` is wry's private transparency key (macOS and iOS); iOS uses public transparency; native overlays for the MAS build if review rejects; `cargo xtask review-risk` |
 | `STORE-3-ios-app-store` | privacy manifest from a scan of the built app, export options that never upload, `macos-private-api` via `drift-macos` only, `libapp.a` linked not bundled |
+| `STORE-4-host-release` | `cargo xtask host-release [--notarize]`: Developer ID, inside-out signing, Hardened Runtime, no sandbox or entitlements, notarized and stapled DMG |
 | `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility |
 
 ## Commands
@@ -87,6 +88,8 @@ another JS package manager.
 | `cargo xtask import-fixtures [--staging DIR]` | sanitize + import `~/code/drift-spikes/fixtures-staging` into `fixtures/` (M0-3, ADR `M0-3-fixture-capture-and-sanitization`) |
 | `cargo xtask host-setup-check` | read-only check of the GNOME host over SSH (M0-4, `docs/gnome-host-setup.md`) |
 | `cargo xtask bundle` | M9-5 (stub until then) |
+| `cargo xtask review-risk <app>` | private-API strings App Review may flag in a built Mac or iOS app (STORE-2) |
+| `cargo xtask host-release [--notarize]` | Drift Host: Developer ID, DMG, notarization + stapling (STORE-4); never publishes |
 | `cargo xtask mas-package [--profile F]` | the Mac App Store `.pkg`: universal, sandboxed, Apple Distribution + installer signature (STORE-1) |
 | `cargo tauri dev` / `cargo tauri build` | run / bundle the app (UI is built by bun first) |
 

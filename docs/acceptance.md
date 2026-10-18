@@ -594,3 +594,25 @@ chroma PSNR of 34.7 dB on coloured strokes. Still to do by hand:
 - [ ] With `virtual_display = false` in `host.toml`, the host captures the main display and the
       client letterboxes.
 
+## STORE — Distribution (validate only; nothing is uploaded or published)
+
+Blocked on the developer account (ADRs `STORE-1`..`STORE-3`): create the
+`com.hutsonlabs.drift` App ID, a Mac App Store and an iOS App Store provisioning profile, and an
+App Store Connect app record; answer the export-compliance question. Then:
+
+- [ ] **Mac:** `cargo xtask mas-package --profile <profile>`, then
+      `xcrun altool --validate-app -f target/universal-apple-darwin/release/bundle/mas/Drift.pkg -t macos --api-key … --api-issuer …`.
+      Record whether validation accepts the transparent webview (`drawsBackground`, ADR
+      `STORE-2-review-risk`); on rejection build the native overlays planned there.
+- [ ] **Export compliance:** add `ITSAppUsesNonExemptEncryption` to both apps' `Info.plist`
+      with the owner's answer (ADR `STORE-1-mac-app-store`).
+- [ ] **iOS:** set `bundle.iOS.developmentTeam`, install the iOS App Store profile, run
+      `cargo tauri ios build --export-method app-store-connect` (exports, never uploads), then
+      `xcrun altool --validate-app -f <ipa> -t ios …`; Xcode's privacy report on the archive lists
+      the manifest's four categories.
+- [ ] **iOS overlays without the private key:** in a simulator with `FAKE_HOST_CLOSE_AFTER=10`,
+      the reconnect overlay dims the last frame and the picture shows through (STORE-3 removed
+      wry's `drawsBackground` from iOS builds; only the live picture was checked).
+- [x] **Drift Host DMG** (STORE-4): notarized, stapled, Gatekeeper-accepted on 2026-10-18.
+- [ ] **Drift Host on a clean Mac:** install from the DMG on a Mac that never ran a build;
+      it opens without a Gatekeeper warning and asks for Screen Recording and Accessibility.

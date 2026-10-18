@@ -82,6 +82,13 @@ enum Cmd {
         /// The `.app` bundle (every file in `Contents/MacOS` is scanned) or one executable.
         path: PathBuf,
     },
+    /// Sign `Drift Host.app` with Developer ID, make the DMG and (optionally) notarize it (STORE-4).
+    HostRelease {
+        /// Submit the DMG to Apple's notary service and staple the ticket. Reads the App Store
+        /// Connect key from `APPLE_API_KEY_PATH`, `APPLE_KEY_ID` and `APPLE_API_ISSUER`.
+        #[arg(long)]
+        notarize: bool,
+    },
     /// Build the Mac App Store package: universal, sandboxed, Apple Distribution (STORE-1).
     MasPackage {
         /// The Mac App Store provisioning profile for `com.hutsonlabs.drift` to embed.
@@ -143,6 +150,7 @@ fn run(cmd: Cmd) -> Result<()> {
         Cmd::Bundle => not_yet("bundle", "M9-5"),
         Cmd::HostBundle { debug } => host_bundle(&root, if debug { "debug" } else { "release" }),
         Cmd::ReviewRisk { path } => review_risk(&path),
+        Cmd::HostRelease { notarize } => host_release(&root, notarize),
         Cmd::MasPackage { profile } => mas_package(&root, profile.as_deref()),
         Cmd::HostSetupCheck { host, headless, report, save_report } => {
             host_setup_check(host, &headless, report.as_deref(), save_report.as_deref())
@@ -206,6 +214,55 @@ fn is_mach_o(path: &Path) -> bool {
     let mut magic = [0_u8; 4];
     std::fs::File::open(path).and_then(|mut f| f.read_exact(&mut magic)).is_ok()
         && matches!(u32::from_be_bytes(magic), 0xFEED_FACF | 0xCFFA_EDFE | 0xCAFE_BABE | 0xBEBA_FECA)
+}
+
+fn checked(cmd: &mut Command, what: &str) -> Result<()> {
+    let status = cmd.status().with_context(|| format!("running {what}"))?;
+    if !status.success() {
+        bail!("{what} failed ({status})");
+    }
+    Ok(())
+}
+
+fn host_release(root: &Path, notarize: bool) -> Result<()> {
+    host_bundle(root, "release")?;
+    let plan = xtask::store::host_release_plan(root, env!("CARGO_PKG_VERSION"));
+    for args in &plan.sign {
+        checked(Command::new("codesign").args(args), "codesign")?;
+    }
+    checked(
+        Command::new("codesign").args(["--verify", "--deep", "--strict"]).arg(&plan.app),
+        "codesign --verify",
+    )?;
+    if plan.staging.exists() {
+        std::fs::remove_dir_all(&plan.staging)?;
+    }
+    std::fs::create_dir_all(&plan.staging)?;
+    checked(
+        Command::new("ditto").arg(&plan.app).arg(plan.staging.join(xtask::host_bundle::APP_NAME)),
+        "ditto",
+    )?;
+    std::os::unix::fs::symlink("/Applications", plan.staging.join("Applications"))?;
+    if let Some(dir) = plan.dmg.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    checked(Command::new("hdiutil").args(&plan.hdiutil), "hdiutil")?;
+    checked(Command::new("codesign").args(&plan.sign_dmg), "codesign (dmg)")?;
+    if notarize {
+        let var = |name: &str| std::env::var(name).with_context(|| format!("{name} is not set"));
+        let (key, key_id, issuer) =
+            (var("APPLE_API_KEY_PATH")?, var("APPLE_KEY_ID")?, var("APPLE_API_ISSUER")?);
+        // The key values are passed as arguments and never printed.
+        checked(
+            Command::new("xcrun")
+                .args(&plan.notarize_args)
+                .args(["--key", &key, "--key-id", &key_id, "--issuer", &issuer]),
+            "notarytool submit",
+        )?;
+        checked(Command::new("xcrun").args(&plan.staple_args), "stapler staple")?;
+    }
+    println!("{}", plan.dmg.display());
+    Ok(())
 }
 
 fn mas_package(root: &Path, profile: Option<&Path>) -> Result<()> {

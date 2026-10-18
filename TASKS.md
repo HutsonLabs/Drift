@@ -141,5 +141,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   900 MB `libapp.a` is no longer bundled (ADR `STORE-3-ios-app-store`). Archive and validation
   need a development team, an iOS App Store profile and an App Store Connect record for
   `com.hutsonlabs.drift`; TestFlight is out of scope (validate only).*
-- [ ] **STORE-4 Drift Host release.** Developer ID signing, notarization and DMG through the
-  M9-5 release path; Hardened Runtime without the App Sandbox.
+- [✓] **STORE-4 Drift Host release.** Developer ID signing, notarization and DMG through the
+  M9-5 release path; Hardened Runtime without the App Sandbox. *`cargo xtask host-release
+  --notarize` (ADR `STORE-4-host-release`); a notarized, stapled DMG passed Gatekeeper on
+  2026-10-18. Not published.*
