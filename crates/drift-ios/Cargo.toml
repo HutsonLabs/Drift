@@ -1,0 +1,23 @@
+[package]
+name = "drift-ios"
+description = "iOS platform layer for Drift (UIKit): app lifecycle reconnect triggers and the Settings link; later the remote view and input."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+drift-apple.workspace = true
+drift-core.workspace = true
+thiserror.workspace = true
+
+# UIKit exists only on iOS; the crate is empty elsewhere.
+[target.'cfg(target_os = "ios")'.dependencies]
+block2.workspace = true
+objc2.workspace = true
+objc2-foundation = { workspace = true, features = ["NSNotification", "NSString", "NSURL", "NSDictionary"] }
+objc2-ui-kit.workspace = true
+
+[lints]
+workspace = true

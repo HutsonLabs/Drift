@@ -1467,6 +1467,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "drift-apple"
+version = "0.2.0"
+dependencies = [
+ "block2",
+ "dispatch2",
+ "drift-core",
+ "drift-testkit",
+ "security-framework",
+ "tempfile",
+ "thiserror 2.0.20",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
 name = "drift-clipboard"
 version = "0.2.0"
 dependencies = [
@@ -1554,11 +1569,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "drift-ios"
+version = "0.2.0"
+dependencies = [
+ "block2",
+ "drift-apple",
+ "drift-core",
+ "objc2",
+ "objc2-foundation",
+ "objc2-ui-kit",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "drift-macos"
 version = "0.2.0"
 dependencies = [
  "block2",
  "dispatch2",
+ "drift-apple",
  "drift-core",
  "drift-input",
  "drift-testkit",
@@ -1570,13 +1599,11 @@ dependencies = [
  "objc2-foundation",
  "objc2-quartz-core",
  "proptest",
- "security-framework",
  "tauri",
  "tempfile",
  "thiserror 2.0.20",
  "tracing",
  "uuid",
- "zeroize",
 ]
 
 [[package]]

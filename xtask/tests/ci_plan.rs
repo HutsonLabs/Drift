@@ -246,8 +246,18 @@ fn declared_features_skips_default() {
 // --- IOS-2: the platform-neutral and Apple-framework crates keep building for iOS ---
 
 /// The crates ADR `IOS-0` decision 8 requires to build for iOS.
-const IOS_CRATES: &[&str] =
-    &["drift-core", "drift-rdp", "drift-gfx", "drift-codec", "drift-input", "drift-video", "drift-render"];
+/// IOS-3 adds the shared Apple layer and the UIKit layer.
+const IOS_CRATES: &[&str] = &[
+    "drift-core",
+    "drift-rdp",
+    "drift-gfx",
+    "drift-codec",
+    "drift-input",
+    "drift-video",
+    "drift-render",
+    "drift-apple",
+    "drift-ios",
+];
 
 #[test]
 fn the_gate_lints_the_ios_crates_for_both_ios_targets() {
@@ -325,4 +335,44 @@ fn appkit_is_only_a_macos_target_dependency() {
             }
         }
     }
+}
+
+#[test]
+fn uikit_is_only_an_ios_target_dependency() {
+    // IOS-3: the mirror image of the AppKit rule; UIKit (`objc2-ui-kit`) never reaches macOS.
+    for (name, text) in workspace_manifests() {
+        let manifest = text.parse::<toml::Table>().expect("manifest parses");
+        for table in ["dependencies", "dev-dependencies", "build-dependencies"] {
+            let deps = manifest.get(table).and_then(toml::Value::as_table);
+            assert!(
+                deps.is_none_or(|d| !d.contains_key("objc2-ui-kit")),
+                "{name}: objc2-ui-kit must live under [target.'cfg(target_os = \"ios\")'.{table}]"
+            );
+        }
+        if let Some(targets) = manifest.get("target").and_then(toml::Value::as_table) {
+            for (cfg, spec) in targets {
+                let has_uikit = spec
+                    .get("dependencies")
+                    .and_then(toml::Value::as_table)
+                    .is_some_and(|d| d.contains_key("objc2-ui-kit"));
+                assert!(
+                    !has_uikit || cfg == "cfg(target_os = \"ios\")",
+                    "{name}: objc2-ui-kit under `{cfg}`"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn drift_ios_uses_uikit_and_drift_apple_does_not() {
+    let by_name: std::collections::BTreeMap<String, String> = workspace_manifests().into_iter().collect();
+    let ios = by_name.get("drift-ios").expect("drift-ios is a workspace member");
+    assert!(ios.contains("objc2-ui-kit"), "drift-ios is the UIKit layer");
+    let apple = by_name.get("drift-apple").expect("drift-apple is a workspace member");
+    for framework in ["objc2-ui-kit", "objc2-app-kit"] {
+        assert!(!apple.contains(framework), "drift-apple is shared by macOS and iOS; no {framework}");
+    }
+    let macos = by_name.get("drift-macos").expect("drift-macos");
+    assert!(macos.contains("drift-apple"), "drift-macos builds on drift-apple");
 }
