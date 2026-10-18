@@ -54,6 +54,34 @@ impl Drop for Pump {
     }
 }
 
+/// Keeps the reference chain intact: once the server refused a picture, the pictures after it
+/// (still in the batch or already out of the encoder) reference one the client never got, so
+/// nothing but a keyframe may follow. H.264's decoder shows such frames with artifacts; HEVC's
+/// rejects them (`kVTVideoDecoderBadDataErr`), which would end the session (EXT-5).
+#[derive(Debug, Default)]
+pub(crate) struct KeyframeGate {
+    waiting: bool,
+}
+
+impl KeyframeGate {
+    /// Whether a picture may be offered to the server.
+    pub(crate) fn admit(&self, keyframe: bool) -> bool {
+        keyframe || !self.waiting
+    }
+
+    /// The server refused the picture just offered.
+    pub(crate) fn refused(&mut self) {
+        self.waiting = true;
+    }
+
+    /// The server queued the picture just offered.
+    pub(crate) fn sent(&mut self, keyframe: bool) {
+        if keyframe {
+            self.waiting = false;
+        }
+    }
+}
+
 /// Starts pumping `source` to `target`.
 pub(crate) fn start(mut source: Box<dyn LiveSource>, target: Arc<dyn GfxTarget>) -> std::io::Result<Pump> {
     let stop = Arc::new(AtomicBool::new(false));
@@ -64,6 +92,7 @@ pub(crate) fn start(mut source: Box<dyn LiveSource>, target: Arc<dyn GfxTarget>)
         let mut sent: u64 = 0;
         let mut idle = IdleHeartbeat::new(HEARTBEAT_INTERVAL);
         let mut backlog = BacklogMeter::default();
+        let mut gate = KeyframeGate::default();
         while !stopped.load(Ordering::Relaxed) {
             if target.take_keyframe_request() {
                 source.request_keyframe();
@@ -88,14 +117,21 @@ pub(crate) fn start(mut source: Box<dyn LiveSource>, target: Arc<dyn GfxTarget>)
             };
             let timestamp = u32::try_from(started.elapsed().as_millis()).unwrap_or(u32::MAX);
             for frame in &frames {
+                if !gate.admit(frame.keyframe) {
+                    continue;
+                }
                 match target.send(frame, timestamp) {
                     Some(true) => {
                         sent += 1;
+                        gate.sent(frame.keyframe);
                         idle.sent(Instant::now());
                     }
                     // The picture never reached the client, so later P-frames would reference
-                    // nothing: start again from a keyframe.
-                    Some(false) => source.request_keyframe(),
+                    // nothing: start again from a keyframe and send nothing else until it.
+                    Some(false) => {
+                        gate.refused();
+                        source.request_keyframe();
+                    }
                     None => return,
                 }
             }
