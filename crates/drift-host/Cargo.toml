@@ -15,9 +15,14 @@ path = "src/main.rs"
 drift-apple.workspace = true
 drift-core.workspace = true
 drift-ext.workspace = true
-# The VideoToolbox H.264 encoder (behind `recording` today) draws the skeleton's test pattern;
-# HOST-4's real-time encoder replaces it.
-drift-video = { workspace = true, features = ["recording"] }
+# Screen capture (HOST-3), injection (HOST-6), the keymap and the Mac's keyboard type.
+drift-capture.workspace = true
+drift-inject.workspace = true
+drift-input.workspace = true
+drift-macos.workspace = true
+# The VideoToolbox H.264 encoder: the real-time profile for the screen (HOST-4) and the test pattern.
+drift-video.workspace = true
+ironrdp-core.workspace = true
 ironrdp-displaycontrol.workspace = true
 ironrdp-dvc.workspace = true
 ironrdp-egfx.workspace = true

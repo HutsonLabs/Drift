@@ -13,7 +13,7 @@ fn the_default_listener_is_loopback_only_on_the_rdp_port() {
     let c = HostConfig::default();
     assert!(c.listen.ip().is_loopback(), "{}", c.listen);
     assert_eq!(c.listen.port(), 3389);
-    assert!(!c.inject_input, "input injection stays off in the skeleton");
+    assert_eq!(c.inject_input, None, "injection is automatic: on only with Accessibility");
     assert_eq!(c.desktop, Size::new(1920, 1080));
 }
 

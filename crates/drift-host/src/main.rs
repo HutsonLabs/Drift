@@ -13,7 +13,6 @@ use drift_core::SecretRole;
 use drift_host::config::{HostConfig, default_dir};
 use drift_host::frames::TestPattern;
 use drift_host::identity::HostIdentity;
-use drift_host::input::RecordingInput;
 use drift_host::server::{Host, HostOptions};
 use uuid::Uuid;
 
@@ -87,9 +86,8 @@ fn run() -> Result<(), String> {
         .map_err(|e| e.to_string())?
         .ok_or("no password stored: run `drift-host set-password` first")?;
     let identity = HostIdentity::load_or_create(&dir).map_err(|e| e.to_string())?;
-    if config.inject_input {
-        tracing::warn!("inject_input is set, but this build only logs input (HOST-6 wiring comes later)");
-    }
+    let live = drift_host::setup::capture_or_pattern();
+    let input = drift_host::setup::input_for(config.inject_input, live.as_ref().map(|l| l.1.clone()));
     if config.listens_beyond_loopback() {
         tracing::warn!(listen = %config.listen, "listening beyond loopback without device pairing (HOST-8)");
     }
@@ -100,7 +98,8 @@ fn run() -> Result<(), String> {
         password,
         desktop: config.desktop,
         frames: Box::new(|| Box::new(TestPattern::new())),
-        input: Box::new(RecordingInput::default()),
+        live: live.map(|l| l.0),
+        input,
     })
     .map_err(|e| format!("cannot listen on {}: {e}", config.listen))?;
     println!("Drift Host listening on {}", host.addr());

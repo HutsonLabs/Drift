@@ -64,6 +64,8 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   on UDP (HOST-2) and `drift-rdp` connecting over QUIC with the paired-host flag (HOST-8).*
 - [✓] **HOST-2 Host skeleton.** New `drift-host` crate and binary: TLS listener, one session,
   fast-path input logged only. Menu-bar shell later (HOST-9).
+  *The screen, pointer and injection are wired in (ADR `HOST-pipeline`); the test pattern stays
+  as the fallback without Screen Recording.*
 - [~] **HOST-3 Capture.** New `drift-capture` crate: ScreenCaptureKit `SCStream` per display,
   IOSurface frames, dirty rects, cursor shape and position reported separately.
   *`drift-capture` built and tested (ADR `HOST-3-capture`); the pointer sampler ran for real, but

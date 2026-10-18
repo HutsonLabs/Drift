@@ -14,6 +14,8 @@ pub trait InputSink: Send {
     fn keyboard(&mut self, event: KeyboardEvent);
     /// A mouse event (move, button, wheel).
     fn mouse(&mut self, event: MouseEvent);
+    /// The session ended: let go of anything held (HOST-pipeline).
+    fn session_ended(&mut self) {}
 }
 
 /// What a [`RecordingInput`] has seen.
@@ -63,15 +65,19 @@ impl InputSink for RecordingInput {
     }
 }
 
+/// The host's input sink, shared by `ironrdp-server`'s handler and the connection loop (which
+/// tells it when a session ends).
+pub(crate) type SharedSink = Arc<Mutex<Box<dyn InputSink>>>;
+
 /// Adapts an [`InputSink`] to `ironrdp-server`'s input handler.
-pub(crate) struct SinkHandler(pub(crate) Box<dyn InputSink>);
+pub(crate) struct SinkHandler(pub(crate) SharedSink);
 
 impl RdpServerInputHandler for SinkHandler {
     fn keyboard(&mut self, event: KeyboardEvent) {
-        self.0.keyboard(event);
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).keyboard(event);
     }
 
     fn mouse(&mut self, event: MouseEvent) {
-        self.0.mouse(event);
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).mouse(event);
     }
 }
