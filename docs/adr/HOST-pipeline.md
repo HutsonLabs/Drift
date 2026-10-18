@@ -51,3 +51,19 @@ existed separately: `drift-capture` streams NV12 frames with damage into a one-s
   timer.
 - The screen's size changing mid-session (a display mode change) rebuilds the encoder but not
   the surface; HOST-10 owns display sizes.
+
+## Virtual displays and AVC444 (added when HOST-10 and AVC444-client merged)
+
+- The live factory takes a `LiveRequest`: which display to capture (`None` = main, or HOST-10's
+  virtual display id) and whether to encode AVC444.
+- A client layout that gets a virtual display stops the pump, reopens capture on that display,
+  and starts again on a new output and surface at the mode's size. The physical display keeps
+  its size, as before. The next session starts on the main display again.
+- When the graphics channel is ready the client's capabilities are known: `codec::choose`
+  picks AVC444 if the client confirmed it and the picture is at most 1920×1080, and the source
+  is reopened as `LiveAvc444Encoder` (BGRA capture, HOST-4's two views) if needed. Both views
+  carry the same regions; `HostStats::avc444_frames` counts them.
+- Tested on loopback with synthetic sources (`tests/live_glue.rs`): capture moves to the virtual
+  display at 1024×640, and a client with Drift's V10 caps gets AVC444 frames while a V8.1 client
+  never does.
+

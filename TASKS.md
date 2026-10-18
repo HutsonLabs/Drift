@@ -90,8 +90,9 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 - [~] **HOST-10 Virtual display.** `CGVirtualDisplay` created and resized from Display Control
   layouts; launch self-test; fallback to the physical display. *Planning, the private-API
   module with its self-test, the display manager and the physical fallback are in (ADR
-  `HOST-10-virtual-display`); a virtual display was created and removed on the dev Mac. Capturing
-  it waits for the host pipeline to capture `DisplayChoice::Id`; a real client resize is manual.*
+  `HOST-10-virtual-display`); a virtual display was created and removed on the dev Mac. The live
+  picture switches capture to the virtual display at its mode's size (ADR `HOST-pipeline`,
+  "Virtual displays and AVC444"); a real client resize is manual.*
 - [~] **HOST-11 Clipboard and audio.** CLIPRDR server role reusing `drift-clipboard`'s mapping;
   `ironrdp-rdpsnd` fed from ScreenCaptureKit audio.
   *Both directions of the clipboard and the host's sound to Drift's client work over loopback
