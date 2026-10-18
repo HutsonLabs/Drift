@@ -81,6 +81,36 @@ impl Default for DisplayPrefs {
     }
 }
 
+/// How a finger on the picture drives the remote pointer on iPhone and iPad (IOS-7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "kebab-case")]
+pub enum TouchMode {
+    /// The device decides: trackpad on iPhone, direct on iPad. Default.
+    #[default]
+    Auto,
+    /// The screen is a trackpad: relative pointer, taps click where the pointer is.
+    Trackpad,
+    /// Tap where you touch.
+    Direct,
+}
+
+impl TouchMode {
+    /// Resolves [`TouchMode::Auto`] for the device (`phone`: an iPhone-sized screen).
+    pub const fn resolve(self, phone: bool) -> Self {
+        match self {
+            Self::Auto if phone => Self::Trackpad,
+            Self::Auto => Self::Direct,
+            other => other,
+        }
+    }
+
+    /// `true` for [`TouchMode::Auto`] (not written to `profiles.toml`).
+    pub const fn is_auto(&self) -> bool {
+        matches!(self, Self::Auto)
+    }
+}
+
 /// Clipboard synchronisation level.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
@@ -209,6 +239,9 @@ pub struct ConnectionProfile {
     /// Clipboard preferences.
     #[serde(default)]
     pub clipboard: ClipboardPrefs,
+    /// Touch on iPhone and iPad (IOS-7); ignored on the Mac.
+    #[serde(default, skip_serializing_if = "TouchMode::is_auto")]
+    pub touch: TouchMode,
 }
 
 impl ConnectionProfile {
@@ -226,6 +259,7 @@ impl ConnectionProfile {
             keyboard: KeyboardPrefs::default(),
             display: DisplayPrefs::default(),
             clipboard: ClipboardPrefs::default(),
+            touch: TouchMode::default(),
         }
     }
 

@@ -126,10 +126,17 @@ fn two_finger_pan_scrolls() {
     p.move_to(at(100.0, 100.0));
     t.began(&mut p, &z, 1, at(400.0, 300.0), 0.0);
     t.began(&mut p, &z, 2, at(450.0, 300.0), 0.0);
-    t.moved(&mut p, &z, 1, at(400.0, 330.0), 0.05);
-    let out = t.moved(&mut p, &z, 2, at(450.0, 330.0), 0.05).events;
+    let mut out = t.moved(&mut p, &z, 1, at(400.0, 330.0), 0.05).events;
+    out.extend(t.moved(&mut p, &z, 2, at(450.0, 330.0), 0.05).events);
     // The centre moved 30 points down: 30 × 2 units per point = 60 wheel units (natural).
-    assert_eq!(out, vec![InputEvent::Wheel { horizontal: false, units: 60 }]);
+    let units: i32 = out
+        .iter()
+        .map(|e| match e {
+            InputEvent::Wheel { horizontal: false, units } => i32::from(*units),
+            other => panic!("only vertical wheel events: {other:?}"),
+        })
+        .sum();
+    assert_eq!(units, 60);
     let mut rest = t.ended(&mut p, &z, 1, at(400.0, 330.0), 0.4).events;
     rest.extend(t.ended(&mut p, &z, 2, at(450.0, 330.0), 0.4).events);
     assert!(rest.is_empty(), "no click after a scroll: {rest:?}");

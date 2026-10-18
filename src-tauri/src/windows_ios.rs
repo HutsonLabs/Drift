@@ -411,7 +411,7 @@ fn build_session_window<R: Runtime>(
         .build()
         .map_err(tauri_error)?;
     let web = SendView(page_view_of(&window)?);
-    let cmd_as = profile.keyboard.cmd_as;
+    let (cmd_as, touch) = (profile.keyboard.cmd_as, profile.touch);
     let label2 = label.to_owned();
     on_main(app, move |mtm| -> Result<(), CommandError> {
         let web = web.into_inner();
@@ -419,6 +419,7 @@ fn build_session_window<R: Runtime>(
         let link = SessionLink::new();
         view.set_handler(link.clone());
         view.set_cmd_as(cmd_as);
+        view.set_touch(touch, drift_ios::view::is_phone(mtm));
         view.setHidden(true);
         PLATFORM.with(|p| {
             p.borrow_mut()

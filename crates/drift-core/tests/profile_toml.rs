@@ -18,6 +18,7 @@ fn full_profile() -> ConnectionProfile {
         keyboard: KeyboardPrefs { cmd_as: CmdAs::Ctrl, type_with_mac_layout: true },
         display: DisplayPrefs { adaptive: false, retina: true },
         clipboard: ClipboardPrefs::Text,
+        touch: drift_core::TouchMode::Trackpad,
     }
 }
 

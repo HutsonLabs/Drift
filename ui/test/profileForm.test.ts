@@ -207,6 +207,7 @@ describe("saving", () => {
     check(field(h.root, "Type using Mac layout") as HTMLInputElement);
     type(field(h.root, "Command key sends"), "ctrl");
     type(field(h.root, "Clipboard"), "text");
+    type(field(h.root, "Touch on iPhone and iPad"), "direct");
     await flush();
     (h.root.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     expect(h.saved.length).toBe(1);
@@ -219,6 +220,7 @@ describe("saving", () => {
     expect(d.profile.linux_username).toBeNull();
     expect(d.profile.keyboard).toEqual({ cmd_as: "ctrl", type_with_mac_layout: true });
     expect(d.profile.clipboard).toBe("text");
+    expect(d.profile.touch).toBe("direct");
     expect(d.rdpPassword).toBe("pw-Fake1");
   });
 
