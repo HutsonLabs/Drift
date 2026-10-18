@@ -103,5 +103,5 @@ fn malformed_ipc_frames_are_errors_not_panics() {
     for n in 0..save.len() - 4 {
         assert!(decode(&save[4..4 + n]).is_err(), "prefix {n}");
     }
-    assert!(MAX_FRAME >= 64 * 1024, "room for a devices file");
+    const { assert!(MAX_FRAME >= 64 * 1024, "room for a devices file") };
 }

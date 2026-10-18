@@ -90,17 +90,37 @@ pub enum DeviceStoreError {
     Parse(PathBuf, String),
 }
 
+/// Writes a whole `devices.toml` somewhere else: through the daemon, which owns the file when
+/// the host runs as a daemon and agents (HOST-13).
+pub type DeviceSaver = Arc<dyn Fn(&str) -> Result<(), String> + Send + Sync>;
+
 /// The paired devices, kept in `devices.toml` (or only in memory).
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DeviceStore {
     path: Option<PathBuf>,
     devices: Vec<PairedDevice>,
+    saver: Option<DeviceSaver>,
+}
+
+impl std::fmt::Debug for DeviceStore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DeviceStore")
+            .field("path", &self.path)
+            .field("devices", &self.devices.len())
+            .field("brokered", &self.saver.is_some())
+            .finish()
+    }
+}
+
+/// Parses a `devices.toml` (the daemon checks what an agent asks it to write, HOST-13).
+pub fn parse_devices(text: &str) -> Result<Vec<PairedDevice>, String> {
+    toml::from_str::<DevicesFile>(text).map(|f| f.devices).map_err(|e| e.to_string())
 }
 
 impl DeviceStore {
     /// An empty list that is never saved (tests).
     pub fn memory() -> Self {
-        Self { path: None, devices: Vec::new() }
+        Self { path: None, devices: Vec::new(), saver: None }
     }
 
     /// The list in `dir/devices.toml`; a missing file is an empty list.
@@ -115,7 +135,7 @@ impl DeviceStore {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
             Err(e) => return Err(DeviceStoreError::Io(path, e)),
         };
-        Ok(Self { path: Some(path), devices })
+        Ok(Self { path: Some(path), devices, saver: None })
     }
 
     /// The devices.
@@ -123,8 +143,20 @@ impl DeviceStore {
         &self.devices
     }
 
+    /// Saves through `saver` instead of writing the file itself (an agent, HOST-13).
+    #[must_use]
+    pub fn with_saver(mut self, saver: DeviceSaver) -> Self {
+        self.saver = Some(saver);
+        self
+    }
+
     fn save(&self) -> Result<(), DeviceStoreError> {
         let Some(path) = &self.path else { return Ok(()) };
+        if let Some(saver) = &self.saver {
+            let text = toml::to_string(&DevicesFile { devices: self.devices.clone() })
+                .map_err(|e| DeviceStoreError::Parse(path.clone(), e.to_string()))?;
+            return saver(&text).map_err(|e| DeviceStoreError::Io(path.clone(), std::io::Error::other(e)));
+        }
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(|e| DeviceStoreError::Io(dir.to_owned(), e))?;
         }

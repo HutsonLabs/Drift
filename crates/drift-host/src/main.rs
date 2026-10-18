@@ -7,7 +7,12 @@
 //! drift-host pair [--config-dir DIR] [--listen ADDR]     # …and show a pairing code and QR code
 //! drift-host devices [--config-dir DIR]                  # list paired devices
 //! drift-host forget ID [--config-dir DIR]                # unpair a device
+//! drift-host daemon [--socket PATH] [--listen ADDR]      # the root broker (launchd, HOST-13)
+//! drift-host agent aqua|loginwindow [--socket PATH]      # a session agent (launchd, HOST-13)
 //! ```
+//!
+//! `daemon` and `agent` use the shared store (`/Library/Application Support/...`) unless
+//! `--config-dir` says otherwise.
 
 use std::io::BufRead as _;
 use std::path::PathBuf;
@@ -16,6 +21,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use drift_core::SystemClock;
+use drift_host::broker::SessionKind;
 use drift_host::config::default_dir;
 use drift_host::launch;
 use drift_host::pairing::{CODE_LIFETIME, DeviceStore, Pairing};
@@ -27,22 +33,36 @@ enum Command {
     SetPassword,
     Devices,
     Forget(Uuid),
+    Daemon,
+    Agent(SessionKind),
 }
 
 struct Args {
     config_dir: Option<PathBuf>,
+    socket: Option<PathBuf>,
     listen: Option<std::net::SocketAddr>,
     command: Command,
 }
 
 fn parse_args() -> Result<Args, String> {
-    let mut args = Args { config_dir: None, listen: None, command: Command::Serve { pair: false } };
+    let mut args =
+        Args { config_dir: None, socket: None, listen: None, command: Command::Serve { pair: false } };
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "set-password" => args.command = Command::SetPassword,
             "pair" => args.command = Command::Serve { pair: true },
             "devices" => args.command = Command::Devices,
+            "daemon" => args.command = Command::Daemon,
+            "agent" => {
+                let kind = it.next().ok_or("agent needs a session: aqua or loginwindow")?;
+                args.command = Command::Agent(match kind.as_str() {
+                    "aqua" => SessionKind::Aqua,
+                    "loginwindow" => SessionKind::LoginWindow,
+                    other => return Err(format!("unknown session {other}: aqua or loginwindow")),
+                });
+            }
+            "--socket" => args.socket = Some(it.next().ok_or("--socket needs a value")?.into()),
             "forget" => {
                 let id = it.next().ok_or("forget needs a device id (see `drift-host devices`)")?;
                 args.command = Command::Forget(id.parse().map_err(|_| format!("{id} is not a device id"))?);
@@ -76,6 +96,24 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), String> {
     let args = parse_args()?;
+    // HOST-13: the daemon and its agents share one store and one socket.
+    let socket = args.socket.clone().unwrap_or_else(|| PathBuf::from(drift_host::daemon::DEFAULT_SOCKET));
+    match args.command {
+        Command::Daemon => {
+            let dir = args.config_dir.unwrap_or_else(|| PathBuf::from(drift_host::daemon::DEFAULT_STORE));
+            let (daemon, _advert) = launch::start_daemon(&dir, args.listen, &socket)?;
+            println!("Drift Host broker listening on {}", daemon.addr());
+            daemon.wait();
+            return Ok(());
+        }
+        Command::Agent(kind) => {
+            let dir = args.config_dir.unwrap_or_else(|| PathBuf::from(drift_host::daemon::DEFAULT_STORE));
+            let (launched, _link) = launch::start_agent(&dir, &socket, kind)?;
+            launched.host.wait();
+            return Ok(());
+        }
+        _ => {}
+    }
     let dir = args.config_dir.or_else(default_dir).ok_or("no config directory (HOME is not set)")?;
     let config = launch::load_config(&dir, args.listen)?;
     let store = DeviceStore::load(&dir).map_err(|e| e.to_string())?;
@@ -93,7 +131,7 @@ fn run() -> Result<(), String> {
             let pairing = Pairing::new(store, Arc::new(SystemClock));
             return if pairing.remove_device(id) { Ok(()) } else { Err(format!("no paired device {id}")) };
         }
-        Command::SetPassword | Command::Serve { .. } => {}
+        Command::SetPassword | Command::Serve { .. } | Command::Daemon | Command::Agent(_) => {}
     }
     if args.command == Command::SetPassword {
         eprintln!("Password for {} (read from stdin; it is echoed if this is a terminal):", config.username);

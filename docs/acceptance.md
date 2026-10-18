@@ -594,3 +594,21 @@ chroma PSNR of 34.7 dB on coloured strokes. Still to do by hand:
 - [ ] With `virtual_display = false` in `host.toml`, the host captures the main display and the
       client letterboxes.
 
+
+### HOST-13 — Daemon, agents and the login window (ADR `HOST-13-login-window`)
+
+Needs the signed `Drift Host.app` (STORE-4) and an administrator. Never done on the dev Mac.
+
+- [ ] **Install:** from the app, register the daemon and the user agent; approve the daemon in
+      System Settings › General › Login Items. `sudo launchctl print system/com.hutsonlabs.drift.host.daemon`
+      shows it running; `launchctl print gui/$UID/com.hutsonlabs.drift.host.agent` shows the agent.
+- [ ] **Login-window agent:** `sudo cp "Drift Host.app/Contents/Library/LaunchAgents/com.hutsonlabs.drift.host.loginwindow.plist" /Library/LaunchAgents/`
+      (with `BundleProgram` replaced by the absolute path of `drift-host`), then log out.
+- [ ] **Store:** `/Library/Application Support/com.hutsonlabs.drift.host` is `root:admin 0750`,
+      `host-key.der` is `0640`; a non-admin user's agent logs that it cannot read the key.
+- [ ] **Logged in:** a paired iPad connects to the Mac's address; the daemon log says "connection
+      handed over" and the picture is the user's desktop. Switch users: the next connection goes to
+      the other user's agent.
+- [ ] **After a restart, nobody logged in:** the iPad connects; record what the login-window agent
+      shows (ScreenCaptureKit picture, or the test pattern). Typing the password from the iPad is
+      only possible if a picture appears.

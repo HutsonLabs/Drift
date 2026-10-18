@@ -141,7 +141,7 @@ async fn drift_reaches_the_console_agent_through_the_daemon() {
     assert_eq!(host.stats().sessions_served, 1);
 
     // Pairing writes go through the daemon, which owns devices.toml.
-    let text = "[[devices]]\nid = \"6f1c7f0e-1111-4222-8333-944455556666\"\nname = \"iPad\"\nkey = \"04ab\"\npaired_at = 1\n";
+    let text = "[[device]]\nid = \"6f1c7f0e-1111-4222-8333-944455556666\"\nname = \"iPad\"\nkey = \"04ab\"\npaired_at = 1\n";
     link.save_devices(text).unwrap();
     let saved = std::fs::read_to_string(dir.path().join("store").join("devices.toml")).unwrap();
     assert!(saved.contains("iPad"), "{saved}");

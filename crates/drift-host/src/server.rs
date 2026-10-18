@@ -171,9 +171,73 @@ impl Drop for Host {
     }
 }
 
+/// Where a host's connections come from (HOST-13).
+#[derive(Debug, Default)]
+pub enum Incoming {
+    /// It binds `HostOptions::listen` itself (TCP, plus QUIC with pairing).
+    #[default]
+    Bind,
+    /// The daemon accepts them and hands them over ([`crate::agent`]); TCP only.
+    Handed(Handed),
+}
+
+/// Connections accepted elsewhere and handed to this host.
+#[derive(Debug)]
+pub struct Handed {
+    rx: mpsc::UnboundedReceiver<(std::net::TcpStream, SocketAddr)>,
+    local: SocketAddr,
+}
+
+/// The sending side of [`Handed`].
+#[derive(Debug, Clone)]
+pub struct HandedSender(mpsc::UnboundedSender<(std::net::TcpStream, SocketAddr)>);
+
+impl HandedSender {
+    /// Hands one accepted connection to the host; `false` once the host has stopped.
+    pub fn hand(&self, stream: std::net::TcpStream, peer: SocketAddr) -> bool {
+        self.0.send((stream, peer)).is_ok()
+    }
+}
+
+impl Handed {
+    /// A channel of handed connections; `local` is what the host reports as its address (the
+    /// daemon's).
+    pub fn channel(local: SocketAddr) -> (HandedSender, Self) {
+        let (tx, rx) = mpsc::unbounded_channel();
+        (HandedSender(tx), Self { rx, local })
+    }
+}
+
+/// The accepting side of the connection loop.
+enum Listener {
+    Tcp(TcpListener),
+    Handed(mpsc::UnboundedReceiver<(std::net::TcpStream, SocketAddr)>),
+}
+
+impl Listener {
+    async fn accept(&mut self) -> std::io::Result<(tokio::net::TcpStream, SocketAddr)> {
+        match self {
+            Self::Tcp(listener) => listener.accept().await,
+            Self::Handed(rx) => {
+                let (stream, peer) = rx.recv().await.ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::BrokenPipe, "the daemon went away")
+                })?;
+                stream.set_nonblocking(true)?;
+                Ok((tokio::net::TcpStream::from_std(stream)?, peer))
+            }
+        }
+    }
+}
+
 impl Host {
     /// Binds the listener and starts serving on a thread of its own.
     pub fn start(options: HostOptions) -> std::io::Result<Self> {
+        Self::start_with(options, Incoming::Bind)
+    }
+
+    /// Starts serving connections from `incoming` (HOST-13: an agent serves what its daemon hands
+    /// it).
+    pub fn start_with(options: HostOptions, incoming: Incoming) -> std::io::Result<Self> {
         let HostOptions {
             listen,
             identity,
@@ -189,9 +253,16 @@ impl Host {
             pairing,
         } = options;
         let displays: SharedDisplays = Arc::new(Mutex::new(displays));
-        let listener = std::net::TcpListener::bind(listen)?;
-        listener.set_nonblocking(true)?;
-        let addr = listener.local_addr()?;
+        let (listener, addr) = match incoming {
+            Incoming::Bind => {
+                let listener = std::net::TcpListener::bind(listen)?;
+                listener.set_nonblocking(true)?;
+                let addr = listener.local_addr()?;
+                (Ok(listener), addr)
+            }
+            Incoming::Handed(handed) => (Err(handed.rx), handed.local),
+        };
+        let bound = listener.is_ok();
         let acceptor = identity.acceptor().map_err(std::io::Error::other)?;
         let stats = SharedStats::default();
         // HOST-11: the clipboard thread starts with the host; the sound factory per connection.
@@ -216,7 +287,8 @@ impl Host {
                 return;
             };
             // QUIC on the same port for paired devices (HOST-12); quinn needs the runtime.
-            let quic = pairing.as_ref().and_then(|_| {
+            // Handed connections are TCP only: the daemon owns the port (HOST-13).
+            let quic = pairing.as_ref().filter(|_| bound).and_then(|_| {
                 let _guard = runtime.enter();
                 match QuicHost::bind(addr, identity.cert_der().to_vec(), identity.key_pkcs8().to_vec()) {
                     Ok(host) => Some(Arc::new(host)),
@@ -303,6 +375,16 @@ impl Host {
                 *lock(&gfx.last_pointer) = None;
             };
             let connections = Connections { pairing, current, gfx: Arc::clone(&gfx), displays, quic };
+            let listener = match listener {
+                Ok(tcp) => match TcpListener::from_std(tcp) {
+                    Ok(l) => Listener::Tcp(l),
+                    Err(e) => {
+                        tracing::error!(error = %e, "cannot use the listener");
+                        return;
+                    }
+                },
+                Err(rx) => Listener::Handed(rx),
+            };
             runtime.block_on(serve(
                 &mut server,
                 listener,
@@ -404,14 +486,13 @@ async fn until(deadline: Option<tokio::time::Instant>) {
 /// The connection loop: one admitted session at a time, extra connections closed at once.
 async fn serve(
     server: &mut RdpServer,
-    listener: std::net::TcpListener,
+    mut listener: Listener,
     stats: &SharedStats,
     stopped: &mut tokio::sync::oneshot::Receiver<()>,
     on_start: &dyn Fn(&TransportStream),
     on_end: &dyn Fn(),
     connections: &Connections,
 ) {
-    let Ok(listener) = TcpListener::from_std(listener) else { return };
     // QUIC handshakes run on their own task, so a slow one never holds up TCP.
     let (quic_tx, mut quic_rx) = mpsc::channel::<(TransportStream, SocketAddr)>(4);
     if let Some(quic) = connections.quic.clone() {
@@ -431,10 +512,18 @@ async fn serve(
         });
     }
     let gate = SessionGate::new();
+    let mut listening = true;
     loop {
+        if !listening {
+            return;
+        }
         let (stream, peer) = tokio::select! {
             accepted = listener.accept() => match accepted {
                 Ok((tcp, peer)) => (TransportStream::Tcp(tcp), peer),
+                Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {
+                    tracing::info!("no more handed connections");
+                    return;
+                }
                 Err(e) => {
                     tracing::warn!(error = %e, "accept failed");
                     continue;
@@ -500,7 +589,13 @@ async fn serve(
                     tracing::info!(%peer, "device refused; dropping the connection");
                     break;
                 }
-                accepted = listener.accept() => {
+                accepted = listener.accept(), if listening => {
+                    if let Err(e) = &accepted
+                        && e.kind() == std::io::ErrorKind::BrokenPipe
+                    {
+                        // The daemon went away: finish this session, then stop.
+                        listening = false;
+                    }
                     if let Ok((extra, extra_peer)) = accepted {
                         debug_assert!(gate.try_begin().is_none());
                         tracing::info!(peer = %extra_peer, "refused: a session is already running");
