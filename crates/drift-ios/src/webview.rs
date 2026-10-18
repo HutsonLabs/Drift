@@ -72,3 +72,43 @@ pub fn is_front(page: &UIView) -> bool {
     let scene_key = scene.keyWindow().is_some_and(|k| std::ptr::eq(&*k, &*window));
     window.isKeyWindow() || scene_key || scene.windows().len() == 1
 }
+
+/// The address of the scene the page's window belongs to, as reported by
+/// `AppObserver::scene_disconnected` (IOS-11); `None` without a window or scene.
+pub fn scene_id(page: &UIView) -> Option<usize> {
+    let scene = page.window()?.windowScene()?;
+    Some(Retained::as_ptr(&scene) as usize)
+}
+
+/// The top and leading safe-area insets of the page's superview (the status bar, the camera
+/// housing in landscape), in points.
+pub fn safe_area(page: &UIView) -> (f64, f64) {
+    page.superview().map_or((0.0, 0.0), |s| {
+        let insets = s.safeAreaInsets();
+        (insets.top, insets.left)
+    })
+}
+
+/// Brings the page's window to the front (IOS-11).
+///
+/// On iPad (multiple scenes) this activates the window's **own** scene session. tao 0.35's
+/// `set_focus` sends an activation request without a session, which makes iPadOS open a new,
+/// empty scene instead. On iPhone the windows share one scene, and the window is made key and
+/// visible above the others.
+pub fn bring_to_front(mtm: MainThreadMarker, page: &UIView) {
+    use objc2_ui_kit::{UIApplication, UISceneSessionActivationRequest};
+    let Some(window) = page.window() else { return };
+    let app = UIApplication::sharedApplication(mtm);
+    match window.windowScene() {
+        Some(scene) if app.supportsMultipleScenes() => {
+            let request = UISceneSessionActivationRequest::requestWithSession(&scene.session());
+            let on_error = block2::RcBlock::new(|error: std::ptr::NonNull<objc2_foundation::NSError>| {
+                // SAFETY: UIKit passes a live error for the duration of the call.
+                let error = unsafe { error.as_ref() };
+                tracing::warn!(error = %error.localizedDescription(), "could not activate the window's scene");
+            });
+            app.activateSceneSessionForRequest_errorHandler(&request, Some(&on_error));
+        }
+        _ => window.makeKeyAndVisible(),
+    }
+}

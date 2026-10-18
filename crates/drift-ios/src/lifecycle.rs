@@ -18,6 +18,7 @@ use objc2_foundation::NSNotificationName;
 use objc2_foundation::{NSNotification, NSNotificationCenter, NSObjectProtocol};
 use objc2_ui_kit::{
     UIApplicationDidEnterBackgroundNotification, UIApplicationWillEnterForegroundNotification,
+    UISceneDidDisconnectNotification,
 };
 
 /// An observer of one `UIApplication` notification on the default center. Removed on drop.
@@ -63,6 +64,32 @@ impl AppObserver {
     pub fn background(handler: impl Fn() + Send + Sync + 'static) -> BackgroundObserver {
         // SAFETY: an immutable constant exported by UIKit.
         Self::start(unsafe { UIApplicationDidEnterBackgroundNotification }, handler)
+    }
+}
+
+impl AppObserver {
+    /// Calls `handler` with the scene's address (see `drift_ios::webview::scene_id`) whenever
+    /// iPadOS disconnects a scene — for example when the user closes a session window's scene
+    /// from the app switcher. tao ignores `sceneDidDisconnect:`, so Drift listens itself (IOS-11).
+    pub fn scene_disconnected(handler: impl Fn(usize) + Send + Sync + 'static) -> Self {
+        let center = NSNotificationCenter::defaultCenter();
+        let block = RcBlock::new(move |note: NonNull<NSNotification>| {
+            // SAFETY: the center passes a live notification for the duration of the call.
+            let note = unsafe { note.as_ref() };
+            if let Some(scene) = note.object() {
+                handler(Retained::as_ptr(&scene) as usize);
+            }
+        });
+        // SAFETY: as in `start`; UIKit exports the constant name.
+        let token = unsafe {
+            center.addObserverForName_object_queue_usingBlock(
+                Some(UISceneDidDisconnectNotification),
+                None,
+                None,
+                &block,
+            )
+        };
+        Self { center, token }
     }
 }
 

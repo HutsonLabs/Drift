@@ -397,3 +397,12 @@ app is in the background. Still to do by hand:
       text is typed into the remote's focused text field (Ctrl+V). Repeat with a copied photo
       and a "Text and images" profile. Copy on the remote, then paste in Notes. Switch the
       profile's clipboard off: the button disappears.
+- [ ] **IOS-11 switcher:** on an iPhone with two sessions, tap the round button at the top left
+      of a session: the menu lists Connections and both sessions with their status, the current
+      one checked; choosing another session shows it, choosing Connections shows the gallery.
+      On iPad, do the same, then close a session's window from the app switcher (swipe it up):
+      its session ends and its card in Connections goes back to idle. Close the Connections
+      window the same way, then choose Connections from a session's menu: it comes back.
+      Simulator runs can script this with `DRIFT_SMOKE_SCRIPT="wait:8;connect:Fake host 2;wait:8;pick:session-0"`
+      (`fake_host` with `FAKE_HOST_PROFILES=2`).
+

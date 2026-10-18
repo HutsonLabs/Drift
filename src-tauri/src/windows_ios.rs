@@ -27,6 +27,7 @@ use drift_gfx::FrameSink;
 use drift_ios::lifecycle::AppObserver;
 use drift_ios::pacing::FramePacing;
 use drift_ios::paste::{PasteButton, Pasted};
+use drift_ios::switcher::{MenuEntry, SwitcherButton};
 use drift_ios::view::{RemoteView, RemoteViewHandler};
 use drift_rdp::{SessionCommand, SessionHandle};
 use drift_render::{Compositor, Gpu, LayerTarget, RenderThread};
@@ -76,6 +77,8 @@ struct WindowPlatform {
     surface: Surface,
     link: Rc<SessionLink>,
     render: Option<RenderThread<Compositor<LayerTarget>>>,
+    /// The switcher button and its menu of windows (IOS-11).
+    switcher: SwitcherButton,
     /// The paste button over the picture (IOS-10); `None` if it could not be added.
     paste: Option<PasteButton>,
     /// The profile's clipboard preference: no paste button when it is off.
@@ -90,8 +93,13 @@ struct Shell {
     live: HashSet<String>,
     /// Up to 120 Hz while any live picture is on screen (ProMotion, IOS-4).
     pacing: Option<FramePacing>,
-    /// Foreground and background observers (visibility of every session).
+    /// Foreground and background observers (visibility of every session) and the scene
+    /// observer (an iPad window closed from the app switcher).
     observers: Vec<AppObserver>,
+    /// The Connections page, its scene, and whether iPadOS has disconnected it (IOS-11).
+    connections_web: Option<Retained<UIView>>,
+    connections_scene: Option<usize>,
+    connections_gone: bool,
 }
 
 thread_local! {
@@ -231,11 +239,10 @@ unsafe impl Send for SendView {}
 /// `autoconnect`, if any. Also starts the app-wide visibility observers.
 pub(crate) fn open_connections_window<R: Runtime>(app: &AppHandle<R>, autoconnect: Option<Uuid>) {
     install_visibility_observers(app);
+    install_scene_observer(app);
     let app = app.clone();
     std::thread::spawn(move || {
-        let built = template(&app, CONNECTIONS_TEMPLATE, CONNECTIONS_WINDOW)
-            .and_then(|config| WebviewWindowBuilder::from_config(&app, &config)?.build());
-        if let Err(e) = built {
+        if let Err(e) = build_connections_window(&app) {
             tracing::error!(error = %e, "could not create the Connections window");
             return;
         }
@@ -245,6 +252,55 @@ pub(crate) fn open_connections_window<R: Runtime>(app: &AppHandle<R>, autoconnec
             tracing::error!(error = %e, "autoconnect failed");
         }
     });
+}
+
+/// Builds the Connections window and remembers its scene (worker thread).
+fn build_connections_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), CommandError> {
+    let tauri_error = |e: tauri::Error| platform_error(e.to_string());
+    let config = template(app, CONNECTIONS_TEMPLATE, CONNECTIONS_WINDOW).map_err(tauri_error)?;
+    let window =
+        WebviewWindowBuilder::from_config(app, &config).map_err(tauri_error)?.build().map_err(tauri_error)?;
+    let web = SendView(page_view_of(&window)?);
+    on_main(app, move |_| {
+        let web = web.into_inner();
+        let scene = drift_ios::webview::scene_id(&web);
+        SHELL.with(|s| {
+            let mut shell = s.borrow_mut();
+            shell.connections_web = Some(web);
+            shell.connections_scene = scene;
+            shell.connections_gone = false;
+        });
+    })
+}
+
+/// iPadOS disconnects a scene when the user closes it from the app switcher. A session window's
+/// scene closing closes its session; the Connections window is rebuilt the next time it is
+/// asked for (IOS-11). tao does not report either.
+fn install_scene_observer<R: Runtime>(app: &AppHandle<R>) {
+    let app = app.clone();
+    let observer = AppObserver::scene_disconnected(move |scene| {
+        let app2 = app.clone();
+        defer_main(&app, move |_| {
+            let closed: Vec<String> = PLATFORM.with(|p| {
+                p.borrow()
+                    .iter()
+                    .filter(|(_, plat)| drift_ios::webview::scene_id(&plat.web) == Some(scene))
+                    .map(|(label, _)| label.clone())
+                    .collect()
+            });
+            for label in closed {
+                tracing::info!(%label, "its scene was closed; closing the session");
+                close_session_window(&app2, &label);
+            }
+            SHELL.with(|s| {
+                let mut shell = s.borrow_mut();
+                if shell.connections_scene == Some(scene) {
+                    shell.connections_gone = true;
+                }
+            });
+        });
+    });
+    SHELL.with(|s| s.borrow_mut().observers.push(observer));
 }
 
 /// Every session is visible while the app is in the foreground and hidden once iOS has moved it
@@ -269,12 +325,27 @@ fn install_visibility_observers<R: Runtime>(app: &AppHandle<R>) {
         AppObserver::foreground(set_all(app.clone(), true)),
         AppObserver::background(set_all(app.clone(), false)),
     ];
-    SHELL.with(|s| s.borrow_mut().observers = observers);
+    SHELL.with(|s| s.borrow_mut().observers.extend(observers));
 }
 
 /// Brings Connections forward; with `intent`, asks its page to open a sheet. Returns at once.
 pub fn show_connections<R: Runtime>(app: &AppHandle<R>, intent: Option<ConnectionsIntent>) {
-    focus_window(app, CONNECTIONS_WINDOW);
+    let gone = SHELL.with(|s| s.try_borrow().map(|s| s.connections_gone).unwrap_or(false));
+    if gone {
+        // Its scene was closed: rebuild the window, which brings a new scene forward.
+        let app = app.clone();
+        std::thread::spawn(move || {
+            if let Some(window) = app.get_webview_window(CONNECTIONS_WINDOW) {
+                let _ = window.destroy();
+            }
+            if let Err(e) = build_connections_window(&app) {
+                tracing::error!(error = %e, "could not rebuild the Connections window");
+            }
+            let _ = on_main(&app.clone(), move |_| push_connections_forced(&app));
+        });
+    } else {
+        focus_window(app, CONNECTIONS_WINDOW);
+    }
     if let Some(intent) = intent {
         let _ = ConnectionsIntentRequested(intent)
             .emit_to(app, EventTarget::webview_window(CONNECTIONS_WINDOW))
@@ -409,6 +480,7 @@ fn build_session_window<R: Runtime>(
     let web = SendView(page_view_of(&window)?);
     let label2 = label.to_owned();
     let clipboard = profile.clipboard;
+    let app3 = app.clone();
     on_main(app, move |mtm| -> Result<(), CommandError> {
         let web = web.into_inner();
         let view = drift_ios::webview::attach_below(mtm, &web).map_err(|e| platform_error(e.to_string()))?;
@@ -427,8 +499,18 @@ fn build_session_window<R: Runtime>(
         if paste.is_none() {
             tracing::warn!("could not add the paste button");
         }
-        let plat =
-            WindowPlatform { view, web, surface: Surface::Webview, link, render: None, paste, clipboard };
+        let parent = web.superview().ok_or_else(|| platform_error("the page is not in a window"))?;
+        let switcher = SwitcherButton::install(mtm, &parent, move |id| pick(&app3, &id));
+        let plat = WindowPlatform {
+            view,
+            web,
+            surface: Surface::Webview,
+            link,
+            render: None,
+            switcher,
+            paste,
+            clipboard,
+        };
         layout(&plat);
         PLATFORM.with(|p| {
             p.borrow_mut().insert(label2, plat);
@@ -469,10 +551,14 @@ pub fn session_labels() -> Vec<String> {
 /// once.
 pub(crate) fn focus_window<R: Runtime>(app: &AppHandle<R>, label: &str) {
     let label = label.to_owned();
-    let app2 = app.clone();
-    defer_main(app, move |_| {
-        if let Some(window) = app2.get_webview_window(&label) {
-            let _ = window.set_focus();
+    defer_main(app, move |mtm| {
+        let page = if label == CONNECTIONS_WINDOW {
+            SHELL.with(|s| s.borrow().connections_web.clone())
+        } else {
+            with_platform(&label, |plat| plat.web.clone())
+        };
+        if let Some(page) = page {
+            drift_ios::webview::bring_to_front(mtm, &page);
         }
     });
 }
@@ -559,6 +645,9 @@ fn layout(plat: &WindowPlatform) {
     let Some((width, height)) = drift_ios::webview::container_size(&plat.web) else { return };
     plat.view.setHidden(plat.surface == Surface::Webview);
     plat.web.setHidden(plat.surface == Surface::Remote);
+    let (top, left) = drift_ios::webview::safe_area(&plat.web);
+    plat.switcher.place(top, left);
+    plat.switcher.bring_to_front();
     if let Some(paste) = &plat.paste {
         paste.place(width, height);
         let picture = matches!(plat.surface, Surface::Remote | Surface::Hud(_));
@@ -711,6 +800,63 @@ pub(crate) fn reconnect<R: Runtime>(app: &AppHandle<R>, label: &str) -> Result<(
 /// Pushes the gallery state after a change (main thread).
 fn refresh_shell<R: Runtime>(app: &AppHandle<R>) {
     push_connections(app);
+    refresh_switchers(app);
+}
+
+/// Re-sends the gallery state to a rebuilt Connections page.
+fn push_connections_forced<R: Runtime>(app: &AppHandle<R>) {
+    SHELL.with(|s| {
+        if let Ok(mut shell) = s.try_borrow_mut() {
+            shell.connections = None;
+        }
+    });
+    push_connections(app);
+}
+
+/// Rebuilds every session window's switcher menu from the current sessions (main thread).
+fn refresh_switchers<R: Runtime>(app: &AppHandle<R>) {
+    let sessions: Vec<(String, String, ConnectionStatus)> = app
+        .state::<AppState>()
+        .sessions
+        .sessions()
+        .into_iter()
+        .map(|s| (s.window, s.profile.name, present::status_for(&s.view)))
+        .collect();
+    PLATFORM.with(|p| {
+        let Ok(map) = p.try_borrow() else { return };
+        for (label, plat) in map.iter() {
+            let menu: Vec<MenuEntry> = crate::switcher::entries(label, &sessions)
+                .into_iter()
+                .map(|e| MenuEntry { id: e.id, title: e.title, subtitle: e.subtitle, checked: e.current })
+                .collect();
+            plat.switcher.set_entries(&menu);
+        }
+    });
+}
+
+/// A switcher choice: Connections or a session window that still exists.
+pub(crate) fn pick<R: Runtime>(app: &AppHandle<R>, id: &str) {
+    match crate::switcher::target(id, &session_labels()) {
+        Some(crate::switcher::Target::Connections) => show_connections(app, None),
+        Some(crate::switcher::Target::Session(label)) => focus_window(app, &label),
+        None => {}
+    }
+    // Which window ended up in front a moment later (iPad activates scenes asynchronously),
+    // for the logs (`RUST_LOG=drift_app=debug`).
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(1));
+        defer_main(&app, |_| {
+            let front: Vec<String> = PLATFORM.with(|p| {
+                p.borrow()
+                    .iter()
+                    .filter(|(_, plat)| drift_ios::webview::is_front(&plat.web))
+                    .map(|(label, _)| label.clone())
+                    .collect()
+            });
+            tracing::debug!(?front, "switcher: session windows in front");
+        });
+    });
 }
 
 /// Writes remote clipboard contents to the general pasteboard, but only while the window is in
