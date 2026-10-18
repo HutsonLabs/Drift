@@ -139,3 +139,21 @@ fn ios_project_links_the_frameworks_the_crates_need() {
         assert!(spec.contains(framework), "project.yml does not link {framework}");
     }
 }
+
+/// IOS-9: Drift browses `_drift-host._tcp` (iOS refuses to browse a type the app did not
+/// declare) and scans pairing QR codes with the camera.
+#[test]
+fn ios_declares_bonjour_and_camera_use() {
+    let plist = read("gen/apple/drift-app_iOS/Info.plist");
+    let spec = read("gen/apple/project.yml");
+    assert!(
+        plist.contains("<key>NSBonjourServices</key>") && plist.contains("<string>_drift-host._tcp</string>")
+    );
+    assert!(spec.contains("NSBonjourServices:") && spec.contains("_drift-host._tcp"));
+    for key in ["NSCameraUsageDescription"] {
+        assert!(plist.contains(&format!("<key>{key}</key>")), "Info.plist lacks {key}");
+        assert!(spec.contains(&format!("{key}:")), "project.yml lacks {key}");
+    }
+    // macOS browses too (typed-code pairing): the Mac's Info.plist declares the same type.
+    assert!(read("Info.plist").contains("_drift-host._tcp"));
+}
