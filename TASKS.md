@@ -69,7 +69,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   60 fps at 4K on M1 (ADR open question 5).
 - [✓] **HOST-5 Frame mailbox.** One-slot newest-frame mailbox between capture and encode, and
   between encode and the socket. Stats for dropped frames.
-- [ ] **HOST-6 Input injection.** Inverse of `drift-input::keymap` (set-1 scancodes → `kVK_*`),
+- [✓] **HOST-6 Input injection.** Inverse of `drift-input::keymap` (set-1 scancodes → `kVK_*`),
   mouse and wheel through `CGEventPost`. One shared table and round-trip tests.
 - [ ] **HOST-7 Link hygiene.** Interactive-video service class on the socket; idle heartbeat to
   keep a phone's Wi-Fi radio awake; backlog detection feeding EXT-4.
