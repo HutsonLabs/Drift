@@ -90,6 +90,9 @@ pub struct SessionOptions {
     /// host, or V10 first for a paired Drift Host, which then may send AVC444 (ADR
     /// `AVC444-client`).
     pub gfx_caps: drift_gfx::GfxCaps,
+    /// Play the server's sound here (HOST-11). With `None` the client does not offer the sound
+    /// channel.
+    pub audio: Option<crate::audio::AudioOutput>,
 }
 
 impl Default for SessionOptions {
@@ -102,6 +105,7 @@ impl Default for SessionOptions {
             reconnect_seed: None,
             drift_mac: None,
             gfx_caps: drift_gfx::GfxCaps::Gnome,
+            audio: None,
         }
     }
 }

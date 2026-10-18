@@ -496,6 +496,24 @@ Recording in System Settings › Privacy & Security:
 - [ ] **Pointer:** the stream's frames never contain the pointer; moving it to a second display
       reports `Hidden` for the first.
 
+### HOST-11 — Clipboard and sound (ADR `HOST-11-clipboard-and-audio`)
+
+Loopback tests cover both clipboard directions and a test tone. By hand, with `drift-host`
+running and Drift connected:
+
+- [ ] **Mac → device:** copy text, then an image (a screenshot) on the Mac; paste on the iPad
+      or the client Mac. Copy a 40 MiB image: it is refused, nothing hangs.
+- [ ] **Device → Mac:** copy text on the client and paste it on the Mac (`pbpaste`); the Mac's
+      clipboard is not sent back to the client (no flicker, one change).
+- [ ] **Sound:** with Screen Recording granted to `drift-host`, play a video on the Mac: the
+      client plays it within a fraction of a second, in sync with the picture. Without Screen
+      Recording the session works, silently, and the host log says why.
+- [ ] **Stall:** pull the network for 5 s and restore it: the sound catches up with the
+      picture (no growing delay).
+- [ ] **iOS:** sound plays with the ringer switch on silent and mixes with music from another
+      app; locking the device stops it.
+- [ ] **GNOME:** a GNOME session with audio enabled in g-r-d now plays its sound in Drift.
+
 ### HOST-6 / EXT — Injection and the `Drift::Mac::v1` channel
 
 - [ ] **HOST-6 injection (by hand, once HOST-2 wires it):** with Accessibility granted to Drift

@@ -36,6 +36,8 @@ use ironrdp_svc::ChannelFlags;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
+use crate::audio::{AudioSourceFactory, HostSound};
+use crate::clipboard::{HostClipboard, PasteboardFactory};
 use crate::frames::{FrameError, FrameSource};
 use crate::gate::SessionGate;
 use crate::identity::HostIdentity;
@@ -68,6 +70,10 @@ pub struct HostOptions {
     pub live: Option<LiveFactory>,
     /// Where input goes.
     pub input: Box<dyn InputSink>,
+    /// The Mac pasteboard to share over CLIPRDR (HOST-11); `None` offers no clipboard.
+    pub clipboard: Option<PasteboardFactory>,
+    /// The sound to stream over rdpsnd (HOST-11); `None` offers no sound.
+    pub audio: Option<AudioSourceFactory>,
 }
 
 /// What the host has done so far.
@@ -97,6 +103,10 @@ pub struct HostStats {
     pub backlog: crate::link::Backlog,
     /// Heartbeats sent on an idle link (HOST-7).
     pub heartbeats: u64,
+    /// The current connection's clipboard channel is ready (HOST-11).
+    pub clipboard_ready: bool,
+    /// Sound waves sent (HOST-11).
+    pub audio_waves: u32,
 }
 
 type SharedStats = Arc<Mutex<HostStats>>;
@@ -110,6 +120,8 @@ pub struct Host {
     addr: SocketAddr,
     stats: SharedStats,
     drift_mac: Arc<Mutex<Option<Link>>>,
+    clipboard_ready: Option<Arc<Mutex<bool>>>,
+    audio_waves: Option<Arc<std::sync::atomic::AtomicU32>>,
     stop: Option<tokio::sync::oneshot::Sender<()>>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
@@ -131,12 +143,28 @@ impl Drop for Host {
 impl Host {
     /// Binds the listener and starts serving on a thread of its own.
     pub fn start(options: HostOptions) -> std::io::Result<Self> {
-        let HostOptions { listen, identity, username, password, desktop, frames, live, input } = options;
+        let HostOptions {
+            listen,
+            identity,
+            username,
+            password,
+            desktop,
+            frames,
+            live,
+            input,
+            clipboard,
+            audio,
+        } = options;
         let listener = std::net::TcpListener::bind(listen)?;
         listener.set_nonblocking(true)?;
         let addr = listener.local_addr()?;
         let acceptor = identity.acceptor().map_err(std::io::Error::other)?;
         let stats = SharedStats::default();
+        // HOST-11: the clipboard thread starts with the host; the sound factory per connection.
+        let clipboard = clipboard.map(HostClipboard::start).transpose()?;
+        let clipboard_ready = clipboard.as_ref().map(HostClipboard::ready_flag);
+        let sound = audio.map(HostSound::new);
+        let audio_waves = sound.as_ref().map(HostSound::waves);
         let drift_mac: Arc<Mutex<Option<Link>>> = Arc::default();
         let (stop, mut stopped) = tokio::sync::oneshot::channel::<()>();
         let (thread_stats, thread_mac) = (Arc::clone(&stats), Arc::clone(&drift_mac));
@@ -168,6 +196,10 @@ impl Host {
                 .with_input_handler(SinkHandler(Arc::clone(&input)))
                 .with_display_handler(HostDisplay { size: Arc::clone(&size), desktop, gfx: Arc::clone(&gfx) })
                 .with_gfx_factory(Some(Box::new(HostGfx(Arc::clone(&gfx)))))
+                .with_cliprdr_factory(
+                    clipboard.map(|c| Box::new(c) as Box<dyn ironrdp_server::CliprdrServerFactory>),
+                )
+                .with_sound_factory(sound.map(|s| Box::new(s) as Box<dyn ironrdp_server::SoundServerFactory>))
                 .build();
             server.add_dvc_factory(Box::new(DriftMacFactory(thread_mac)));
             server.set_credentials(Some(Credentials {
@@ -194,7 +226,15 @@ impl Host {
             };
             runtime.block_on(serve(&mut server, listener, &thread_stats, &mut stopped, &on_start, &on_end));
         })?;
-        Ok(Self { addr, stats, drift_mac, stop: Some(stop), thread: Some(thread) })
+        Ok(Self {
+            addr,
+            stats,
+            drift_mac,
+            clipboard_ready,
+            audio_waves,
+            stop: Some(stop),
+            thread: Some(thread),
+        })
     }
 
     /// The bound address.
@@ -213,6 +253,9 @@ impl Host {
         stats.drift_mac = lock(&self.drift_mac)
             .as_ref()
             .map_or_else(|| "Absent".to_owned(), |l| format!("{:?}", l.state()));
+        stats.clipboard_ready = self.clipboard_ready.as_ref().is_some_and(|r| *lock(r));
+        stats.audio_waves =
+            self.audio_waves.as_ref().map_or(0, |w| w.load(std::sync::atomic::Ordering::Relaxed));
         stats
     }
 

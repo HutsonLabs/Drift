@@ -89,10 +89,35 @@ impl<R: Runtime> SessionHost for TauriHost<R> {
 /// Every session offers the `Drift::Mac::v1` channel (EXT-1): a Drift Host opens it, every
 /// other server leaves it closed and the session is plain RDP. Only a paired Drift Host gets
 /// the V10 graphics caps that allow AVC444; GNOME keeps the verified V8.1 list, because V10
-/// makes g-r-d send AVC444v2 (ADR `AVC444-client`).
+/// makes g-r-d send AVC444v2 (ADR `AVC444-client`). Every session also plays the server's
+/// sound (HOST-11), through its own `AVAudioEngine` player.
 pub(crate) fn session_options(profile: &ConnectionProfile) -> SessionOptions {
     let gfx_caps = if profile.paired_host.is_some() { GfxCaps::DriftHost } else { GfxCaps::Gnome };
-    SessionOptions { drift_mac: Some(drift_ext::channel::Link::new()), gfx_caps, ..SessionOptions::default() }
+    SessionOptions {
+        drift_mac: Some(drift_ext::channel::Link::new()),
+        gfx_caps,
+        audio: Some(drift_rdp::audio::AudioOutput::new(SessionSound(drift_apple::audio_out::Player::new()))),
+        ..SessionOptions::default()
+    }
+}
+
+/// A session's sound output: the `drift-apple` player behind `drift-rdp`'s sink trait.
+struct SessionSound(drift_apple::audio_out::Player);
+
+impl drift_rdp::audio::AudioSink for SessionSound {
+    fn start(&self, format: drift_core::audio::PcmFormat) {
+        if let Err(e) = self.0.start(format) {
+            tracing::warn!(error = %e, "no sound for this session");
+        }
+    }
+
+    fn play(&self, pcm: &[u8]) {
+        self.0.play(pcm);
+    }
+
+    fn stop(&self) {
+        self.0.stop();
+    }
 }
 
 #[cfg(test)]
@@ -108,5 +133,6 @@ mod tests {
         profile.paired_host = Some(Uuid::new_v4());
         assert_eq!(session_options(&profile).gfx_caps, GfxCaps::DriftHost);
         assert!(session_options(&profile).drift_mac.is_some());
+        assert!(session_options(&profile).audio.is_some(), "every session plays sound (HOST-11)");
     }
 }

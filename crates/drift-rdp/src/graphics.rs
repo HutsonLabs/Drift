@@ -194,6 +194,7 @@ impl Graphics {
         clipboard: Option<CliprdrClient>,
         drift_mac: Option<&drift_ext::channel::Link>,
         caps: drift_gfx::GfxCaps,
+        sound: Option<ironrdp_rdpsnd::client::Rdpsnd>,
     ) -> impl FnOnce(ClientConnector) -> ClientConnector + Send + use<> {
         let drdynvc = DrdynvcClient::new().with_dynamic_channel(display_control);
         // EXT-1: offered only when the app asked for it; a non-Drift server never opens it.
@@ -223,8 +224,12 @@ impl Graphics {
         };
         move |connector| {
             let connector = connector.with_static_channel(drdynvc);
-            match clipboard {
+            let connector = match clipboard {
                 Some(cliprdr) => connector.with_static_channel(cliprdr),
+                None => connector,
+            };
+            match sound {
+                Some(rdpsnd) => connector.with_static_channel(rdpsnd),
                 None => connector,
             }
         }

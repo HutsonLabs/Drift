@@ -20,6 +20,7 @@
 //! - [`messages`]: user-facing disconnect explanations with next steps (M1-6, M9-4).
 //! - [`mailbox`]: the one-slot newest-item mailbox between Drift Host's pipeline stages (HOST-5).
 
+pub mod audio;
 pub mod clock;
 pub mod geometry;
 pub mod input;

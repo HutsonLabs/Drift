@@ -19,11 +19,15 @@
 //! | [`setup`] | the binary's wiring: screen or pattern, injection or logging | HOST-pipeline |
 //! | [`inject`] | client input → `drift-inject` plans → CoreGraphics events | HOST-pipeline |
 //! | [`codec`] | AVC444 or AVC420 for an output size and what the client confirmed | AVC444-client |
+//! | [`clipboard`] | the CLIPRDR server role over `drift-clipboard`'s sync state and the Mac pasteboard | HOST-11 |
+//! | [`audio`] | the rdpsnd server: 16-bit PCM from ScreenCaptureKit (or a test tone) | HOST-11 |
 //! | [`server`] | the listener, the connection loop, EGFX and Display Control wiring | HOST-2 |
 //!
 //! Pure modules are unit tested; [`server`] is covered by a loopback test against `drift-rdp`.
 
+pub mod audio;
 pub mod capture;
+pub mod clipboard;
 pub mod codec;
 pub mod config;
 pub mod frames;

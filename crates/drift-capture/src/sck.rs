@@ -71,7 +71,7 @@ struct Sent<T>(T);
 // displays); they are only read after crossing the channel.
 unsafe impl<T> Send for Sent<T> {}
 
-fn shareable_content() -> Result<Retained<SCShareableContent>, CaptureError> {
+pub(crate) fn shareable_content() -> Result<Retained<SCShareableContent>, CaptureError> {
     let (tx, rx) = mpsc::channel();
     let tx = Mutex::new(tx);
     let block = RcBlock::new(move |content: *mut SCShareableContent, error: *mut NSError| {
@@ -267,9 +267,9 @@ impl std::fmt::Debug for Output {
 }
 
 /// A completion handler and the receiver it reports to.
-type Completion = (RcBlock<dyn Fn(*mut NSError)>, mpsc::Receiver<Result<(), String>>);
+pub(crate) type Completion = (RcBlock<dyn Fn(*mut NSError)>, mpsc::Receiver<Result<(), String>>);
 
-fn completion() -> Completion {
+pub(crate) fn completion() -> Completion {
     let (tx, rx) = mpsc::channel();
     let tx = Mutex::new(tx);
     let block = RcBlock::new(move |error: *mut NSError| {
@@ -281,7 +281,7 @@ fn completion() -> Completion {
     (block, rx)
 }
 
-fn wait(rx: &mpsc::Receiver<Result<(), String>>) -> Result<(), CaptureError> {
+pub(crate) fn wait(rx: &mpsc::Receiver<Result<(), String>>) -> Result<(), CaptureError> {
     match rx.recv_timeout(TIMEOUT) {
         Ok(Ok(())) => Ok(()),
         Ok(Err(e)) => Err(CaptureError::Sck(e)),

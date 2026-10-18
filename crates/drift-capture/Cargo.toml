@@ -19,7 +19,8 @@ objc2.workspace = true
 objc2-app-kit = { workspace = true, features = ["NSCursor", "NSImage", "NSGraphicsContext"] }
 objc2-core-foundation.workspace = true
 objc2-core-graphics = { workspace = true, features = ["CGDirectDisplay", "CGWindow", "CGEvent", "CGEventTypes", "CGImage", "CGColorSpace", "CGContext"] }
-objc2-core-media = { version = "0.3.2", default-features = false, features = ["std", "objc2-core-video", "CMBase", "CMSampleBuffer", "CMTime", "CMSync", "CMFormatDescription", "CMAttachment"] }
+objc2-core-media = { version = "0.3.2", default-features = false, features = ["std", "objc2-core-video", "CMBase", "CMSampleBuffer", "CMTime", "CMSync", "CMFormatDescription", "CMAttachment", "CMBlockBuffer", "objc2-core-audio-types"] }
+objc2-core-audio-types = { version = "0.3.2", default-features = false, features = ["std", "CoreAudioBaseTypes"] }
 objc2-core-video = { workspace = true, features = ["CVPixelBuffer", "CVImageBuffer", "CVBuffer", "CVPixelBufferIOSurface", "objc2-io-surface"] }
 objc2-foundation = { workspace = true, features = ["NSArray", "NSDictionary", "NSString", "NSValue", "NSError", "NSGeometry"] }
 objc2-io-surface.workspace = true

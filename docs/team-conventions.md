@@ -61,6 +61,7 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `HOST-2-host-skeleton` | `drift-host` crate + binary: loopback default listener, one NLA account (Keychain), self-signed identity, one session (extra refused), `FrameSource` test pattern, DISP resize, input counted only, `add_dvc_factory` for `Drift::Mac::v1` |
 | `HOST-pipeline` | live picture per connection (capture → mailbox → real-time AVC420, damage → regions, never encode under backpressure), pointer updates with a shape cache, automatic injection with Accessibility |
 | `HOST-7-link-hygiene` | `NET_SERVICE_TYPE_VI` on the session socket, idle heartbeat = last pointer update every 100 ms, backlog from frames in flight + `SO_NWRITE` with hysteresis |
+| `HOST-11-clipboard-and-audio` | host runs the client's `ClipboardSync` on a clipboard thread; 16-bit stereo PCM rdpsnd from ScreenCaptureKit; `AVAudioEngine` player with a 200 ms cap; sound for every session |
 | `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility |
 
 ## Commands

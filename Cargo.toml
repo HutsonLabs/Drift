@@ -65,6 +65,7 @@ ironrdp-dvc = { path = "third_party/ironrdp/crates/ironrdp-dvc" }
 ironrdp-egfx = { path = "third_party/ironrdp/crates/ironrdp-egfx" }
 ironrdp-graphics = { path = "third_party/ironrdp/crates/ironrdp-graphics" }
 ironrdp-pdu = { path = "third_party/ironrdp/crates/ironrdp-pdu" }
+ironrdp-rdpsnd = { path = "third_party/ironrdp/crates/ironrdp-rdpsnd" }
 ironrdp-server = { path = "third_party/ironrdp/crates/ironrdp-server", default-features = false }
 ironrdp-session = { path = "third_party/ironrdp/crates/ironrdp-session" }
 ironrdp-svc = { path = "third_party/ironrdp/crates/ironrdp-svc" }

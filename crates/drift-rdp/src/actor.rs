@@ -495,11 +495,13 @@ impl Actor {
             ClipboardChannel::new(self.profile.clipboard, self.view.focused, Arc::clone(&self.clock));
         let cliprdr = channel.client();
         *self.clipboard.lock().unwrap_or_else(PoisonError::into_inner) = Some(channel);
+        let sound = self.options.audio.as_ref().map(crate::audio::AudioOutput::client);
         self.graphics.channels_for_leg(
             display_control,
             Some(cliprdr),
             self.options.drift_mac.as_ref(),
             self.options.gfx_caps,
+            sound,
         )
     }
 
