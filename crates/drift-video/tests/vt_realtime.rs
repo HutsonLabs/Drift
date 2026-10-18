@@ -95,8 +95,12 @@ fn avc444_streams_decode_and_combine_to_the_source() {
                 aux_dec.decode_picture(&picture.aux.to_annex_b().unwrap()).unwrap().expect("aux picture");
             assert!(AccessUnit::from_annex_b(&picture.aux.to_annex_b().unwrap()).is_ok());
             let back = combine(&main.to_planes().unwrap(), &aux.to_planes().unwrap()).unwrap();
-            let source =
-                bgra_to_yuv444(&bgra_frame(size, picture.index), size, (size.width * 4) as usize).unwrap();
+            let source = bgra_to_yuv444(
+                &bgra_frame(size, u32::try_from(picture.index).unwrap()),
+                size,
+                (size.width * 4) as usize,
+            )
+            .unwrap();
             let p_y = psnr(back.y(), source.y()).unwrap();
             let p_u = psnr(back.u(), source.u()).unwrap();
             let p_v = psnr(back.v(), source.v()).unwrap();

@@ -3,7 +3,7 @@
 //! BT.709 full-range matrix, which the client's decoder inverts). Pure; runs on every target.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use drift_core::Size;
+use drift_core::{Nv12Source as _, Size};
 use drift_video::avc444::{Yuv444, bgra_to_yuv444, combine, split};
 use proptest::prelude::*;
 
@@ -70,7 +70,7 @@ fn auxiliary_view_carries_the_other_chroma_samples() {
 fn heights_that_are_not_a_multiple_of_16_pad_the_auxiliary_luma_with_grey() {
     let size = Size::new(8, 20);
     let (main, aux) = split(&tagged(size)).unwrap();
-    assert_eq!((main.size(), aux.size()), (size, size));
+    assert_eq!((main.size(), aux.size()), (size, Size::new(8, 32)), "whole 16-row bands");
     // Band 1 holds U rows 2*(8+r)+1 for r = 0..8; only r = 0 and 1 exist (rows 17, 19).
     let w = 8usize;
     assert!(aux.y()[(16 + 2) * w..(16 + 4) * w].iter().all(|&s| s == 128));
@@ -139,4 +139,42 @@ fn bgra_to_yuv444_uses_grds_integer_matrix() {
         assert_eq!((pic.y()[i], pic.u()[i], pic.v()[i]), expect(r, g, b), "pixel {i}");
     }
     assert!(bgra_to_yuv444(&padded, Size::new(2, 4), stride).is_none(), "buffer too short");
+}
+
+#[test]
+fn filtered_combine_keeps_the_average_unless_the_rebuilt_sample_is_far_off() {
+    use drift_video::avc444::{CHROMA_FILTER_THRESHOLD, combine_filtered};
+    // One 2x2 chroma block: a small step (kept as the average) and a sharp edge (rebuilt).
+    let size = Size::new(2, 2);
+    let soft = Yuv444::new(size, vec![50; 4], vec![100, 104, 104, 104], vec![128; 4]).unwrap();
+    let (main, aux) = split(&soft).unwrap();
+    let back = combine_filtered(&main, &aux, CHROMA_FILTER_THRESHOLD).unwrap();
+    assert_eq!(back.u()[0], 103, "within the threshold: the average");
+    assert_eq!(back.u()[1..], [104, 104, 104]);
+    let edge = Yuv444::new(size, vec![50; 4], vec![240, 20, 20, 20], vec![128; 4]).unwrap();
+    let (main, aux) = split(&edge).unwrap();
+    assert_eq!(
+        combine_filtered(&main, &aux, CHROMA_FILTER_THRESHOLD).unwrap().u()[0],
+        240,
+        "an edge is rebuilt"
+    );
+    assert_eq!(combine_filtered(&main, &aux, 0).unwrap(), combine(&main, &aux).unwrap());
+}
+
+proptest! {
+    #[test]
+    fn the_one_pass_split_matches_convert_then_split(seed in any::<u64>(), wq in 1u32..5, hq in 1u32..12, pad in 0usize..3) {
+        use drift_video::avc444::split_bgra;
+        let size = Size::new(wq * 2, hq * 2);
+        let stride = (size.width as usize + pad) * 4;
+        let mut s = seed | 1;
+        let mut next = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; (s >> 24) as u8 };
+        let bgra: Vec<u8> = (0..stride * size.height as usize).map(|_| next()).collect();
+        let expect = split(&bgra_to_yuv444(&bgra, size, stride).unwrap()).unwrap();
+        let got = split_bgra(&bgra, size, stride).unwrap();
+        prop_assert_eq!(got.0.y(), expect.0.y());
+        prop_assert_eq!(got.0.uv(), expect.0.uv());
+        prop_assert_eq!(got.1.y(), expect.1.y());
+        prop_assert_eq!(got.1.uv(), expect.1.uv());
+    }
 }
