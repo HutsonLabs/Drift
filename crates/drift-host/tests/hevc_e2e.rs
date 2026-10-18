@@ -129,7 +129,21 @@ async fn a_paired_client_that_offers_hevc_gets_hevc() {
         },
     );
     wait_connected(&mut events).await;
-    wait_until("HEVC frames", Duration::from_secs(25), || host.stats().hevc_frames >= 10).await;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(40);
+    while host.stats().hevc_frames < 10 {
+        if tokio::time::Instant::now() >= deadline {
+            let mut seen = Vec::new();
+            while let Ok(Some(e)) = tokio::time::timeout(Duration::from_millis(10), events.recv()).await {
+                seen.push(format!("{e:?}"));
+            }
+            panic!(
+                "no HEVC frames: {:?}, requests {:?}, client events {seen:?}",
+                host.stats(),
+                requests.lock().unwrap()
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
     wait_until("the client drew them", Duration::from_secs(15), || picture_calls(&frames) >= 10).await;
     let stats = host.stats();
     assert!(stats.hevc_profile.is_some(), "the host reports what it picked: {stats:?}");

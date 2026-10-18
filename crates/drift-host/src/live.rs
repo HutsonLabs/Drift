@@ -164,6 +164,84 @@ mod tests {
     }
 
     #[test]
+    fn after_a_refused_frame_only_a_keyframe_goes_out_next() {
+        let mut gate = KeyframeGate::default();
+        assert!(gate.admit(true) && gate.admit(false), "a running stream goes out");
+        gate.refused();
+        assert!(!gate.admit(false), "a P-frame after the gap would reference nothing");
+        assert!(!gate.admit(false));
+        assert!(gate.admit(true), "the keyframe restarts the stream");
+        gate.sent(true);
+        assert!(gate.admit(false));
+    }
+
+    /// Frames K P P, then P P K P; the target refuses the second frame it is offered.
+    struct Script(Vec<Vec<bool>>);
+
+    impl LiveSource for Script {
+        fn size(&self) -> Size<u32> {
+            Size::new(64, 64)
+        }
+        fn request_keyframe(&mut self) {}
+        fn next(&mut self, timeout: Duration, _: bool) -> Result<Vec<LiveFrame>, FrameError> {
+            if self.0.is_empty() {
+                std::thread::sleep(timeout);
+                return Ok(Vec::new());
+            }
+            Ok(self
+                .0
+                .remove(0)
+                .into_iter()
+                .map(|keyframe| LiveFrame {
+                    au: vec![u8::from(keyframe)],
+                    regions: Vec::new(),
+                    keyframe,
+                    chroma: None,
+                    hevc: true,
+                })
+                .collect())
+        }
+    }
+
+    #[derive(Default)]
+    struct Refusing {
+        offered: Mutex<Vec<bool>>,
+    }
+
+    impl GfxTarget for Refusing {
+        fn backpressure(&self) -> bool {
+            false
+        }
+        fn send(&self, frame: &LiveFrame, _: u32) -> Option<bool> {
+            let mut offered = self.offered.lock().unwrap();
+            offered.push(frame.keyframe);
+            Some(offered.len() != 2)
+        }
+        fn pointer(&self, _: DisplayUpdate) {}
+        fn take_keyframe_request(&self) -> bool {
+            false
+        }
+        fn sample(&self) -> BacklogSample {
+            BacklogSample::default()
+        }
+        fn report_backlog(&self, _: Backlog) {}
+        fn heartbeat(&self) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn the_pump_skips_p_frames_after_a_refusal_until_a_keyframe() {
+        let target = Arc::new(Refusing::default());
+        let source = Script(vec![vec![true, false, false], vec![false, false, true, false]]);
+        let pump = start(Box::new(source), Arc::clone(&target) as Arc<dyn GfxTarget>).unwrap();
+        std::thread::sleep(Duration::from_millis(300));
+        drop(pump);
+        // K sent, P refused, P P P skipped, K sent, P sent.
+        assert_eq!(target.offered.lock().unwrap().as_slice(), &[true, false, true, false]);
+    }
+
+    #[test]
     fn an_idle_link_gets_heartbeats_and_a_slow_one_reports_its_backlog() {
         let fake = Arc::new(Fake::default());
         *fake.sample.lock().unwrap() = BacklogSample { frames_in_flight: 9, unsent_bytes: 0 };
