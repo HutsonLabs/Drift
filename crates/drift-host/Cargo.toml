@@ -55,6 +55,7 @@ objc2-core-graphics.workspace = true
 objc2-foundation = { workspace = true, features = ["NSArray", "NSString"] }
 
 [dev-dependencies]
+drift-gfx.workspace = true
 drift-ext.workspace = true
 drift-rdp.workspace = true
 drift-testkit.workspace = true

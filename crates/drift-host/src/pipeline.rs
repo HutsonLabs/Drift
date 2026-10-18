@@ -69,6 +69,16 @@ pub fn decide(backpressure: bool, has_damage: bool, keyframe_due: bool) -> Step 
     }
 }
 
+/// What a live source should capture and how to encode it (the glue between HOST-10's virtual
+/// displays, AVC444 and the pipeline).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LiveRequest {
+    /// A `CGDirectDisplayID` to capture, or `None` for the main display.
+    pub display: Option<u32>,
+    /// Encode AVC444 (two views from BGRA) instead of AVC420.
+    pub avc444: bool,
+}
+
 /// One raw frame and what changed since the previous one.
 #[derive(Debug)]
 pub struct RawFrame {
