@@ -147,3 +147,23 @@ fn pointer_pixels_go_bottom_up_bgra() {
         CursorShape::new(Size::new(1, 2), Point::new(0, 0), vec![255, 0, 0, 255, 0, 0, 255, 128]).unwrap();
     assert_eq!(drift_host::pointer::to_rdp_pixels(&shape), vec![255, 0, 0, 128, 0, 0, 255, 255]);
 }
+
+/// EXT-4 + EXT-5: the quality ladder reaches an HEVC session: a lower level lowers the encoder's
+/// bit rate and caps the frame rate, as it does for H.264 and AVC444.
+#[test]
+fn a_quality_step_reaches_the_hevc_encoder() {
+    use drift_core::video::{HevcProfile, Transfer};
+    use drift_host::pipeline::{HevcSelection, LiveHevcEncoder, LiveSource, MovingSquare};
+    use drift_host::quality::QualityLevel;
+
+    let size = drift_core::Size::new(640, 368);
+    let selection = HevcSelection { profile: HevcProfile::Main, transfer: Transfer::Sdr };
+    let mut live = LiveHevcEncoder::new(MovingSquare::new(size, 60), 60, selection).unwrap();
+    let best = live.average_bitrate();
+    live.set_quality(QualityLevel::Low);
+    assert!(live.average_bitrate() < best, "{} !< {best}", live.average_bitrate());
+    assert!(live.fps_cap() < 60, "Low halves the frame rate");
+    live.set_quality(QualityLevel::Best);
+    assert_eq!(live.average_bitrate(), best);
+    assert_eq!(live.fps_cap(), 60);
+}

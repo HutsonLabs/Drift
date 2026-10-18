@@ -173,3 +173,22 @@ fn garbage_is_an_error_not_a_panic() {
     assert!(matches!(dec.decode(&[]), Ok(None) | Err(_)));
     assert!(matches!(dec.decode(&[1, 2, 3]), Ok(None) | Err(_)));
 }
+
+/// EXT-4 + EXT-5: a quality step lowers the bit rate of a running HEVC session, which keeps
+/// encoding (paired clients get HEVC, so the quality ladder must reach it too).
+#[test]
+fn the_hevc_bit_rate_changes_on_a_running_session() {
+    let size = Size::new(640, 368);
+    let mut enc = HevcEncoder::new(HevcConfig::realtime(size, 60, HevcProfile::Main, Transfer::Sdr)).unwrap();
+    let t0 = Instant::now();
+    let mut frames = Vec::new();
+    for n in 0..12u32 {
+        if n == 6 {
+            enc.set_average_bitrate(1_500_000).unwrap();
+        }
+        frames.extend(enc.encode(&buffer(&text_like(n)), t0 + Duration::from_millis(u64::from(n) * 16)).unwrap());
+    }
+    frames.extend(enc.flush().unwrap());
+    assert_eq!(frames.len(), 12);
+    assert_eq!(enc.config().average_bitrate, 1_500_000);
+}
