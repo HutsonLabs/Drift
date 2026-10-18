@@ -3,6 +3,10 @@
 <plist version="1.0">
 <dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Drift connects to GNOME Remote Desktop hosts on your local network.</string>
+	<string>Drift connects to remote desktops on your local network: GNOME Remote Desktop and Macs running Drift Host.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_drift-host._tcp</string>
+	</array>
 </dict>
 </plist>

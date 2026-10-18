@@ -150,10 +150,8 @@ fn ios_declares_bonjour_and_camera_use() {
         plist.contains("<key>NSBonjourServices</key>") && plist.contains("<string>_drift-host._tcp</string>")
     );
     assert!(spec.contains("NSBonjourServices:") && spec.contains("_drift-host._tcp"));
-    for key in ["NSCameraUsageDescription"] {
-        assert!(plist.contains(&format!("<key>{key}</key>")), "Info.plist lacks {key}");
-        assert!(spec.contains(&format!("{key}:")), "project.yml lacks {key}");
-    }
+    assert!(plist.contains("<key>NSCameraUsageDescription</key>"), "Info.plist lacks NSCameraUsageDescription");
+    assert!(spec.contains("NSCameraUsageDescription:"), "project.yml lacks NSCameraUsageDescription");
     // macOS browses too (typed-code pairing): the Mac's Info.plist declares the same type.
     assert!(read("Info.plist").contains("_drift-host._tcp"));
 }

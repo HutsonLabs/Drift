@@ -8,6 +8,8 @@ import type {
   ConnectionProfile_Serialize,
   Connections,
   ConnectionsIntent,
+  HostAdvert,
+  PairingInput,
   OpenConnection,
   ProfileEntry_Serialize,
   Thumbnail,
@@ -21,6 +23,7 @@ import { renderConfirm } from "./views/confirm";
 import { type Filter, renderGallery } from "./views/gallery";
 import { openMenu } from "./views/menu";
 import { type FormDraft, type FormModel, formModel, isDirty, toSecretsUpdate } from "./views/profileForm";
+import { type PairSheetHandle, renderPairSheet } from "./views/pairSheet";
 import { renderSheet, type SheetHandle } from "./views/sheet";
 
 /** The IPC commands the Connections page uses. */
@@ -37,6 +40,11 @@ export type ConnectionsApi = Pick<
   | "showWindow"
   | "disconnectProfile"
   | "connections"
+  | "startHostDiscovery"
+  | "stopHostDiscovery"
+  | "readPairingCode"
+  | "pairHost"
+  | "scanPairingQr"
 >;
 
 /** The Connections page controller. */
@@ -50,6 +58,8 @@ export class ConnectionsApp {
   private query = "";
   private focusId: string | null = null;
   private sheet: { model: FormModel; handle: SheetHandle } | null = null;
+  /** The "Pair a Mac" sheet while it is open (IOS-9). */
+  private pairing: PairSheetHandle | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
 
   private readonly page: HTMLElement;
@@ -90,6 +100,7 @@ export class ConnectionsApp {
       h("span", { class: "spacer", "data-tauri-drag-region": true }),
       h("div", { class: "seg", role: "group", "aria-label": "Show" }, this.filterButtons.all, this.filterButtons.open),
       h("div", { class: "search" }, icon("search"), search),
+      h("button", { type: "button", class: "tb-btn", "aria-label": "Pair a Mac", title: "Pair a Mac running Drift Host", onclick: () => void this.openPairing() }, icon("display")),
       h("button", { type: "button", class: "tb-btn", "aria-label": "New Connection", title: "New Connection (⌘N)", onclick: () => void this.openNew() }, icon("plus")),
     );
     this.noticeSlot = h("div", { class: "notice-slot" });
@@ -139,6 +150,11 @@ export class ConnectionsApp {
       this.renderGallery();
       this.openEdit(intent.profile_id);
     }
+  }
+
+  /** Drift Hosts found while the pairing sheet is open (the `hostsDiscovered` event). */
+  onHostsDiscovered(hosts: HostAdvert[]): void {
+    this.pairing?.update(hosts);
   }
 
   /** Re-reads the clock into the uptime and countdown pills. */
@@ -359,11 +375,50 @@ export class ConnectionsApp {
     this.showSheet({ ...sheet.model, ...draftFields(d), profile: { ...d.profile, cert_pin: null }, original: { ...sheet.model.original, cert_pin: null } });
   }
 
+  // ---- pairing a Mac (IOS-9) -----------------------------------------------------------
+
+  private async openPairing(): Promise<void> {
+    if (this.pairing) return;
+    this.pairing = renderPairSheet(this.sheetLayer, {
+      read: async (text) => {
+        const r = (await this.api.readPairingCode(text)) as Result<PairingInput>;
+        return r.status === "ok" ? r.data : describeError(r.error);
+      },
+      scan: async () => {
+        const r = (await this.api.scanPairingQr()) as Result<string>;
+        return r.status === "ok" ? { text: r.data } : { error: describeError(r.error) };
+      },
+      pair: async (request) => {
+        const r = (await this.api.pairHost(request)) as Result<ProfileEntry_Serialize>;
+        if (r.status === "error") return describeError(r.error);
+        this.focusId = r.data.profile.id;
+        this.closePairing();
+        await this.reload();
+        this.renderGallery();
+        this.refocus();
+        return null;
+      },
+      cancel: () => this.closePairing(),
+    });
+    this.updateInert();
+    const r = (await this.api.startHostDiscovery()) as Result<null>;
+    if (r.status === "error") this.notice(describeError(r.error));
+  }
+
+  private closePairing(): void {
+    if (!this.pairing) return;
+    this.pairing = null;
+    void this.api.stopHostDiscovery();
+    mount(this.sheetLayer);
+    this.updateInert();
+    this.refocus();
+  }
+
   // ---- rendering ------------------------------------------------------------------------
 
   private updateInert(): void {
     const confirm = this.confirmLayer.childElementCount > 0;
-    const sheet = this.sheet !== null;
+    const sheet = this.sheet !== null || this.pairing !== null;
     this.page.toggleAttribute("inert", sheet || confirm);
     this.sheetLayer.toggleAttribute("inert", confirm);
   }

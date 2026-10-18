@@ -76,12 +76,26 @@ export const commands = {
 	windowIdentity: () => typedError<WindowIdentity, CommandError>(__TAURI_INVOKE("window_identity")),
 	/**  Turns the calling session window's statistics HUD on or off (the title bar's gauge). */
 	toggleStats: () => typedError<null, CommandError>(__TAURI_INVOKE("toggle_stats")),
+	/**  Recognises a scanned, pasted or typed pairing code (IOS-9). */
+	readPairingCode: (text: string) => typedError<PairingInput, CommandError>(__TAURI_INVOKE("read_pairing_code", { text })),
+	/**  Pairs a Mac running Drift Host and saves its connection (IOS-9). */
+	pairHost: (request: PairHostRequest) => typedError<ProfileEntry_Serialize, CommandError>(__TAURI_INVOKE("pair_host", { request })),
+	/**  Starts browsing for Drift Hosts; [`HostsDiscovered`] goes to the Connections page. */
+	startHostDiscovery: () => typedError<null, CommandError>(__TAURI_INVOKE("start_host_discovery")),
+	/**  Stops browsing for Drift Hosts. */
+	stopHostDiscovery: () => typedError<null, CommandError>(__TAURI_INVOKE("stop_host_discovery")),
+	/**
+	 *  Scans a pairing QR code with the camera and returns its text (iOS; on a Mac the code is
+	 *  typed or pasted instead).
+	 */
+	scanPairingQr: () => typedError<string, CommandError>(__TAURI_INVOKE("scan_pairing_qr")),
 };
 
 /** Events */
 export const events = {
 	connectionsChanged: makeEvent<ConnectionsChanged>("connections-changed"),
 	connectionsIntentRequested: makeEvent<ConnectionsIntentRequested>("connections-intent-requested"),
+	hostsDiscovered: makeEvent<HostsDiscovered>("hosts-discovered"),
 	sessionViewChanged: makeEvent<SessionViewChanged_Deserialize>("session-view-changed"),
 	thumbnailUpdated: makeEvent<ThumbnailUpdated>("thumbnail-updated"),
 	windowIdentityChanged: makeEvent<WindowIdentityChanged>("window-identity-changed"),
@@ -160,6 +174,10 @@ message: string } |
 message: string } | 
 /**  The window has no session (or it has already ended). */
 { kind: "no-session" } | 
+/**  Pairing input was refused or a pairing check failed (IOS-9). */
+{ kind: "pairing"; 
+/**  Human-readable reason. */
+message: string } | 
 /**  The command exists for the UI but its backend is not wired yet. */
 { kind: "not-implemented"; 
 /**  What is missing. */
@@ -206,8 +224,16 @@ export type ConnectionProfile_Deserialize = {
 	rdp_username: string,
 	/**  RemoteLogin only: the Linux user, shown in the greeter hint. */
 	linux_username?: string | null,
-	/**  TOFU-pinned certificate fingerprint of the first leg. */
+	/**
+	 *  TOFU-pinned certificate fingerprint of the first leg; for a paired Mac host, the pin
+	 *  taken from the pairing (never trust-on-first-use).
+	 */
 	cert_pin?: CertFingerprint | null,
+	/**
+	 *  The Drift Host this profile was paired with (IOS-9). `None` for GNOME hosts, which keep
+	 *  TOFU; absent from `profiles.toml` when `None`, so older files and readers are unaffected.
+	 */
+	paired_host?: string | null,
 	/**  Keyboard preferences. */
 	keyboard?: KeyboardPrefs,
 	/**  Display preferences. */
@@ -232,8 +258,16 @@ export type ConnectionProfile_Serialize = {
 	rdp_username: string,
 	/**  RemoteLogin only: the Linux user, shown in the greeter hint. */
 	linux_username?: string | null,
-	/**  TOFU-pinned certificate fingerprint of the first leg. */
+	/**
+	 *  TOFU-pinned certificate fingerprint of the first leg; for a paired Mac host, the pin
+	 *  taken from the pairing (never trust-on-first-use).
+	 */
 	cert_pin?: CertFingerprint | null,
+	/**
+	 *  The Drift Host this profile was paired with (IOS-9). `None` for GNOME hosts, which keep
+	 *  TOFU; absent from `profiles.toml` when `None`, so older files and readers are unaffected.
+	 */
+	paired_host?: string | null,
 	/**  Keyboard preferences. */
 	keyboard: KeyboardPrefs,
 	/**  Display preferences. */
@@ -334,6 +368,28 @@ export type ErrorExplanation = {
 	actions: ErrorAction[],
 };
 
+/**
+ *  A Drift Host found with Bonjour, from its TXT record
+ *  (`v`, `id`, `host`, `fp`, optional `name` and `port`).
+ */
+export type HostAdvert = {
+	/**  The Bonjour service instance name. */
+	service_name: string,
+	/**  The Drift Host's stable id. */
+	host_id: string,
+	/**  The Mac's name (the service name when the record has none). */
+	name: string,
+	/**  Host name to connect to (the Mac's `.local` name). */
+	host: string,
+	/**  RDP port. */
+	port: number,
+	/**  SHA-256 of the host's TLS certificate. */
+	fingerprint: CertFingerprint,
+};
+
+/**  Emitted to the `connections` page while discovery runs: every Drift Host currently found. */
+export type HostsDiscovered = HostAdvert[];
+
 /**  Keyboard preferences. */
 export type KeyboardPrefs = {
 	/**  Mapping of the Command key. */
@@ -366,6 +422,44 @@ export type OpenConnection = {
 	/**  The reconnect attempt while reconnecting. */
 	attempt: number | null,
 };
+
+/**  A pairing to perform. */
+export type PairHostRequest = 
+/**  From a QR payload. */
+{ kind: "qr"; 
+/**  The payload. */
+uri: string; 
+/**  The account on the Mac. */
+username: string; 
+/**  Its password, to store like any profile's (optional). */
+password: string | null } | 
+/**  A host found with Bonjour and the code typed from its screen. */
+{ kind: "advert"; 
+/**  The host. */
+advert: HostAdvert; 
+/**  The typed code. */
+code: string; 
+/**  The account on the Mac. */
+username: string; 
+/**  Its password (optional). */
+password: string | null };
+
+/**  What a scanned, pasted or typed pairing code turned out to be. */
+export type PairingInput = 
+/**  A QR payload: it names the host, so no Bonjour host needs choosing. */
+{ kind: "qr"; 
+/**  The payload, to pass back to [`PairHostRequest::Qr`]. */
+uri: string; 
+/**  The Mac's name. */
+name: string; 
+/**  Host name. */
+host: string; 
+/**  RDP port. */
+port: number } | 
+/**  A typed code, formatted `1234 5678`. */
+{ kind: "code"; 
+/**  The code. */
+code: string };
 
 /**  A profile plus which passwords are stored for it (never the passwords themselves). */
 export type ProfileEntry = ProfileEntry_Serialize | ProfileEntry_Deserialize;

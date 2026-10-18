@@ -89,7 +89,8 @@ export class FakeConnectionsApi {
           return ok({ kind: "qr", uri: text, name: "Studio Mac", host: "studio.local", port: 3389 });
         }
         const digits = text.replace(/[\s-]/g, "");
-        if (/^\d{8}$/.test(digits)) return ok({ kind: "code", code: `${digits.slice(0, 4)} ${digits.slice(4)}` });
+        // The one code with a valid check digit in these tests.
+        if (digits === "76543215") return ok({ kind: "code", code: "7654 3215" });
         return Promise.resolve({ status: "error", error: { kind: "pairing", message: "That code has a typo." } });
       },
       pairHost: (request: unknown) => {

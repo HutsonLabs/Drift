@@ -24,6 +24,7 @@ pub mod geometry;
 pub mod input;
 pub mod layout;
 pub mod messages;
+pub mod pairing;
 pub mod profile;
 pub mod reconnect;
 pub mod state;

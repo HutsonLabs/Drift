@@ -16,6 +16,7 @@ mod host;
 pub mod manager;
 pub mod menu;
 mod options;
+pub mod pairing;
 pub mod platform;
 pub mod present;
 pub mod profiles;
@@ -66,6 +67,11 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::new_connection,
             commands::window_identity,
             commands::toggle_stats,
+            commands::read_pairing_code,
+            commands::pair_host,
+            commands::start_host_discovery,
+            commands::stop_host_discovery,
+            commands::scan_pairing_qr,
         ])
         .events(tauri_specta::collect_events![
             view::SessionViewChanged,
@@ -73,6 +79,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             connections::ThumbnailUpdated,
             connections::ConnectionsIntentRequested,
             connections::WindowIdentityChanged,
+            pairing::HostsDiscovered,
         ])
         .typ::<drift_core::ConnectionProfile>()
         .typ::<drift_core::SessionState>()
@@ -118,6 +125,12 @@ pub fn run_with(options: RunOptions) {
                 None => app.path().app_config_dir()?,
             };
             // Passwords live in the Keychain (drift-apple, M3-2); tests use memory.
+            // Pairing items (IOS-9) follow the passwords: Keychain in production, memory otherwise.
+            let pairing_store: Arc<dyn pairing::PairingStore> = if secret_store.is_some() || memory_secrets {
+                Arc::new(pairing::MemoryPairingStore::new())
+            } else {
+                Arc::new(pairing::KeychainPairingStore::new(drift_apple::Keychain::new()))
+            };
             let secrets: Arc<dyn secrets::SecretStore> = match (&secret_store, memory_secrets) {
                 (Some(store), _) => Arc::clone(store),
                 (None, true) => Arc::new(secrets::MemorySecretStore::new()),
@@ -133,7 +146,8 @@ pub fn run_with(options: RunOptions) {
             // so they belong to the app, not to one window. Managed state keeps them alive.
             app.manage(services::PlatformServices::start(&handle, sessions.clone()));
             let frames = frames::FrameStore::in_dir(&dir);
-            app.manage(commands::AppState::new(profiles.clone(), sessions, frames));
+            let pairing = pairing::PairingService::new(profiles.clone(), pairing_store);
+            app.manage(commands::AppState::new(profiles.clone(), sessions, frames, pairing));
             // iOS has no menu bar and no Dock (IOS-5).
             #[cfg(target_os = "macos")]
             {

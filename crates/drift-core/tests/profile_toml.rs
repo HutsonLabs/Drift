@@ -15,6 +15,7 @@ fn full_profile() -> ConnectionProfile {
         rdp_username: "rdp-system".into(),
         linux_username: Some("drifttest".into()),
         cert_pin: Some(CertFingerprint::from_bytes(std::array::from_fn(|i| (i as u8).wrapping_mul(37)))),
+        paired_host: None,
         keyboard: KeyboardPrefs { cmd_as: CmdAs::Ctrl, type_with_mac_layout: true },
         display: DisplayPrefs { adaptive: false, retina: true },
         clipboard: ClipboardPrefs::Text,

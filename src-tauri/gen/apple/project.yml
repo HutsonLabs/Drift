@@ -52,7 +52,10 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         # Drift connects to hosts on the local network (ADR IOS-0 decision 9).
-        NSLocalNetworkUsageDescription: "Drift connects to GNOME Remote Desktop hosts on your local network."
+        NSLocalNetworkUsageDescription: "Drift connects to remote desktops on your local network: GNOME Remote Desktop and Macs running Drift Host."
+        # Pairing (IOS-9): browse Drift Hosts with Bonjour and scan their QR codes.
+        NSBonjourServices: [_drift-host._tcp]
+        NSCameraUsageDescription: "Drift uses the camera to scan the pairing code shown on your Mac."
         # One scene per session window on iPad (IOS-1, IOS-11); iPhone stays single-scene.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
