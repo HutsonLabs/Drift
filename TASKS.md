@@ -60,8 +60,10 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   GFX frame. The client tries UDP first with a paired Drift Host and falls back to TCP.
 - [ ] **HOST-2 Host skeleton.** New `drift-host` crate and binary: TLS listener, one session,
   fast-path input logged only. Menu-bar shell later (HOST-9).
-- [ ] **HOST-3 Capture.** New `drift-capture` crate: ScreenCaptureKit `SCStream` per display,
+- [~] **HOST-3 Capture.** New `drift-capture` crate: ScreenCaptureKit `SCStream` per display,
   IOSurface frames, dirty rects, cursor shape and position reported separately.
+  *`drift-capture` built and tested (ADR `HOST-3-capture`); the pointer sampler ran for real, but
+  this Mac has no Screen Recording grant, so a live stream is a manual step in `docs/acceptance.md`.*
 - [ ] **HOST-4 Real-time encoder.** Extend `drift-video::encode` with a real-time profile (no
   reordering, low-latency rate control, bounded keyframe interval) and an AVC444 mode. Measure
   60 fps at 4K on M1 (ADR open question 5).

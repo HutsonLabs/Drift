@@ -48,13 +48,24 @@ fn streams_iosurface_frames_of_the_display_size() {
 }
 
 #[test]
+fn the_main_display_has_a_pixel_size_without_screencapturekit() {
+    let main = drift_capture::sck::main_display();
+    assert!(main.points.width > 0 && main.points.height > 0, "{main:?}");
+    assert!(main.pixels.width >= main.points.width, "{main:?}");
+}
+
+#[test]
 fn samples_the_cursor_separately() {
-    if !permitted("samples_the_cursor_separately") {
-        return;
-    }
-    let list = displays().unwrap();
-    let sample = drift_capture::cursor_sample::sample(&list[0]);
+    // Needs no Screen Recording permission: the position is a CGEvent location and the shape
+    // comes from NSCursor.
+    let sample = drift_capture::cursor_sample::sample(&drift_capture::sck::main_display());
     if let Some(shape) = &sample.shape {
         assert_eq!(shape.rgba().len(), shape.size().width as usize * shape.size().height as usize * 4);
+        assert!(shape.rgba().chunks_exact(4).any(|px| px[3] > 0), "the pointer image is not empty");
     }
+    eprintln!(
+        "cursor sample: position {:?}, shape {:?}",
+        sample.position,
+        sample.shape.as_ref().map(|s| (s.size(), s.hotspot()))
+    );
 }

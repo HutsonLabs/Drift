@@ -35,7 +35,10 @@ fn frame_status_follows_sc_frame_status() {
 fn from_frame_coords_rounds_outward_scales_and_clips() {
     assert_eq!(PixelRect::from_frame_coords(10.4, 20.6, 5.2, 5.0, 1.0, BOUNDS), Some(r(10, 20, 6, 6)));
     assert_eq!(PixelRect::from_frame_coords(10.0, 10.0, 5.0, 5.0, 2.0, BOUNDS), Some(r(20, 20, 10, 10)));
-    assert_eq!(PixelRect::from_frame_coords(990.0, 790.0, 50.0, 50.0, 1.0, BOUNDS), Some(r(990, 790, 10, 10)));
+    assert_eq!(
+        PixelRect::from_frame_coords(990.0, 790.0, 50.0, 50.0, 1.0, BOUNDS),
+        Some(r(990, 790, 10, 10))
+    );
     assert_eq!(PixelRect::from_frame_coords(-5.0, -5.0, 10.0, 10.0, 1.0, BOUNDS), Some(r(0, 0, 5, 5)));
     assert_eq!(PixelRect::from_frame_coords(2000.0, 0.0, 10.0, 10.0, 1.0, BOUNDS), None);
     assert_eq!(PixelRect::from_frame_coords(0.0, 0.0, 0.0, 10.0, 1.0, BOUNDS), None);
@@ -56,17 +59,17 @@ fn coalesce_merges_overlaps_and_touching_rects() {
 fn coalesce_falls_back_to_a_bounding_box_or_the_full_frame() {
     let many: Vec<PixelRect> = (0..20).map(|i| r(i * 20, 0, 5, 5)).collect();
     assert_eq!(coalesce(&many, BOUNDS, 8), Damage::Rects(vec![r(0, 0, 385, 5)]));
-    assert_eq!(coalesce(&[r(0, 0, 900, 500)], BOUNDS, 16), Damage::Full, "over half the frame is a full update");
+    assert_eq!(
+        coalesce(&[r(0, 0, 900, 500)], BOUNDS, 16),
+        Damage::Full,
+        "over half the frame is a full update"
+    );
     assert_eq!(coalesce(&[r(0, 0, 2000, 2000)], BOUNDS, 16), Damage::Full);
 }
 
 #[test]
 fn frame_damage_uses_dirty_rects_only_for_complete_frames() {
-    let meta = FrameMeta {
-        status: FrameStatus::Complete,
-        scale: 1.0,
-        dirty: vec![(10.0, 10.0, 20.0, 20.0)],
-    };
+    let meta = FrameMeta { status: FrameStatus::Complete, scale: 1.0, dirty: vec![(10.0, 10.0, 20.0, 20.0)] };
     assert_eq!(damage(&meta, BOUNDS, 16), Damage::Rects(vec![r(10, 10, 20, 20)]));
     let started = FrameMeta { status: FrameStatus::Started, ..meta.clone() };
     assert_eq!(damage(&started, BOUNDS, 16), Damage::Full, "the first frame is a full update");
@@ -93,7 +96,12 @@ fn display_selection_prefers_the_requested_id_then_main() {
 
 #[test]
 fn cursor_positions_map_to_display_pixels() {
-    let d = DisplayInfo { id: 1, origin: (100.0, 50.0), points: Size::new(800, 600), pixels: Size::new(1600, 1200) };
+    let d = DisplayInfo {
+        id: 1,
+        origin: (100.0, 50.0),
+        points: Size::new(800, 600),
+        pixels: Size::new(1600, 1200),
+    };
     assert_eq!(d.point_to_pixels(100.0, 50.0), Some(Point::new(0, 0)));
     assert_eq!(d.point_to_pixels(500.5, 350.25), Some(Point::new(801, 600)));
     assert_eq!(d.point_to_pixels(99.0, 50.0), None, "left of the display");
@@ -120,7 +128,10 @@ fn cursor_tracker_reports_only_changes() {
         t.update(&CursorSample { position: Some(Point::new(6, 5)), shape: Some(s2.clone()) }),
         vec![CursorEvent::Shape(s2.clone())]
     );
-    assert_eq!(t.update(&CursorSample { position: None, shape: Some(s2.clone()) }), vec![CursorEvent::Hidden]);
+    assert_eq!(
+        t.update(&CursorSample { position: None, shape: Some(s2.clone()) }),
+        vec![CursorEvent::Hidden]
+    );
     assert_eq!(
         t.update(&CursorSample { position: Some(Point::new(6, 5)), shape: Some(s2) }),
         vec![CursorEvent::Moved(Point::new(6, 5))],

@@ -443,3 +443,18 @@ to do by hand:
       connecting it reaches the pin check (a wrong certificate fails before credentials are sent).
 - [ ] **After HOST-8:** the Mac accepts the code and lists the device; a wrong code is refused
       with "The Mac did not accept the code."
+
+## HOST — Drift Host (Mac)
+
+### HOST-3 — Capture (ADR `HOST-3-capture`)
+
+Needs a Mac where the process running the tests (Terminal, or the CI runner) has Screen
+Recording in System Settings › Privacy & Security:
+
+- [ ] `cargo test -p drift-capture --test sck_smoke -- --nocapture` prints no "skipped" lines: the
+      displays list with pixel sizes, the first frame is IOSurface-backed, the display's pixel
+      size, and a full update.
+- [ ] **Dirty rects:** with a stream running, move a small window; the reported rects cover it in
+      output pixels on a Retina display (not half-size, which would mean they are points).
+- [ ] **Pointer:** the stream's frames never contain the pointer; moving it to a second display
+      reports `Hidden` for the first.
