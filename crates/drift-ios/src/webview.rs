@@ -57,3 +57,18 @@ pub fn place_page(page: &UIView, x: f64, y: f64, width: f64, height: f64, fill: 
 pub fn dispatch_main(work: impl FnOnce() + Send + 'static) {
     dispatch2::DispatchQueue::main().exec_async(work);
 }
+
+/// Whether the page's window is the one in front: its scene is foreground-active and the window
+/// is the scene's key window, or the scene's only window. On iPad every session window is its
+/// own scene and may never become "key" in the iPhone sense; on iPhone the windows share one
+/// scene and the front one is key (IOS-10, IOS-11).
+pub fn is_front(page: &UIView) -> bool {
+    use objc2_ui_kit::UISceneActivationState;
+    let Some(window) = page.window() else { return false };
+    let Some(scene) = window.windowScene() else { return window.isKeyWindow() };
+    if scene.activationState() != UISceneActivationState::ForegroundActive {
+        return false;
+    }
+    let scene_key = scene.keyWindow().is_some_and(|k| std::ptr::eq(&*k, &*window));
+    window.isKeyWindow() || scene_key || scene.windows().len() == 1
+}

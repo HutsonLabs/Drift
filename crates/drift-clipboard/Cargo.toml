@@ -27,6 +27,12 @@ objc2 = { workspace = true, optional = true }
 objc2-foundation = { workspace = true, optional = true, features = ["NSString", "NSData", "NSArray", "NSDictionary"] }
 objc2-app-kit = { workspace = true, optional = true, features = ["NSPasteboard", "NSBitmapImageRep", "NSImageRep"] }
 
+# UIPasteboard adapter (IOS-10).
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2.workspace = true
+objc2-foundation = { workspace = true, features = ["NSString", "NSData", "NSArray", "NSDictionary"] }
+objc2-ui-kit.workspace = true
+
 [dev-dependencies]
 drift-testkit.workspace = true
 proptest.workspace = true

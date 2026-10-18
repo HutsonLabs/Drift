@@ -16,6 +16,7 @@ mod host;
 pub mod manager;
 pub mod menu;
 mod options;
+pub mod paste;
 pub mod platform;
 pub mod present;
 pub mod profiles;

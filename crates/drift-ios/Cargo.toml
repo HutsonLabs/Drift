@@ -17,7 +17,7 @@ thiserror.workspace = true
 block2.workspace = true
 dispatch2 = "0.3.1"
 objc2.workspace = true
-objc2-foundation = { workspace = true, features = ["NSNotification", "NSString", "NSURL", "NSDictionary", "NSRunLoop", "NSObjCRuntime"] }
+objc2-foundation = { workspace = true, features = ["NSNotification", "NSString", "NSURL", "NSDictionary", "NSRunLoop", "NSObjCRuntime", "NSItemProvider", "NSProgress", "NSError", "NSData", "NSArray", "NSDate"] }
 objc2-ui-kit.workspace = true
 objc2-core-foundation.workspace = true
 objc2-quartz-core = { workspace = true, features = ["objc2-core-foundation", "objc2-metal"] }

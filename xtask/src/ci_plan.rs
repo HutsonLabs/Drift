@@ -179,6 +179,7 @@ pub const IOS_CRATES: &[&str] = &[
     "drift-render",
     "drift-apple",
     "drift-ios",
+    "drift-clipboard",
 ];
 
 /// The lint pass: formatting and clippy over every target and every feature.

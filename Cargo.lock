@@ -1497,6 +1497,7 @@ dependencies = [
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
+ "objc2-ui-kit",
  "proptest",
  "serde",
  "thiserror 2.0.20",

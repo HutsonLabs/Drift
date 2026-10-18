@@ -69,14 +69,9 @@ mod tests {
         let s = seen.clone();
         let target = PasteTarget::new(mtm(), move |p| s.borrow_mut().push(p));
         let text = NSString::from_str("fake pasted text");
-        // SAFETY: an NSString is NSSecureCoding; the type identifier matches it.
-        let provider = unsafe {
-            NSItemProvider::initWithItem_typeIdentifier(
-                NSItemProvider::alloc(),
-                Some(ProtocolObject::from_ref(&*text)),
-                Some(&NSString::from_str("public.utf8-plain-text")),
-            )
-        };
+        // What UIKit hands a paste target: a provider written from the object itself.
+        let provider =
+            NSItemProvider::initWithObject(NSItemProvider::alloc(), ProtocolObject::from_ref(&*text));
         target.pasteItemProviders(&NSArray::from_retained_slice(&[provider]));
         spin_until(|| !seen.borrow().is_empty());
         let seen = seen.borrow();
