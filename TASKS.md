@@ -136,12 +136,26 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 
 ## STORE — Distribution
 
-- [ ] **STORE-1 Mac App Store packaging.** Provisioning profile, application/team identifier
+- [~] **STORE-1 Mac App Store packaging.** Provisioning profile, application/team identifier
   entitlements, universal build, `ITSAppUsesNonExemptEncryption` and export-compliance answers.
-  Update `bundle.shortDescription` for GNOME and Mac hosts.
-- [ ] **STORE-2 Review-risk check.** Upload a build to App Store Connect and validate it,
+  Update `bundle.shortDescription` for GNOME and Mac hosts. *`cargo xtask mas-package` builds a
+  universal, sandboxed, Apple Distribution-signed app in an installer-signed `.pkg` (ADR
+  `STORE-1-mac-app-store`). Blocked on the account: no `com.hutsonlabs.drift` App ID, profile or
+  app record. Owner's decisions (2026-10-18): skipped for now — no App ID, profiles or App Store
+  Connect record are created — and `ITSAppUsesNonExemptEncryption` stays unset.*
+- [~] **STORE-2 Review-risk check.** Upload a build to App Store Connect and validate it,
   including the transparent webview (ADR open question 7). Plan native overlays if it fails.
-- [ ] **STORE-3 iOS App Store packaging.** `NSLocalNetworkUsageDescription`,
-  `NSBonjourServices`, privacy manifest, TestFlight build.
-- [ ] **STORE-4 Drift Host release.** Developer ID signing, notarization and DMG through the
-  M9-5 release path; Hardened Runtime without the App Sandbox.
+  *Validate only (no upload, per the owner). `altool --validate-app` needs an App Store Connect
+  record for `com.hutsonlabs.drift`, which does not exist yet. `cargo xtask review-risk` finds
+  one private key (`drawsBackground`, from wry's transparent webview); the native-overlay plan is
+  in ADR `STORE-2-review-risk`, and iOS drops the key (STORE-3).*
+- [~] **STORE-3 iOS App Store packaging.** `NSLocalNetworkUsageDescription`,
+  `NSBonjourServices`, privacy manifest, TestFlight build. *Usage strings, privacy manifest and
+  App Store export options are in, iOS no longer carries wry's private transparency key, and the
+  900 MB `libapp.a` is no longer bundled (ADR `STORE-3-ios-app-store`). Archive and validation
+  need a development team, an iOS App Store profile and an App Store Connect record for
+  `com.hutsonlabs.drift`; TestFlight is out of scope (validate only).*
+- [✓] **STORE-4 Drift Host release.** Developer ID signing, notarization and DMG through the
+  M9-5 release path; Hardened Runtime without the App Sandbox. *`cargo xtask host-release
+  --notarize` (ADR `STORE-4-host-release`); a notarized, stapled DMG passed Gatekeeper on
+  2026-10-18. Not published.*

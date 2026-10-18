@@ -28,4 +28,5 @@ pub mod npm_ban;
 pub mod repo;
 pub mod sanitize;
 pub mod secret_scan;
+pub mod store;
 pub mod workflows;

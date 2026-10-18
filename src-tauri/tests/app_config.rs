@@ -80,18 +80,19 @@ fn windows_are_built_by_the_app_from_two_templates() {
 #[test]
 fn the_webview_is_transparent_so_overlays_can_be_drawn_over_the_picture() {
     // M7-3 keeps "the last frame dimmed under an overlay" and M1's stats HUD floats over the
-    // live picture. Both need a non-opaque WKWebView, which wry only does under Tauri's
-    // `macos-private-api` feature plus the matching config flag
-    // (docs/adr/M7-3-overlays-over-the-live-picture.md).
-    let conf: serde_json::Value = serde_json::from_str(&read("tauri.conf.json")).unwrap();
-    assert_eq!(conf["app"]["macOSPrivateApi"], true, "the CSS transparency rules are dead without it");
-    let manifest = read("Cargo.toml");
-    let tauri_dep =
-        manifest.lines().find(|l| l.trim_start().starts_with("tauri = ")).expect("a `tauri` dependency line");
-    assert!(
-        tauri_dep.contains("macos-private-api"),
-        "the config flag alone does nothing; wry needs the cargo feature: {tauri_dep}"
-    );
+    // live picture. Both need a non-opaque WKWebView, which wry only does on macOS under
+    // Tauri's `macos-private-api` cargo feature (docs/adr/M7-3-overlays-over-the-live-picture.md).
+    // Since STORE-2 the feature is enabled for macOS only, by `drift-macos` (a macOS-only
+    // dependency); Tauri 2.11 ignores the `macOSPrivateApi` config flag at run time, so it is not
+    // set (tauri-build would otherwise demand the feature on drift-app's own `tauri` entry, which
+    // iOS shares).
+    let manifest = read("../crates/drift-macos/Cargo.toml");
+    let tauri_dep = manifest
+        .lines()
+        .find(|l| l.trim_start().starts_with("tauri = {"))
+        .expect("a `tauri` dependency line");
+    assert!(tauri_dep.contains("macos-private-api"), "wry needs the cargo feature: {tauri_dep}");
+    assert!(read("Cargo.toml").contains("drift-macos = { workspace = true, features = [\"tauri\"] }"));
 }
 
 // ---- IOS-5: the iOS app project -------------------------------------------------------------

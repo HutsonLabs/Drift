@@ -30,7 +30,11 @@ targets:
     sources:
       - path: Sources
       - path: Assets.xcassets
+      # Rust's static library is linked (`dependencies` below), never copied into the app; a
+      # plain source entry made xcodegen bundle the 900 MB `libapp.a` as a resource (STORE-3).
       - path: Externals
+        buildPhase: none
+      # Info.plist, entitlements and the privacy manifest (PrivacyInfo.xcprivacy, a resource).
       - path: drift-app_iOS
       - path: assets
         buildPhase: resources
