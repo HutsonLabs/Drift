@@ -44,7 +44,7 @@ fn huge_layouts_shrink_to_the_maximum_and_keep_their_shape() {
     assert_eq!(p.pixels, Size::new(5120, 2880));
     let p = plan(&req(8000, 2000, None));
     assert_eq!(p.pixels, Size::new(5120, 1280));
-    assert!(p.pixels.width % 2 == 0 && p.pixels.height % 2 == 0);
+    assert!(p.pixels.width.is_multiple_of(2) && p.pixels.height.is_multiple_of(2));
 }
 
 #[test]

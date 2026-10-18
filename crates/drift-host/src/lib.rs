@@ -13,11 +13,17 @@
 //! | [`layout`] | client monitor layouts → desktop sizes the encoder accepts | HOST-2 |
 //! | [`input`] | input sinks: count/log only for now; HOST-6's injection plugs in here | HOST-2 |
 //! | [`frames`] | what the host shows: a test pattern until capture and the real-time encoder land | HOST-2 |
+//! | [`vdisplay_plan`] | client layouts → virtual-display modes (pure) | HOST-10 |
+//! | [`display`] | the display manager: a virtual display for the client, or the physical one | HOST-10 |
+//! | `cg_virtual` | the private `CGVirtualDisplay` API, isolated, with a launch self-test | HOST-10 |
 //! | [`server`] | the listener, the connection loop, EGFX and Display Control wiring | HOST-2 |
 //!
 //! Pure modules are unit tested; [`server`] is covered by a loopback test against `drift-rdp`.
 
+#[cfg(target_os = "macos")]
+pub mod cg_virtual;
 pub mod config;
+pub mod display;
 pub mod frames;
 pub mod gate;
 pub mod identity;
@@ -25,3 +31,4 @@ pub mod input;
 pub mod launch;
 pub mod layout;
 pub mod server;
+pub mod vdisplay_plan;

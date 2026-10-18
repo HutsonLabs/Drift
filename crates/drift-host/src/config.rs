@@ -25,6 +25,9 @@ pub struct HostConfig {
     pub desktop: Size<u32>,
     /// Inject the client's keyboard and mouse into this Mac (HOST-6). Off in the skeleton.
     pub inject_input: bool,
+    /// Give each client a virtual display at its own size (HOST-10). Falls back to the physical
+    /// display when macOS does not offer one.
+    pub virtual_display: bool,
 }
 
 impl Default for HostConfig {
@@ -34,6 +37,7 @@ impl Default for HostConfig {
             username: "drift".to_owned(),
             desktop: Size::new(1920, 1080),
             inject_input: false,
+            virtual_display: true,
         }
     }
 }

@@ -508,3 +508,14 @@ realtime_bench -- <width> <height> <frames>` while other builds ran. Still to do
 - [ ] Start at Login checks and unchecks; System Settings › General › Login Items lists Drift Host.
 - [ ] Quit Drift Host stops the listener (the port is free again).
 
+### HOST-10 — Virtual display (ADR `HOST-10-virtual-display`)
+
+- [ ] `cargo test -p drift-host --test cg_virtual -- --ignored` passes (creates a 1600×1000 HiDPI
+      display for a second; passed on the dev Mac, macOS 27, 2026-10-18).
+- [ ] Connect from an iPad to Drift Host: System Settings › Displays shows a "Drift Host" display at
+      the iPad's resolution; the iPad's picture is sharp (no scaling) and fills the screen.
+- [ ] Rotate the iPad / resize the Mac client window: the virtual display follows; disconnect: it
+      disappears and windows on it move back to the Mac's own display.
+- [ ] With `virtual_display = false` in `host.toml`, the host captures the main display and the
+      client letterboxes.
+
