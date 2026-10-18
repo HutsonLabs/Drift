@@ -115,3 +115,22 @@ describe("Pair a Mac", () => {
     expect(hasButton(sheet, "Pair")).toBe(true);
   });
 });
+
+describe("Pair a Mac from a drift-pair: link", () => {
+  test("the pair intent opens the sheet with the link as the code", async () => {
+    const started = await startConnections(new FakeConnectionsApi());
+    await started.app.onIntent({ kind: "pair", uri: "drift-pair:1?id=link" });
+    await flush();
+    const sheet = started.root.querySelector<HTMLElement>("[role=dialog][aria-label='Pair a Mac']")!;
+    expect(field(sheet, "Code shown on the Mac").value).toBe("drift-pair:1?id=link");
+    expect(text(sheet)).toContain("Pairs with Studio Mac");
+  });
+
+  test("a link that launched the app is picked up at start", async () => {
+    const fake = new FakeConnectionsApi();
+    fake.pendingLink = "drift-pair:1?id=cold";
+    const started = await startConnections(fake);
+    const sheet = started.root.querySelector<HTMLElement>("[role=dialog][aria-label='Pair a Mac']")!;
+    expect(field(sheet, "Code shown on the Mac").value).toBe("drift-pair:1?id=cold");
+  });
+});

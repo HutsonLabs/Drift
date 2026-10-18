@@ -29,6 +29,8 @@ export class FakeConnectionsApi {
   calls: unknown[][] = [];
   /** What `scan_pairing_qr` returns (IOS-9); `null` = no camera. */
   scanned: string | null = null;
+  /** A `drift-pair:` link that launched the app (`take_pairing_link`). */
+  pendingLink: string | null = null;
   /** What `pair_host` fails with, if anything. */
   pairError: CommandError | null = null;
   entries: ProfileEntry_Serialize[] = [];
@@ -75,6 +77,12 @@ export class FakeConnectionsApi {
       showWindow: (id: string) => (log("showWindow", id), done()),
       disconnectProfile: (id: string) => (log("disconnectProfile", id), done()),
       connections: () => (log("connections"), ok({ open: [...this.open] })),
+      takePairingLink: () => {
+        log("takePairingLink");
+        const link = this.pendingLink;
+        this.pendingLink = null;
+        return Promise.resolve(link);
+      },
       startHostDiscovery: () => (log("startHostDiscovery"), ok(null)),
       stopHostDiscovery: () => (log("stopHostDiscovery"), ok(null)),
       scanPairingQr: () => (

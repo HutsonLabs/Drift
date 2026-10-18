@@ -200,3 +200,12 @@ fn duplicating_a_paired_profile_drops_the_pairing() {
     assert_eq!(copy.profile.paired_host, None);
     assert_eq!(copy.profile.cert_pin, None);
 }
+
+#[test]
+fn opened_urls_yield_the_first_pairing_link() {
+    use drift_app::pairing::pairing_link;
+    let uri = PairingPayload::from(target()).to_uri();
+    let urls = ["https://example.com/".to_owned(), uri.clone(), "drift-pair:1?other".to_owned()];
+    assert_eq!(pairing_link(urls.iter().map(String::as_str)), Some(uri));
+    assert_eq!(pairing_link(["file:///tmp/x"].into_iter()), None);
+}

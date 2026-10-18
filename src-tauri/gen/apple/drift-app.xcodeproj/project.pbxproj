@@ -15,6 +15,7 @@
 		534CBCFBCB6CB3D99B4DAD60 /* libapp.a in Resources */ = {isa = PBXBuildFile; fileRef = 6A3A66923A491B5473BBCA03 /* libapp.a */; };
 		680E39603E0E02F2A52C020B /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB1ABA54F8FDDFB49DC6C9B5 /* MetalKit.framework */; };
 		6A1933DFAD11A4ADFE49CFFA /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E1F556744ABE17BE0A9F5333 /* Security.framework */; };
+		6F94F53F1611A0A47593C50B /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 78BA8AA77EA4BE0FE6FF1628 /* AVFoundation.framework */; };
 		7204550DDF3A063ADC92FC1E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B5BE6E938DA24B4F23D180C6 /* Assets.xcassets */; };
 		7CCCDCE3CE53049E593B34D7 /* Network.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A986EB7D2906EAB311BA9CD0 /* Network.framework */; };
 		88C42E1BCB8545C12E16336B /* assets in Resources */ = {isa = PBXBuildFile; fileRef = BA1F85DDAF739A722177FBBE /* assets */; };
@@ -39,6 +40,7 @@
 		25BA74263C0C7F3CC4AF2595 /* present.rs */ = {isa = PBXFileReference; path = present.rs; sourceTree = "<group>"; };
 		298062695B3C82191D672497 /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
 		31F1A839C82BD3C44B51799D /* profiles.rs */ = {isa = PBXFileReference; path = profiles.rs; sourceTree = "<group>"; };
+		3B112D8F46339EF0E65AE39F /* smoke.rs */ = {isa = PBXFileReference; path = smoke.rs; sourceTree = "<group>"; };
 		3BD7AD1E186E3222AB4895D8 /* platform.rs */ = {isa = PBXFileReference; path = platform.rs; sourceTree = "<group>"; };
 		3DEDCFEA39CE47CBB7E937FB /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		5C85C6D08DF9522887C269F8 /* connections.rs */ = {isa = PBXFileReference; path = connections.rs; sourceTree = "<group>"; };
@@ -46,6 +48,7 @@
 		63FF44C48F2A5BCAD320DE06 /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
 		6A3A66923A491B5473BBCA03 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		6D6D2B14BA3F896C21EB4F78 /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
+		78BA8AA77EA4BE0FE6FF1628 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		835FDEB39F5F0D8C8CC9F3F8 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		928C03B77E416F23B864A8F7 /* services.rs */ = {isa = PBXFileReference; path = services.rs; sourceTree = "<group>"; };
 		99810D56AC9536F65B065E57 /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
@@ -65,6 +68,7 @@
 		D5FDF690F36224D82C0304D4 /* recording.rs */ = {isa = PBXFileReference; path = recording.rs; sourceTree = "<group>"; };
 		DDB98AD9630D098FD30A9ECD /* drift-app_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "drift-app_iOS.entitlements"; sourceTree = "<group>"; };
 		DF53DCE5FFC4FE2DF7C9EBF0 /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
+		E0FB906D302859CA37F9A059 /* pairing.rs */ = {isa = PBXFileReference; path = pairing.rs; sourceTree = "<group>"; };
 		E1F556744ABE17BE0A9F5333 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		E50696ED2FCA996DF6423CC7 /* drift-app_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "drift-app_iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		EE14C72C3929EF60B116A246 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
@@ -92,6 +96,7 @@
 				B18D74C9ED1E449B4D0E8CE6 /* IOSurface.framework in Frameworks */,
 				7CCCDCE3CE53049E593B34D7 /* Network.framework in Frameworks */,
 				92FF026F939F6C2779E7B9B3 /* libz.tbd in Frameworks */,
+				6F94F53F1611A0A47593C50B /* AVFoundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -126,12 +131,14 @@
 				A67A179F3F78FEB00F3C23E6 /* manager.rs */,
 				ADEB6E999AED8DEB4816B88C /* menu.rs */,
 				1A109DE20B32DD6BF2DF4EF9 /* options.rs */,
+				E0FB906D302859CA37F9A059 /* pairing.rs */,
 				3BD7AD1E186E3222AB4895D8 /* platform.rs */,
 				25BA74263C0C7F3CC4AF2595 /* present.rs */,
 				31F1A839C82BD3C44B51799D /* profiles.rs */,
 				D5FDF690F36224D82C0304D4 /* recording.rs */,
 				0409C8C5AFF2533A4D1604FF /* secrets.rs */,
 				928C03B77E416F23B864A8F7 /* services.rs */,
+				3B112D8F46339EF0E65AE39F /* smoke.rs */,
 				D091B4B3B27F3C0AD8DE393E /* view.rs */,
 				B18F0C6BBF2C69218CF1EC11 /* windows_ios.rs */,
 				B2873B4F9CE0AECFDB777CB1 /* windows.rs */,
@@ -143,6 +150,7 @@
 		324DFCFD727662195F0EA286 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				78BA8AA77EA4BE0FE6FF1628 /* AVFoundation.framework */,
 				02F2E658E67F5D85AA78844F /* CoreGraphics.framework */,
 				5FB0A41843F22674DC054FAB /* CoreMedia.framework */,
 				FF77B3EB19EC0452405BF1BB /* CoreVideo.framework */,
@@ -227,7 +235,7 @@
 			path = "drift-app_iOS";
 			sourceTree = "<group>";
 		};
-		"TEMP_C5A81E34-1BED-48C5-AE3E-E6AD1E911029" /* x86_64 */ = {
+		"TEMP_FBD8A60F-7073-4ED3-9010-80DEC7749BFE" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);

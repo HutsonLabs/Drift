@@ -135,6 +135,7 @@ fn ios_project_links_the_frameworks_the_crates_need() {
         "Network.framework",
         "Metal.framework",
         "libz.tbd",
+        "AVFoundation.framework",
     ] {
         assert!(spec.contains(framework), "project.yml does not link {framework}");
     }
@@ -154,4 +155,15 @@ fn ios_declares_bonjour_and_camera_use() {
     assert!(spec.contains("NSCameraUsageDescription:"), "project.yml lacks NSCameraUsageDescription");
     // macOS browses too (typed-code pairing): the Mac's Info.plist declares the same type.
     assert!(read("Info.plist").contains("_drift-host._tcp"));
+}
+
+/// IOS-9: the Mac's QR code is a `drift-pair:` link, so the system Camera (or a click on a Mac)
+/// opens Drift straight into "Pair a Mac". Both apps register the scheme.
+#[test]
+fn both_apps_register_the_drift_pair_url_scheme() {
+    for file in ["Info.plist", "gen/apple/drift-app_iOS/Info.plist"] {
+        let plist = read(file);
+        assert!(plist.contains("<key>CFBundleURLSchemes</key>") && plist.contains("<string>drift-pair</string>"), "{file}");
+    }
+    assert!(read("gen/apple/project.yml").contains("CFBundleURLSchemes: [drift-pair]"));
 }
