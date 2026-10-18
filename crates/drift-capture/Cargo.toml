@@ -1,0 +1,29 @@
+[package]
+name = "drift-capture"
+description = "Drift Host screen capture: ScreenCaptureKit per display, IOSurface frames, dirty rects, cursor reported separately (HOST-3)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+drift-core.workspace = true
+thiserror.workspace = true
+
+# ScreenCaptureKit, CoreMedia, CoreVideo and the AppKit cursor: macOS only (Drift Host).
+[target.'cfg(target_os = "macos")'.dependencies]
+block2.workspace = true
+dispatch2 = "0.3.1"
+objc2.workspace = true
+objc2-app-kit = { workspace = true, features = ["NSCursor", "NSImage", "NSGraphicsContext"] }
+objc2-core-foundation.workspace = true
+objc2-core-graphics = { workspace = true, features = ["CGDirectDisplay", "CGWindow", "CGEvent", "CGEventTypes", "CGImage", "CGColorSpace", "CGContext"] }
+objc2-core-media = { version = "0.3.2", default-features = false, features = ["std", "objc2-core-video", "CMBase", "CMSampleBuffer", "CMTime", "CMSync", "CMFormatDescription", "CMAttachment"] }
+objc2-core-video = { workspace = true, features = ["CVPixelBuffer", "CVImageBuffer", "CVBuffer", "CVPixelBufferIOSurface", "objc2-io-surface"] }
+objc2-foundation = { workspace = true, features = ["NSArray", "NSDictionary", "NSString", "NSValue", "NSError", "NSGeometry"] }
+objc2-io-surface.workspace = true
+objc2-screen-capture-kit = { version = "0.3.2", default-features = false, features = ["std", "block2", "dispatch2", "objc2-core-foundation", "objc2-core-graphics", "objc2-core-media", "SCShareableContent", "SCStream", "SCError"] }
+
+[lints]
+workspace = true
