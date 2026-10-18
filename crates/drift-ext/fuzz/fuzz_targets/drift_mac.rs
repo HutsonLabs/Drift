@@ -7,6 +7,7 @@
 #![no_main]
 
 use drift_ext::channel::{DriftMacClient, Link, LinkState};
+use drift_ext::codec::{ClientCodec, CodecMessage, CodecOffer};
 use drift_ext::wire::{Capabilities, decode, encode};
 use ironrdp_dvc::DvcProcessor;
 use libfuzzer_sys::fuzz_target;
@@ -15,10 +16,17 @@ fuzz_target!(|data: &[u8]| {
     if let Ok(message) = decode(data) {
         let bytes = encode(&message).expect("a decoded message re-encodes");
         assert_eq!(decode(&bytes).expect("and decodes again"), message);
+        // EXT-5: codec messages decode strictly and round-trip.
+        if let Some(Ok(codec)) = CodecMessage::from_message(&message) {
+            let again = decode(&encode(&codec.to_message()).expect("re-encodes")).expect("decodes");
+            assert_eq!(CodecMessage::from_message(&again).expect("still codec").expect("still valid"), codec);
+        }
     }
 
     let link = Link::new();
-    let mut client = DriftMacClient::new(link.clone(), Capabilities::SCROLL);
+    let codec = ClientCodec::new(CodecOffer::default());
+    let mut client = DriftMacClient::new(link.clone(), Capabilities::SCROLL | Capabilities::CODEC)
+        .with_responder(codec.responder());
     client.start(1).expect("start never fails");
     let mut rest = data;
     while rest.len() >= 2 {
