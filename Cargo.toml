@@ -9,7 +9,9 @@ members = [
   "crates/drift-video",
   "crates/drift-render",
   "crates/drift-rdp",
+  "crates/drift-apple",
   "crates/drift-macos",
+  "crates/drift-ios",
   "crates/drift-testkit",
   "src-tauri",
   "tests/e2e",
@@ -36,7 +38,9 @@ drift-codec = { path = "crates/drift-codec" }
 drift-video = { path = "crates/drift-video" }
 drift-render = { path = "crates/drift-render" }
 drift-rdp = { path = "crates/drift-rdp" }
+drift-apple = { path = "crates/drift-apple" }
 drift-macos = { path = "crates/drift-macos" }
+drift-ios = { path = "crates/drift-ios" }
 drift-testkit = { path = "crates/drift-testkit" }
 
 # --- IronRDP (vendored at rev b149f50 + Drift patches; third_party/ironrdp) ---

@@ -1467,6 +1467,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "drift-apple"
+version = "0.2.0"
+dependencies = [
+ "drift-core",
+ "drift-testkit",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
 name = "drift-clipboard"
 version = "0.2.0"
 dependencies = [
@@ -1551,6 +1561,13 @@ version = "0.2.0"
 dependencies = [
  "drift-core",
  "proptest",
+]
+
+[[package]]
+name = "drift-ios"
+version = "0.2.0"
+dependencies = [
+ "drift-apple",
 ]
 
 [[package]]

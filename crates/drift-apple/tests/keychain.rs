@@ -1,12 +1,16 @@
 //! M3-2: Keychain adapter against a real (throw-away) keychain file, under a unique test-only
 //! service name (never Drift's real service, never the user's login keychain). Every test
 //! cleans up after itself.
+//!
+//! Keychain *files* are a macOS feature; iOS only has the data-protection keychain, which an
+//! unsigned test binary cannot reach, so these tests run on macOS.
+#![cfg(target_os = "macos")]
 #![allow(missing_docs, clippy::unwrap_used)]
 
 use std::path::PathBuf;
 
 use drift_core::SecretRole;
-use drift_macos::keychain::Keychain;
+use drift_apple::keychain::Keychain;
 use uuid::Uuid;
 
 /// Password of the temporary test keychain file (not a credential).
