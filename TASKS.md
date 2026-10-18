@@ -29,9 +29,11 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   mode), shows a live desktop, and reconnects after backgrounding. *Done in the iPad simulator
   against `fake_host` (live picture, reconnect while backgrounded); the GNOME host was down, so
   the device run is in `docs/acceptance.md`.*
-- [ ] **IOS-6 Input plugin.** Swift Tauri plugin: `GCKeyboard` raw key codes, `GCMouse` deltas
+- [~] **IOS-6 Input plugin.** Swift Tauri plugin: `GCKeyboard` raw key codes, `GCMouse` deltas
   with pointer lock, `UIPointerInteraction`, and Apple Pencil hover as pointer movement, all fed to
-  `drift-input`. Document which system shortcuts iPadOS keeps for itself.
+  `drift-input`. Document which system shortcuts iPadOS keeps for itself. *Done in Rust in
+  `drift-ios` instead of Swift (ADR `IOS-6-ios-input`); smoke-tested in the simulator, which
+  cannot synthesize a keyboard, mouse or Pencil, so those checks are in `docs/acceptance.md`.*
 - [ ] **IOS-7 Touch modes.** Trackpad mode (relative pointer, two-finger scroll, tap to click,
   two-finger tap for right click) and direct mode (tap where you touch). Pinch zooms the viewport
   on iPhone.

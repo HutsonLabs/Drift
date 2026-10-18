@@ -56,6 +56,8 @@ targets:
         # One scene per session window on iPad (IOS-1, IOS-11); iPhone stays single-scene.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
+        # iPad pointer clicks arrive as pointer touches, not finger touches (IOS-6).
+        UIApplicationSupportsIndirectInputEvents: true
         # ProMotion iPhones only go above 60 Hz with this (IOS-4).
         CADisableMinimumFrameDurationOnPhone: true
         CFBundleShortVersionString: 0.2.0
@@ -94,6 +96,8 @@ targets:
       - sdk: CoreVideo.framework
       - sdk: IOSurface.framework
       - sdk: Network.framework
+      # drift-ios: GCKeyboard and GCMouse (IOS-6).
+      - sdk: GameController.framework
       - sdk: libz.tbd
     preBuildScripts:
       - script: cargo tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}

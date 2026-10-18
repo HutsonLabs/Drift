@@ -21,7 +21,6 @@ fn main() -> std::process::ExitCode {
 #[cfg(target_os = "ios")]
 mod tests {
     use std::cell::RefCell;
-    use std::ffi::CStr;
     use std::rc::Rc;
 
     use drift_core::{DesktopSize, InputEvent, MouseButton, Point, ViewGeometry};
@@ -160,7 +159,7 @@ mod tests {
     fn pointer_lock_is_per_view_controller() {
         // A runtime-declared subclass that does not override `prefersPointerLocked`, like tao's
         // `TaoUIViewController`.
-        let name = CStr::from_bytes_with_nul(b"DriftTestTaoLikeVC\0").unwrap();
+        let name = c"DriftTestTaoLikeVC";
         let class = ClassBuilder::new(name, UIViewController::class()).map(|b| b.register()).unwrap();
         let make = || -> Retained<AnyObject> {
             // SAFETY: plain alloc/init of a UIViewController subclass on the main thread.

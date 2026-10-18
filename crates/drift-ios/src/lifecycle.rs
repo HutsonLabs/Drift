@@ -33,7 +33,8 @@ unsafe impl Send for AppObserver {}
 unsafe impl Sync for AppObserver {}
 
 impl AppObserver {
-    fn start(name: &NSNotificationName, handler: impl Fn() + Send + Sync + 'static) -> Self {
+    /// Calls `handler` on the posting thread every time `name` is posted on the default center.
+    pub fn observe(name: &NSNotificationName, handler: impl Fn() + Send + Sync + 'static) -> Self {
         let center = NSNotificationCenter::defaultCenter();
         let block = RcBlock::new(move |_note: NonNull<NSNotification>| handler());
         // SAFETY: a constant notification name, no object filter, synchronous delivery on the
@@ -55,14 +56,14 @@ impl AppObserver {
     /// the app is about to enter the foreground.
     pub fn foreground(handler: impl Fn() + Send + Sync + 'static) -> ForegroundObserver {
         // SAFETY: an immutable constant exported by UIKit.
-        Self::start(unsafe { UIApplicationWillEnterForegroundNotification }, handler)
+        Self::observe(unsafe { UIApplicationWillEnterForegroundNotification }, handler)
     }
 
     /// Calls `handler` on the posting thread every time the app has entered the background
     /// (iOS suspends it, and its sockets, shortly after).
     pub fn background(handler: impl Fn() + Send + Sync + 'static) -> BackgroundObserver {
         // SAFETY: an immutable constant exported by UIKit.
-        Self::start(unsafe { UIApplicationDidEnterBackgroundNotification }, handler)
+        Self::observe(unsafe { UIApplicationDidEnterBackgroundNotification }, handler)
     }
 }
 

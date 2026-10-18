@@ -7,20 +7,29 @@
 //! * keeps `contentsScale`/`drawableSize` equal to bounds × the screen's display scale in
 //!   `layoutSubviews` and `didMoveToWindow`, and reports the [`ViewGeometry`] to its handler
 //!   (Display Control, M4-2);
-//! * hands input to its handler; the event sources (keyboard, pointer, touch) arrive with IOS-6
-//!   and IOS-7.
+//! * turns input into [`InputEvent`]s through `drift-input` (IOS-6): hardware keys arrive as HID
+//!   usages ([`RemoteView::hid_key`], fed by [`crate::hardware`]); the iPad pointer and Apple
+//!   Pencil hover move the remote pointer (`UIHoverGestureRecognizer`); pointer clicks arrive as
+//!   indirect-pointer touches, with the secondary button as a right click; wheel and trackpad
+//!   scrolling come from a scroll-only `UIPanGestureRecognizer`; under pointer lock
+//!   [`crate::hardware`] feeds `GCMouse` deltas, buttons and scroll instead.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use drift_core::{InputEvent, Size, ViewGeometry};
+use drift_core::{CmdAs, DesktopSize, InputEvent, MouseButton, Point, Size, ViewGeometry};
+use drift_input::{HidKeyboard, Pointer, ScaleMode, ScrollConfig, ScrollDelta};
 use objc2::rc::Retained;
-use objc2::runtime::AnyClass;
-use objc2::{ClassType, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
-use objc2_core_foundation::{CGRect, CGSize};
+use objc2::runtime::{AnyClass, AnyObject, ProtocolObject};
+use objc2::{ClassType, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
+use objc2_core_foundation::{CGPoint, CGRect, CGSize};
+use objc2_foundation::{NSArray, NSSet};
 use objc2_quartz_core::CAMetalLayer;
 use objc2_ui_kit::{
-    NSObjectUIAccessibility as _, UIColor, UITraitEnvironment as _, UIView, UIViewAutoresizing,
+    NSObjectUIAccessibility as _, UIColor, UIEvent, UIEventButtonMask, UIGestureRecognizer,
+    UIGestureRecognizerState, UIHoverGestureRecognizer, UIPanGestureRecognizer, UIPointerInteraction,
+    UIPressesEvent, UIScrollTypeMask, UITouch, UITouchType, UITraitEnvironment as _, UIView,
+    UIViewAutoresizing,
 };
 
 /// What VoiceOver announces for the picture until the session names it (M9-4).
@@ -49,6 +58,20 @@ pub struct Ivars {
     geometry: Cell<ViewGeometry>,
     /// A fixed display scale (tests run without a window or screen).
     scale_override: Cell<Option<f64>>,
+    /// Pointer position, buttons and scroll remainder (`drift-input`).
+    pointer: RefCell<Pointer>,
+    /// Held hardware keys.
+    keyboard: RefCell<HidKeyboard>,
+    /// The pointer press in progress used the secondary button.
+    pressed_secondary: Cell<bool>,
+}
+
+/// Where an indirect-pointer touch is in its life.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TouchPhase {
+    Began,
+    Moved,
+    Ended,
 }
 
 define_class!(
@@ -78,6 +101,70 @@ define_class!(
             let () = unsafe { msg_send![super(self), didMoveToWindow] };
             self.sync_drawable_size();
         }
+
+        #[unsafe(method(canBecomeFirstResponder))]
+        fn can_become_first_responder(&self) -> bool {
+            true
+        }
+
+        /// iPad pointer and Apple Pencil hover: absolute moves.
+        #[unsafe(method(driftHover:))]
+        fn drift_hover(&self, recognizer: &UIGestureRecognizer) {
+            let p = recognizer.locationInView(Some(self));
+            self.pointer_hover(Point::new(p.x, p.y));
+        }
+
+        /// Wheel and two-finger trackpad scrolling (scroll events only, no touches).
+        #[unsafe(method(driftScroll:))]
+        fn drift_scroll(&self, recognizer: &UIPanGestureRecognizer) {
+            let t = recognizer.translationInView(Some(self));
+            recognizer.setTranslation_inView(CGPoint { x: 0.0, y: 0.0 }, Some(self));
+            let began = recognizer.state() == UIGestureRecognizerState::Began;
+            self.pointer_scroll(ScrollDelta::Precise { dx: t.x, dy: t.y }, began);
+        }
+
+        #[unsafe(method(touchesBegan:withEvent:))]
+        fn touches_began(&self, touches: &NSSet<UITouch>, event: Option<&UIEvent>) {
+            if !self.touches(touches, event, TouchPhase::Began) {
+                // SAFETY: forwarding to the superclass, as UIKit requires for unhandled touches.
+                let () = unsafe { msg_send![super(self), touchesBegan: touches, withEvent: event] };
+            }
+        }
+
+        #[unsafe(method(touchesMoved:withEvent:))]
+        fn touches_moved(&self, touches: &NSSet<UITouch>, event: Option<&UIEvent>) {
+            if !self.touches(touches, event, TouchPhase::Moved) {
+                // SAFETY: as above.
+                let () = unsafe { msg_send![super(self), touchesMoved: touches, withEvent: event] };
+            }
+        }
+
+        #[unsafe(method(touchesEnded:withEvent:))]
+        fn touches_ended(&self, touches: &NSSet<UITouch>, event: Option<&UIEvent>) {
+            if !self.touches(touches, event, TouchPhase::Ended) {
+                // SAFETY: as above.
+                let () = unsafe { msg_send![super(self), touchesEnded: touches, withEvent: event] };
+            }
+        }
+
+        #[unsafe(method(touchesCancelled:withEvent:))]
+        fn touches_cancelled(&self, touches: &NSSet<UITouch>, event: Option<&UIEvent>) {
+            if !self.touches(touches, event, TouchPhase::Ended) {
+                // SAFETY: as above.
+                let () = unsafe { msg_send![super(self), touchesCancelled: touches, withEvent: event] };
+            }
+        }
+
+        /// Hardware keys reach the session through `GCKeyboard` ([`crate::hardware`]); the
+        /// presses UIKit also delivers are swallowed so they neither reach the page nor beep.
+        #[unsafe(method(pressesBegan:withEvent:))]
+        fn presses_began(&self, _presses: &NSSet<AnyObject>, _event: Option<&UIPressesEvent>) {}
+
+        #[unsafe(method(pressesEnded:withEvent:))]
+        fn presses_ended(&self, _presses: &NSSet<AnyObject>, _event: Option<&UIPressesEvent>) {}
+
+        #[unsafe(method(pressesCancelled:withEvent:))]
+        fn presses_cancelled(&self, _presses: &NSSet<AnyObject>, _event: Option<&UIPressesEvent>) {}
     }
 );
 
@@ -88,6 +175,9 @@ impl RemoteView {
             handler: RefCell::new(None),
             geometry: Cell::new(ViewGeometry { points: Size::new(0.0, 0.0), backing_scale: 1.0 }),
             scale_override: Cell::new(None),
+            pointer: RefCell::new(Pointer::new(ScrollConfig::default())),
+            keyboard: RefCell::new(HidKeyboard::new(CmdAs::default())),
+            pressed_secondary: Cell::new(false),
         });
         // SAFETY: `initWithFrame:` is UIView's designated initializer.
         let this: Retained<Self> = unsafe { msg_send![super(this), initWithFrame: frame] };
@@ -99,8 +189,36 @@ impl RemoteView {
             Some(&objc2_foundation::NSString::from_str(DEFAULT_ACCESSIBILITY_LABEL)),
             mtm,
         );
+        this.install_recognizers(mtm);
         this.sync_drawable_size();
         this
+    }
+
+    fn install_recognizers(&self, mtm: MainThreadMarker) {
+        // SAFETY: the view is the target and outlives its own recognizers; `driftHover:` and
+        // `driftScroll:` take the recognizer, as UIKit sends it.
+        let hover = unsafe {
+            UIHoverGestureRecognizer::initWithTarget_action(
+                UIHoverGestureRecognizer::alloc(mtm),
+                Some(self),
+                Some(sel!(driftHover:)),
+            )
+        };
+        self.addGestureRecognizer(&hover);
+        // SAFETY: as above.
+        let scroll = unsafe {
+            UIPanGestureRecognizer::initWithTarget_action(
+                UIPanGestureRecognizer::alloc(mtm),
+                Some(self),
+                Some(sel!(driftScroll:)),
+            )
+        };
+        scroll.setAllowedScrollTypesMask(UIScrollTypeMask::All);
+        // No touch types: this recognizer sees scroll events only, never fingers.
+        scroll.setAllowedTouchTypes(&NSArray::new());
+        self.addGestureRecognizer(&scroll);
+        let pointer = UIPointerInteraction::initWithDelegate(UIPointerInteraction::alloc(mtm), None);
+        self.addInteraction(ProtocolObject::from_ref(&*pointer));
     }
 
     /// The Metal layer (hand it to `drift_render::LayerTarget`).
@@ -160,11 +278,93 @@ impl RemoteView {
         });
         let geometry = ViewGeometry { points: Size::new(size.width, size.height), backing_scale: scale };
         if geometry != self.ivars().geometry.replace(geometry) {
+            self.ivars().pointer.borrow_mut().set_view_geometry(geometry);
             let handler = self.ivars().handler.borrow().clone();
             if let Some(h) = handler {
                 h.geometry_changed(geometry);
             }
         }
+    }
+
+    /// Attaches the remote desktop (pointer mapping; the picture is fitted, as on macOS).
+    pub fn set_desktop(&self, desktop: DesktopSize) {
+        self.ivars().pointer.borrow_mut().set_desktop(desktop, ScaleMode::Fit);
+    }
+
+    /// Detaches the desktop (disconnected): pointer input is dropped.
+    pub fn clear_desktop(&self) {
+        self.ivars().pointer.borrow_mut().clear_desktop();
+    }
+
+    /// Where Command goes (the profile's keyboard preference).
+    pub fn set_cmd_as(&self, cmd_as: CmdAs) {
+        self.ivars().keyboard.borrow_mut().set_cmd_as(cmd_as);
+    }
+
+    /// The viewport the pointer maps through, if a desktop is attached.
+    pub fn viewport(&self) -> Option<drift_input::Viewport> {
+        self.ivars().pointer.borrow().viewport()
+    }
+
+    /// A hardware key, as a HID usage.
+    pub fn hid_key(&self, usage: u16, down: bool) {
+        let events = self.ivars().keyboard.borrow_mut().key(usage, down);
+        self.send_input(&events);
+    }
+
+    /// An absolute pointer position in view points (hover, pointer clicks).
+    pub fn pointer_hover(&self, point: Point<f64>) {
+        let events = self.ivars().pointer.borrow_mut().move_to(point);
+        self.send_input(&events);
+    }
+
+    /// A relative pointer move in view points (pointer lock).
+    pub fn pointer_delta(&self, dx: f64, dy: f64) {
+        let events = self.ivars().pointer.borrow_mut().move_by(dx, dy);
+        self.send_input(&events);
+    }
+
+    /// A pointer button where the pointer is.
+    pub fn pointer_button(&self, button: MouseButton, down: bool) {
+        let events = self.ivars().pointer.borrow_mut().button(button, down);
+        self.send_input(&events);
+    }
+
+    /// Wheel or trackpad scrolling.
+    pub fn pointer_scroll(&self, delta: ScrollDelta, began: bool) {
+        let events = self.ivars().pointer.borrow_mut().scroll(delta, began);
+        self.send_input(&events);
+    }
+
+    /// Releases held keys and buttons (focus loss, background, another session in front).
+    pub fn release_all(&self) {
+        let mut events = self.ivars().keyboard.borrow_mut().release_all();
+        events.extend(self.ivars().pointer.borrow_mut().release_all());
+        self.send_input(&events);
+    }
+
+    /// Touches on the picture. Indirect-pointer touches (iPad pointer clicks) press and drag
+    /// where the pointer is, with the secondary button as a right click. Returns `false` when
+    /// nothing was handled, so UIKit gets the touches.
+    fn touches(&self, touches: &NSSet<UITouch>, event: Option<&UIEvent>, phase: TouchPhase) -> bool {
+        let Some(touch) = touches.iter().find(|t| t.r#type() == UITouchType::IndirectPointer) else {
+            return false;
+        };
+        let p = touch.locationInView(Some(self));
+        self.pointer_hover(Point::new(p.x, p.y));
+        match phase {
+            TouchPhase::Began => {
+                let secondary = event.is_some_and(|e| e.buttonMask().contains(UIEventButtonMask::Secondary));
+                self.ivars().pressed_secondary.set(secondary);
+                self.pointer_button(if secondary { MouseButton::Right } else { MouseButton::Left }, true);
+            }
+            TouchPhase::Moved => {}
+            TouchPhase::Ended => {
+                let right = self.ivars().pressed_secondary.replace(false);
+                self.pointer_button(if right { MouseButton::Right } else { MouseButton::Left }, false);
+            }
+        }
+        true
     }
 
     /// Forwards input events to the handler (the IOS-6/IOS-7 event sources call this).

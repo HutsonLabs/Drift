@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 
 use drift_core::{ConnectionProfile, InputEvent, Size, ViewGeometry};
 use drift_gfx::FrameSink;
+use drift_ios::hardware::{self, HardwareInput};
 use drift_ios::lifecycle::AppObserver;
 use drift_ios::pacing::FramePacing;
 use drift_ios::view::{RemoteView, RemoteViewHandler};
@@ -84,6 +85,8 @@ struct Shell {
     pacing: Option<FramePacing>,
     /// Foreground and background observers (visibility of every session).
     observers: Vec<AppObserver>,
+    /// `GCKeyboard` / `GCMouse` hooks feeding the front session (IOS-6).
+    hardware: Option<HardwareInput>,
 }
 
 thread_local! {
@@ -249,6 +252,10 @@ fn install_visibility_observers<R: Runtime>(app: &AppHandle<R>) {
                 PLATFORM.with(|p| {
                     if let Ok(map) = p.try_borrow() {
                         for plat in map.values() {
+                            if !visible {
+                                // Nothing stays pressed on the remote while iOS suspends Drift.
+                                plat.view.release_all();
+                            }
                             plat.link.send(SessionCommand::SetVisible(visible));
                         }
                     }
@@ -261,7 +268,12 @@ fn install_visibility_observers<R: Runtime>(app: &AppHandle<R>) {
         AppObserver::foreground(set_all(app.clone(), true)),
         AppObserver::background(set_all(app.clone(), false)),
     ];
-    SHELL.with(|s| s.borrow_mut().observers = observers);
+    let hardware = MainThreadMarker::new().map(HardwareInput::start);
+    SHELL.with(|s| {
+        let mut shell = s.borrow_mut();
+        shell.observers = observers;
+        shell.hardware = hardware;
+    });
 }
 
 /// Brings Connections forward; with `intent`, asks its page to open a sheet. Returns at once.
@@ -399,12 +411,14 @@ fn build_session_window<R: Runtime>(
         .build()
         .map_err(tauri_error)?;
     let web = SendView(page_view_of(&window)?);
+    let cmd_as = profile.keyboard.cmd_as;
     let label2 = label.to_owned();
     on_main(app, move |mtm| -> Result<(), CommandError> {
         let web = web.into_inner();
         let view = drift_ios::webview::attach_below(mtm, &web).map_err(|e| platform_error(e.to_string()))?;
         let link = SessionLink::new();
         view.set_handler(link.clone());
+        view.set_cmd_as(cmd_as);
         view.setHidden(true);
         PLATFORM.with(|p| {
             p.borrow_mut()
@@ -501,13 +515,22 @@ pub(crate) fn apply_view<R: Runtime>(app: &AppHandle<R>, label: &str, view: &Ses
     let accessibility_label = present::accessibility_label(Some(view));
     let surface = present::surface_for(view);
     let live = present::status_for(view) == ConnectionStatus::Live;
+    let desktop = match view.state {
+        drift_core::SessionState::Connected { desktop, .. } => Some(desktop),
+        _ => None,
+    };
     let label = label.to_owned();
     let app2 = app.clone();
-    let _ = on_main(app, move |_| {
+    let _ = on_main(app, move |mtm| {
         with_platform(&label, |plat| {
             plat.view.set_accessibility_label(&accessibility_label);
+            match desktop {
+                Some(size) => plat.view.set_desktop(size),
+                None => plat.view.clear_desktop(),
+            }
             plat.surface = surface;
             layout(plat);
+            route_input(mtm, plat);
         });
         let went_live = SHELL.with(|s| {
             let Ok(mut shell) = s.try_borrow_mut() else { return false };
@@ -547,6 +570,19 @@ fn layout(plat: &WindowPlatform) {
     }
 }
 
+/// Hardware input goes to the picture while it is on screen (live or under a HUD); the pointer
+/// is locked only for the live picture (IOS-6). Otherwise the page keeps the keyboard.
+fn route_input(mtm: MainThreadMarker, plat: &WindowPlatform) {
+    let picture = matches!(plat.surface, Surface::Remote | Surface::Hud(_));
+    if picture {
+        hardware::set_active(Some(&plat.view));
+        plat.view.becomeFirstResponder();
+    } else if hardware::active().is_some_and(|a| std::ptr::eq(&*a, &*plat.view)) {
+        hardware::set_active(None);
+    }
+    drift_ios::pointer_lock::set_locked_for_view(mtm, &plat.view, plat.surface == Surface::Remote);
+}
+
 /// Runs the 120 Hz display link while any live picture is on screen.
 fn update_pacing() {
     let Some(mtm) = MainThreadMarker::new() else { return };
@@ -581,6 +617,8 @@ pub(crate) fn release_session<R: Runtime>(app: &AppHandle<R>, label: &str) {
     let app2 = app.clone();
     let _ = on_main(app, move |_| {
         with_platform(&label, |plat| {
+            plat.view.release_all();
+            plat.view.clear_desktop();
             plat.link.set(None);
             if let Some(render) = plat.render.take() {
                 render.shutdown();
