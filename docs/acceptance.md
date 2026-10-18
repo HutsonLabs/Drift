@@ -441,10 +441,28 @@ to do by hand:
       after denying it the list stays empty and pairing by link still works.
 - [ ] **Pair and connect:** pair with a typed code and an account; the new card shows Trusted;
       connecting it reaches the pin check (a wrong certificate fails before credentials are sent).
-- [ ] **After HOST-8:** the Mac accepts the code and lists the device; a wrong code is refused
-      with "The Mac did not accept the code."
+- [ ] **With Drift Host (HOST-8):** on the Mac, `drift-host set-password`, then `drift-host pair`.
+      On the iPad, the Mac appears in "Pair a Mac"; scan the terminal's QR code (or type the
+      code), connect: the picture appears and `drift-host devices` lists the iPad. Disconnect and
+      connect again without a code: it works. On the Mac, `drift-host forget <id>`: the next
+      connection fails with "This device is not paired with this Mac." A wrong code is refused
+      with "The Mac did not accept the code." The same steps work from Drift for Mac.
 
 ## HOST — Drift Host (Mac)
+
+### HOST-8 — Pairing (ADR `HOST-8-pairing`)
+
+Verified on loopback by `crates/drift-host/tests/pairing_e2e.rs`. Still to do by hand:
+
+- [ ] **Over the network:** `drift-host pair` on one Mac; pair from Drift on another Mac and on an
+      iPad (steps in the IOS-9 section above). Microsoft's Windows App connects (TLS and NLA
+      succeed) but sees nothing and is dropped after 15 s.
+- [ ] **Bonjour:** `dns-sd -B _drift-host._tcp` on another Mac lists the host while `drift-host`
+      runs, and `dns-sd -L` shows the TXT record (`v`, `id`, `name`, `host`, `port`, `fp`).
+- [ ] **Lockout:** five wrong codes in a row are refused with "Too many wrong codes"; a minute
+      later pairing needs a new `drift-host pair`.
+- [ ] **Pairing off:** `pairing = false` in `host.toml` with `listen = "0.0.0.0:3389"`: the host
+      listens on 127.0.0.1 only (`lsof -iTCP:3389`).
 
 ### HOST-2 — Host skeleton (ADR `HOST-2-host-skeleton`)
 
@@ -457,7 +475,7 @@ to do by hand:
 - [ ] **A second client** while the first is connected fails at once; the first keeps going.
 - [ ] **Microsoft Windows App** (if installed): connect to 127.0.0.1 with the same account; the
       pattern shows (AVC420 over EGFX).
-- [ ] With `listen = "0.0.0.0:3389"` in `host.toml`, the host warns that it listens beyond loopback.
+- [ ] With `pairing = false` and `listen = "0.0.0.0:3389"` in `host.toml`, the host warns that it stays on loopback (HOST-8).
 
 ### HOST-3 — Capture (ADR `HOST-3-capture`)
 

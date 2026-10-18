@@ -4,7 +4,6 @@
 
 use std::sync::{Arc, Mutex};
 
-use drift_ext::channel::Responder;
 use drift_ext::pairing::{
     AuthStatus, ClientPairing, DeviceSigner, NONCE_LEN, PairStatus, PairingMessage, PairingOutcome, Purpose,
     signed_bytes,

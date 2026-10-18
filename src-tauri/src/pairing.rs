@@ -9,14 +9,17 @@
 //! longer matches what the pairing recorded.
 //!
 //! The handshake that lets the Mac check the code and store the device key runs over the
-//! `Drift::Mac::v1` channel (EXT-1, HOST-8), which does not exist yet: until then pairing records
-//! the host on this side only, and the Mac's account password still authenticates the session.
+//! `Drift::Mac::v1` channel on the next connection (HOST-8, ADR `HOST-8-pairing`):
+//! [`PairingService::client_pairing`] gives that connection the code the user saw, once; after
+//! the Mac accepted it, every connection proves the device key instead. The Mac's account
+//! password still signs the session in (NLA) as well.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use drift_core::CertFingerprint;
 use drift_core::pairing::{HostAdvert, PairingPayload, PairingTarget, ShortCode};
+use drift_ext::pairing::{ClientPairing, DeviceSigner, PairingOutcome};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -32,6 +35,8 @@ pub trait PairingStore: Send + Sync {
     fn host_pin(&self, host: Uuid) -> Result<Option<CertFingerprint>, CommandError>;
     /// Forgets host `host`.
     fn forget_host(&self, host: Uuid) -> Result<(), CommandError>;
+    /// The device key, to sign the host's challenges (HOST-8).
+    fn signer(&self) -> Result<Arc<dyn DeviceSigner>, CommandError>;
 }
 
 fn storage(e: impl std::fmt::Display) -> CommandError {
@@ -69,12 +74,17 @@ impl PairingStore for KeychainPairingStore {
     fn forget_host(&self, host: Uuid) -> Result<(), CommandError> {
         self.0.forget_host(host).map_err(storage)
     }
+
+    fn signer(&self) -> Result<Arc<dyn DeviceSigner>, CommandError> {
+        Ok(Arc::new(self.0.device_key().map_err(storage)?))
+    }
 }
 
-/// An in-memory [`PairingStore`] (tests, smoke runs).
+/// An in-memory [`PairingStore`] (tests, smoke runs): a real P-256 key that lives as long as the
+/// store.
 #[derive(Debug, Default)]
 pub struct MemoryPairingStore {
-    device_key: Mutex<Option<Vec<u8>>>,
+    device_key: Mutex<Option<Arc<drift_apple::pairing::DeviceKey>>>,
     pins: Mutex<HashMap<Uuid, CertFingerprint>>,
 }
 
@@ -87,9 +97,7 @@ impl MemoryPairingStore {
 
 impl PairingStore for MemoryPairingStore {
     fn device_public_key(&self) -> Result<Vec<u8>, CommandError> {
-        let mut key = self.device_key.lock().map_err(storage)?;
-        // A stand-in uncompressed point; nothing verifies it in memory.
-        Ok(key.get_or_insert_with(|| [vec![4_u8], Uuid::new_v4().as_bytes().repeat(4)].concat()).clone())
+        Ok(self.memory_key()?.public_key().to_vec())
     }
 
     fn pin_host(&self, host: Uuid, fingerprint: CertFingerprint) -> Result<(), CommandError> {
@@ -104,6 +112,22 @@ impl PairingStore for MemoryPairingStore {
     fn forget_host(&self, host: Uuid) -> Result<(), CommandError> {
         self.pins.lock().map_err(storage)?.remove(&host);
         Ok(())
+    }
+
+    fn signer(&self) -> Result<Arc<dyn DeviceSigner>, CommandError> {
+        Ok(self.memory_key()?)
+    }
+}
+
+impl MemoryPairingStore {
+    fn memory_key(&self) -> Result<Arc<drift_apple::pairing::DeviceKey>, CommandError> {
+        let mut key = self.device_key.lock().map_err(storage)?;
+        if let Some(key) = key.as_ref() {
+            return Ok(Arc::clone(key));
+        }
+        let made = Arc::new(drift_apple::pairing::DeviceKey::generate().map_err(storage)?);
+        *key = Some(Arc::clone(&made));
+        Ok(made)
     }
 }
 
@@ -170,10 +194,20 @@ impl std::fmt::Debug for PairHostRequest {
     }
 }
 
-/// Pairs Mac hosts and guards paired profiles.
+/// What the next connections to one paired host do: send the code the user saw (until the Mac
+/// accepts it), then authenticate with the device key.
+#[derive(Debug, Default)]
+struct HostHandshake {
+    code: Option<ShortCode>,
+    current: Option<ClientPairing>,
+}
+
+/// Pairs Mac hosts and guards paired profiles. Clones share their state.
+#[derive(Clone)]
 pub struct PairingService {
     profiles: Arc<ProfileService>,
     store: Arc<dyn PairingStore>,
+    handshakes: Arc<Mutex<HashMap<Uuid, HostHandshake>>>,
 }
 
 impl std::fmt::Debug for PairingService {
@@ -185,7 +219,7 @@ impl std::fmt::Debug for PairingService {
 impl PairingService {
     /// A service saving profiles to `profiles` and pairing items to `store`.
     pub fn new(profiles: Arc<ProfileService>, store: Arc<dyn PairingStore>) -> Self {
-        Self { profiles, store }
+        Self { profiles, store, handshakes: Arc::default() }
     }
 
     /// Recognises a QR payload (`drift-pair:…`) or a typed code.
@@ -224,7 +258,46 @@ impl PairingService {
         };
         let entry = self.profiles.save(profile, update)?;
         self.store.pin_host(target.host_id, target.fingerprint)?;
+        // The next connection sends the code to the Mac (HOST-8).
+        self.handshakes
+            .lock()
+            .map_err(storage)?
+            .insert(target.host_id, HostHandshake { code: Some(target.code), current: None });
         Ok(entry)
+    }
+
+    /// The pairing exchange for the next connection of `profile`: `None` for a profile that is
+    /// not a paired Mac. It carries the code until the Mac accepted it once, and from then on
+    /// authenticates with the device key. The returned value is shared with the session, so the
+    /// Mac's answer is seen here too.
+    pub fn client_pairing(&self, profile: Uuid) -> Result<Option<ClientPairing>, CommandError> {
+        let profile = self.profiles.get(profile)?.profile;
+        let Some(host) = profile.paired_host else { return Ok(None) };
+        let Some(pin) = profile.cert_pin else {
+            return Err(CommandError::Pairing {
+                message: "This Mac's pairing has no certificate. Pair it again.".into(),
+            });
+        };
+        let mut handshakes = self.handshakes.lock().map_err(storage)?;
+        let entry = handshakes.entry(host).or_default();
+        if let Some(current) = &entry.current {
+            if matches!(current.outcome(), Some(PairingOutcome::Paired | PairingOutcome::Authenticated)) {
+                entry.code = None;
+            } else if current.code().is_some() == entry.code.is_some() {
+                return Ok(Some(current.clone()));
+            }
+        }
+        let base = ClientPairing::new(
+            self.store.signer()?,
+            *pin.as_bytes(),
+            drift_rdp::connect::local_client_name(),
+        );
+        let pairing = match &entry.code {
+            Some(code) => base.with_code(code.as_str()),
+            None => base,
+        };
+        entry.current = Some(pairing.clone());
+        Ok(Some(pairing))
     }
 
     /// The new profile, or the existing one for this host (same id and preferences) updated.

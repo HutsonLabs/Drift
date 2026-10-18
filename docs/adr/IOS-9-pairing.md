@@ -62,6 +62,8 @@ the client side so the host can be built against them.
 
 - HOST-8 must advertise the TXT record above, show the code and the `drift-pair:` QR, and answer
   `PairRequest` on EXT-1's channel; the client side then wires `PairingFlow` into a connection.
+  *Done in HOST-8 (ADR `HOST-8-pairing`): the live path uses `drift_ext::pairing::ClientPairing`
+  and `drift-rdp`'s pin check instead of `PairingFlow`.*
 - `ConnectionProfile` gained a field (cross-stream change); old files load unchanged.
 - The iOS app links AVFoundation, and both apps' `Info.plist` gained `NSBonjourServices` and
   `CFBundleURLTypes`; `tests/app_config.rs` checks them.

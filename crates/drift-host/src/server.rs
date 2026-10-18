@@ -35,6 +35,7 @@ use crate::gate::SessionGate;
 use crate::identity::HostIdentity;
 use crate::input::{InputSink, SinkHandler};
 use crate::layout::clamp_layout;
+use crate::pairing::{AuthPhase, ConnectionAuth, Pairing};
 
 /// Makes the frame source for a connection.
 pub type FrameSourceFactory = Box<dyn Fn() -> Box<dyn FrameSource> + Send>;
@@ -55,6 +56,11 @@ pub struct HostOptions {
     pub frames: FrameSourceFactory,
     /// Where input goes.
     pub input: Box<dyn InputSink>,
+    /// Device pairing (HOST-8). With it, a connection sees nothing and its input is ignored until
+    /// its device paired or proved its key over `Drift::Mac::v1`, and it is dropped if it does
+    /// not within [`Pairing::auth_timeout`]. Without it (the HOST-2 skeleton, tests), every
+    /// connection that passes NLA is served.
+    pub pairing: Option<Pairing>,
 }
 
 /// What the host has done so far.
@@ -78,6 +84,12 @@ pub struct HostStats {
     pub drift_mac: String,
     /// The latest connection or encoder error.
     pub last_error: Option<String>,
+    /// Connections whose device paired or authenticated (HOST-8).
+    pub authorized: u32,
+    /// Connections refused over `Drift::Mac::v1` (wrong code, unknown device, bad signature).
+    pub auth_refused: u32,
+    /// Connections dropped for not authenticating in time.
+    pub auth_timeouts: u32,
 }
 
 type SharedStats = Arc<Mutex<HostStats>>;
@@ -112,7 +124,7 @@ impl Drop for Host {
 impl Host {
     /// Binds the listener and starts serving on a thread of its own.
     pub fn start(options: HostOptions) -> std::io::Result<Self> {
-        let HostOptions { listen, identity, username, password, desktop, frames, input } = options;
+        let HostOptions { listen, identity, username, password, desktop, frames, input, pairing } = options;
         let listener = std::net::TcpListener::bind(listen)?;
         listener.set_nonblocking(true)?;
         let addr = listener.local_addr()?;
@@ -126,7 +138,9 @@ impl Host {
                 return;
             };
             let size = Arc::new(Mutex::new(desktop));
+            let current = Arc::new(Mutex::new(ConnectionAuth::open()));
             let gfx = Arc::new(GfxShared {
+                auth: Arc::clone(&current),
                 sender: Mutex::new(None),
                 handle: Mutex::new(None),
                 source: Mutex::new(frames()),
@@ -137,17 +151,23 @@ impl Host {
             let mut server = RdpServer::builder()
                 .with_addr(addr)
                 .with_hybrid(acceptor, identity.public_key().to_vec())
-                .with_input_handler(SinkHandler(input))
+                .with_input_handler(GatedInput { sink: SinkHandler(input), auth: Arc::clone(&current) })
                 .with_display_handler(HostDisplay { size: Arc::clone(&size), desktop, gfx: Arc::clone(&gfx) })
                 .with_gfx_factory(Some(Box::new(HostGfx(Arc::clone(&gfx)))))
                 .build();
-            server.add_dvc_factory(Box::new(DriftMacFactory(thread_mac)));
+            server.add_dvc_factory(Box::new(DriftMacFactory {
+                link: thread_mac,
+                pairing: pairing.clone(),
+                host_fingerprint: *identity.fingerprint().as_bytes(),
+                current: Arc::clone(&current),
+            }));
             server.set_credentials(Some(Credentials {
                 username,
                 password: password.to_string(),
                 domain: None,
             }));
-            runtime.block_on(serve(&mut server, listener, &thread_stats, &mut stopped));
+            let connections = Connections { pairing, current, gfx };
+            runtime.block_on(serve(&mut server, listener, &thread_stats, &mut stopped, &connections));
         })?;
         Ok(Self { addr, stats, drift_mac, stop: Some(stop), thread: Some(thread) })
     }
@@ -189,12 +209,32 @@ impl Host {
     }
 }
 
+/// What the connection loop needs beyond the server: pairing and the current connection's
+/// authentication, which the display and the input check.
+struct Connections {
+    pairing: Option<Pairing>,
+    current: Arc<Mutex<ConnectionAuth>>,
+    gfx: Arc<GfxShared>,
+}
+
+/// How long a refused connection stays up so the refusal reaches the client.
+const REFUSAL_GRACE: std::time::Duration = std::time::Duration::from_millis(400);
+
+/// Sleeps until `deadline`, or forever without one.
+async fn until(deadline: Option<tokio::time::Instant>) {
+    match deadline {
+        Some(at) => tokio::time::sleep_until(at).await,
+        None => std::future::pending().await,
+    }
+}
+
 /// The connection loop: one admitted session at a time, extra connections closed at once.
 async fn serve(
     server: &mut RdpServer,
     listener: std::net::TcpListener,
     stats: &SharedStats,
     stopped: &mut tokio::sync::oneshot::Receiver<()>,
+    connections: &Connections,
 ) {
     let Ok(listener) = TcpListener::from_std(listener) else { return };
     let gate = SessionGate::new();
@@ -212,6 +252,15 @@ async fn serve(
         let Some(ticket) = gate.try_begin() else { continue };
         tracing::info!(%peer, "session starting");
         lock(stats).sessions_served += 1;
+        let auth = match &connections.pairing {
+            Some(_) => ConnectionAuth::pending(),
+            None => ConnectionAuth::open(),
+        };
+        *lock(&connections.current) = auth.clone();
+        // Pairing on: the device must pair or authenticate in time, or it is dropped.
+        let mut auth_deadline =
+            connections.pairing.as_ref().map(|p| tokio::time::Instant::now() + p.auth_timeout());
+        let mut kick_at: Option<tokio::time::Instant> = None;
         let session = server.run_connection(stream);
         tokio::pin!(session);
         loop {
@@ -221,6 +270,30 @@ async fn serve(
                         tracing::info!(error = ?e, "session ended with an error");
                         lock(stats).last_error = Some(format!("{e:?}"));
                     }
+                    break;
+                }
+                () = auth.changed(), if auth_deadline.is_some() => match auth.phase() {
+                    AuthPhase::Authorized(device) => {
+                        tracing::info!(device = %device.name, %peer, "connection authorized");
+                        lock(stats).authorized += 1;
+                        auth_deadline = None;
+                        let gfx = Arc::clone(&connections.gfx);
+                        tokio::spawn(async move { gfx.present(false) });
+                    }
+                    AuthPhase::Refused => {
+                        lock(stats).auth_refused += 1;
+                        auth_deadline = None;
+                        kick_at = Some(tokio::time::Instant::now() + REFUSAL_GRACE);
+                    }
+                    AuthPhase::Pending => {}
+                },
+                () = until(auth_deadline) => {
+                    tracing::info!(%peer, "no pairing or authentication in time; dropping the connection");
+                    lock(stats).auth_timeouts += 1;
+                    break;
+                }
+                () = until(kick_at) => {
+                    tracing::info!(%peer, "device refused; dropping the connection");
                     break;
                 }
                 accepted = listener.accept() => {
@@ -235,6 +308,11 @@ async fn serve(
             }
         }
         drop(ticket);
+        // Nothing reaches the next connection's input or display until it is authorized.
+        *lock(&connections.current) = match &connections.pairing {
+            Some(_) => ConnectionAuth::pending(),
+            None => ConnectionAuth::open(),
+        };
         lock(stats).sessions_ended += 1;
         tracing::info!(%peer, "session ended");
     }
@@ -291,6 +369,8 @@ fn to_desktop_size(size: Size<u32>) -> DesktopSize {
 
 /// State shared by the EGFX factory, its handlers and the display.
 struct GfxShared {
+    /// The current connection's authentication: nothing is drawn until it is authorized.
+    auth: Arc<Mutex<ConnectionAuth>>,
     sender: Mutex<Option<mpsc::UnboundedSender<ServerEvent>>>,
     handle: Mutex<Option<GfxServerHandle>>,
     source: Mutex<Box<dyn FrameSource>>,
@@ -302,6 +382,9 @@ impl GfxShared {
     /// Sends a keyframe of the current desktop on a new surface; with `resize`, resets the
     /// graphics output to the new size first.
     fn present(&self, resize: bool) {
+        if !lock(&self.auth).is_authorized() {
+            return;
+        }
         let size = *lock(&self.size);
         let au = match lock(&self.source).keyframe(size) {
             Ok(au) => au,
@@ -397,13 +480,47 @@ impl GraphicsPipelineHandler for HostGfxHandler {
     }
 }
 
-/// Offers `Drift::Mac::v1` (EXT-1) on every connection and keeps the latest link.
-struct DriftMacFactory(Arc<Mutex<Option<Link>>>);
+/// Offers `Drift::Mac::v1` (EXT-1) on every connection and keeps the latest link; with pairing,
+/// the channel also carries the device's pairing or authentication (HOST-8).
+struct DriftMacFactory {
+    link: Arc<Mutex<Option<Link>>>,
+    pairing: Option<Pairing>,
+    host_fingerprint: [u8; 32],
+    current: Arc<Mutex<ConnectionAuth>>,
+}
 
 impl DvcServerFactory for DriftMacFactory {
     fn attach(&self, dvc: DrdynvcServer) -> DrdynvcServer {
         let link = Link::new();
-        *lock(&self.0) = Some(link.clone());
-        dvc.with_dynamic_channel(DriftMacServer::new(link, Capabilities::NONE))
+        *lock(&self.link) = Some(link.clone());
+        let channel = match &self.pairing {
+            Some(pairing) => {
+                let auth = lock(&self.current).clone();
+                DriftMacServer::new(link, Capabilities::PAIRING)
+                    .with_responder(pairing.responder(self.host_fingerprint, auth))
+            }
+            None => DriftMacServer::new(link, Capabilities::NONE),
+        };
+        dvc.with_dynamic_channel(channel)
+    }
+}
+
+/// Input reaches the sink only while the connection is authorized.
+struct GatedInput {
+    sink: SinkHandler,
+    auth: Arc<Mutex<ConnectionAuth>>,
+}
+
+impl ironrdp_server::RdpServerInputHandler for GatedInput {
+    fn keyboard(&mut self, event: ironrdp_server::KeyboardEvent) {
+        if lock(&self.auth).is_authorized() {
+            self.sink.keyboard(event);
+        }
+    }
+
+    fn mouse(&mut self, event: ironrdp_server::MouseEvent) {
+        if lock(&self.auth).is_authorized() {
+            self.sink.mouse(event);
+        }
     }
 }

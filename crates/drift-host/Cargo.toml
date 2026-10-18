@@ -27,6 +27,11 @@ ironrdp-svc.workspace = true
 async-trait = "0.1"
 # The host's self-signed certificate (generated once, pinned by paired devices in HOST-8).
 rcgen.workspace = true
+# Pairing (HOST-8): the code and the challenge nonce come from the system RNG.
+ring = "0.17"
+# The pairing link as a QR code in the terminal (HOST-8; the menu-bar app shows it later, HOST-9).
+qrcode = { version = "0.14", default-features = false }
+libc.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "net", "sync", "macros", "time"] }

@@ -18,12 +18,18 @@ use crate::windows;
 pub struct TauriHost<R: Runtime> {
     app: AppHandle<R>,
     profiles: Arc<ProfileService>,
+    pairing: crate::pairing::PairingService,
 }
 
 impl<R: Runtime> TauriHost<R> {
-    /// A host for `app`, reading secrets and pins from `profiles`.
-    pub fn new(app: AppHandle<R>, profiles: Arc<ProfileService>) -> Self {
-        Self { app, profiles }
+    /// A host for `app`, reading secrets and pins from `profiles` and paired Macs' handshakes
+    /// from `pairing`.
+    pub fn new(
+        app: AppHandle<R>,
+        profiles: Arc<ProfileService>,
+        pairing: crate::pairing::PairingService,
+    ) -> Self {
+        Self { app, profiles, pairing }
     }
 }
 
@@ -37,8 +43,13 @@ impl<R: Runtime> SessionHost for TauriHost<R> {
         let sink = windows::create_render_sink(&self.app, window)?;
         let runtime = tauri::async_runtime::handle();
         let _guard = runtime.inner().enter();
-        let (handle, events) =
-            spawn_session(profile.clone(), secrets, sink, Arc::new(SystemClock), session_options());
+        let (handle, events) = spawn_session(
+            profile.clone(),
+            secrets,
+            sink,
+            Arc::new(SystemClock),
+            self.session_options(profile)?,
+        );
         windows::attach_session(&self.app, window, handle.clone());
         Ok((handle, events))
     }
@@ -85,8 +96,18 @@ impl<R: Runtime> SessionHost for TauriHost<R> {
     }
 }
 
-/// Every session offers the `Drift::Mac::v1` channel (EXT-1): a Drift Host opens it, every
-/// other server leaves it closed and the session is plain RDP.
-fn session_options() -> SessionOptions {
-    SessionOptions { drift_mac: Some(drift_ext::channel::Link::new()), ..SessionOptions::default() }
+impl<R: Runtime> TauriHost<R> {
+    /// Every session offers the `Drift::Mac::v1` channel (EXT-1): a Drift Host opens it, every
+    /// other server leaves it closed and the session is plain RDP. A paired Mac also gets its
+    /// pairing or authentication exchange (HOST-8).
+    fn session_options(
+        &self,
+        profile: &drift_core::ConnectionProfile,
+    ) -> Result<SessionOptions, CommandError> {
+        Ok(SessionOptions {
+            drift_mac: Some(drift_ext::channel::Link::new()),
+            pairing: self.pairing.client_pairing(profile.id)?,
+            ..SessionOptions::default()
+        })
+    }
 }

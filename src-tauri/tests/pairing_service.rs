@@ -215,7 +215,6 @@ fn opened_urls_yield_the_first_pairing_link() {
 #[test]
 fn the_next_connection_carries_the_code_then_authenticates_with_the_device_key() {
     use drift_app::profiles::{LinuxPasswordUpdate, SecretsUpdate};
-    use drift_ext::channel::Responder as _;
     use drift_ext::pairing::{PairStatus, PairingMessage, PairingOutcome};
 
     let f = fixture();
@@ -231,13 +230,10 @@ fn the_next_connection_carries_the_code_then_authenticates_with_the_device_key()
 
     // A GNOME profile gets no pairing exchange at all.
     let none = SecretsUpdate { rdp_password: None, linux_password: LinuxPasswordUpdate::Keep };
-    let gnome = f
-        .profiles
-        .save(
-            drift_core::ConnectionProfile::new("GNOME", "gnome.local", drift_core::ConnectMode::Headless),
-            none,
-        )
-        .unwrap();
+    let mut gnome =
+        drift_core::ConnectionProfile::new("GNOME", "gnome.local", drift_core::ConnectMode::Headless);
+    "someone".clone_into(&mut gnome.rdp_username);
+    let gnome = f.profiles.save(gnome, none).unwrap();
     assert!(f.service.client_pairing(gnome.profile.id).unwrap().is_none());
 
     let first = f.service.client_pairing(id).unwrap().expect("a paired profile authenticates");

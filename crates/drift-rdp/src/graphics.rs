@@ -193,16 +193,26 @@ impl Graphics {
         display_control: DisplayControlClient,
         clipboard: Option<CliprdrClient>,
         drift_mac: Option<&drift_ext::channel::Link>,
+        pairing: Option<&drift_ext::pairing::ClientPairing>,
     ) -> impl FnOnce(ClientConnector) -> ClientConnector + Send + use<> {
         let drdynvc = DrdynvcClient::new().with_dynamic_channel(display_control);
         // EXT-1: offered only when the app asked for it; a non-Drift server never opens it.
         let drdynvc = match drift_mac {
             Some(link) => {
                 link.reset();
-                drdynvc.with_dynamic_channel(drift_ext::channel::DriftMacClient::new(
-                    link.clone(),
-                    drift_ext::wire::Capabilities::NONE,
-                ))
+                let client = match pairing {
+                    // HOST-8: offer pairing and answer the host's challenge on every leg.
+                    Some(pairing) => drift_ext::channel::DriftMacClient::new(
+                        link.clone(),
+                        drift_ext::pairing::ClientPairing::capabilities(),
+                    )
+                    .with_responder(pairing.responder()),
+                    None => drift_ext::channel::DriftMacClient::new(
+                        link.clone(),
+                        drift_ext::wire::Capabilities::NONE,
+                    ),
+                };
+                drdynvc.with_dynamic_channel(client)
             }
             None => drdynvc,
         };

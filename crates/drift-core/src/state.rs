@@ -64,6 +64,9 @@ pub enum DisconnectReason {
     LoggedOffRemotely,
     /// macOS Local Network Privacy denied the connection (`EHOSTUNREACH`, errno 65).
     LocalNetworkDenied,
+    /// A Drift Host refused this device: wrong or expired pairing code, or a device it does not
+    /// know (HOST-8). The text says which. Not retryable.
+    PairingRefused(String),
 }
 
 impl DisconnectReason {
@@ -78,7 +81,8 @@ impl DisconnectReason {
             | Self::RedirectLoop
             | Self::UserClosed
             | Self::LoggedOffRemotely
-            | Self::LocalNetworkDenied => false,
+            | Self::LocalNetworkDenied
+            | Self::PairingRefused(_) => false,
         }
     }
 }

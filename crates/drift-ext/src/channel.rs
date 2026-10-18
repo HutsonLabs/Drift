@@ -109,6 +109,26 @@ impl Link {
     }
 }
 
+/// Answers messages for the task that owns them, inside the channel's own message handling.
+///
+/// DVC processors can only send in reply to what they receive (and when the channel starts), so
+/// an exchange like pairing (HOST-8) is a responder: [`Responder::on_negotiated`] may speak
+/// first once both Hellos agreed, and [`Responder::on_message`] either answers a message (it is
+/// then not queued in the [`Link`]'s inbox) or leaves it for the inbox.
+pub trait Responder: Send + std::fmt::Debug {
+    /// Both ends agreed on `negotiated`; messages to send now.
+    fn on_negotiated(&mut self, negotiated: &Negotiated) -> Vec<Message> {
+        let _ = negotiated;
+        Vec::new()
+    }
+
+    /// A message after the handshake. `Some(replies)` consumes it; `None` queues it.
+    fn on_message(&mut self, message: &Message) -> Option<Vec<Message>> {
+        let _ = message;
+        None
+    }
+}
+
 /// An encoded frame as a DVC message.
 struct Frame(Vec<u8>);
 
@@ -135,6 +155,7 @@ impl DvcEncode for Frame {}
 struct Endpoint {
     link: Link,
     ours: Hello,
+    responder: Option<Box<dyn Responder>>,
 }
 
 impl Endpoint {
@@ -142,7 +163,21 @@ impl Endpoint {
         let agent = format!("Drift {} {} {role}", env!("CARGO_PKG_VERSION"), std::env::consts::OS);
         let ours =
             Hello { min_version: PROTOCOL_VERSIONS.0, max_version: PROTOCOL_VERSIONS.1, capabilities, agent };
-        Self { link, ours }
+        Self { link, ours, responder: None }
+    }
+
+    fn frames(&mut self, messages: Vec<Message>) -> Vec<DvcMessage> {
+        let mut out: Vec<DvcMessage> = Vec::with_capacity(messages.len());
+        for m in messages {
+            match encode(&m) {
+                Ok(bytes) => out.push(Box::new(Frame(bytes))),
+                Err(e) => {
+                    self.fail(format!("could not encode {:?}: {e}", m.kind()));
+                    return Vec::new();
+                }
+            }
+        }
+        out
     }
 
     fn start(&mut self) -> Vec<DvcMessage> {
@@ -173,10 +208,17 @@ impl Endpoint {
                 Ok(n) => {
                     tracing::info!(version = n.version, capabilities = n.capabilities.bits(), agent = %theirs.agent, "Drift::Mac::v1 negotiated");
                     self.link.set(LinkState::Negotiated(n));
+                    let replies = self.responder.as_mut().map(|r| r.on_negotiated(&n)).unwrap_or_default();
+                    return self.frames(replies);
                 }
                 Err(e) => self.fail(e.to_string()),
             },
-            other if self.link.negotiated().is_some() => self.link.push(other),
+            other if self.link.negotiated().is_some() => {
+                match self.responder.as_mut().and_then(|r| r.on_message(&other)) {
+                    Some(replies) => return self.frames(replies),
+                    None => self.link.push(other),
+                }
+            }
             other => self.fail(format!("{:?} before the hello", other.kind())),
         }
         Vec::new()
@@ -196,6 +238,13 @@ impl DriftMacClient {
     /// A client end reporting to `link` and offering `capabilities`.
     pub fn new(link: Link, capabilities: Capabilities) -> Self {
         Self(Endpoint::new(link, capabilities, "client"))
+    }
+
+    /// Lets `responder` answer messages after the handshake (pairing, HOST-8).
+    #[must_use]
+    pub fn with_responder(mut self, responder: Box<dyn Responder>) -> Self {
+        self.0.responder = Some(responder);
+        self
     }
 }
 
@@ -229,6 +278,13 @@ impl DriftMacServer {
     /// A server end reporting to `link` and offering `capabilities`.
     pub fn new(link: Link, capabilities: Capabilities) -> Self {
         Self(Endpoint::new(link, capabilities, "host"))
+    }
+
+    /// Lets `responder` answer messages after the handshake (pairing, HOST-8).
+    #[must_use]
+    pub fn with_responder(mut self, responder: Box<dyn Responder>) -> Self {
+        self.0.responder = Some(responder);
+        self
     }
 }
 

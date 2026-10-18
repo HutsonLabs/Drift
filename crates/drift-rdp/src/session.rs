@@ -86,6 +86,10 @@ pub struct SessionOptions {
     /// not offer the channel at all; with a link it accepts it when a Drift Host opens it, and
     /// the link stays `Absent` with any other server. Reset at every connection leg.
     pub drift_mac: Option<drift_ext::channel::Link>,
+    /// Pair with, or authenticate to, a Drift Host over `Drift::Mac::v1` (HOST-8). Needs
+    /// [`Self::drift_mac`]. A host that refuses the device ends the session with
+    /// `DisconnectReason::PairingRefused` and no retry.
+    pub pairing: Option<drift_ext::pairing::ClientPairing>,
 }
 
 impl Default for SessionOptions {
@@ -97,6 +101,7 @@ impl Default for SessionOptions {
             reconnect: ReconnectConfig::default(),
             reconnect_seed: None,
             drift_mac: None,
+            pairing: None,
         }
     }
 }

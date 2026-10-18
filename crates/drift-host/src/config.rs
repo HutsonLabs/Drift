@@ -5,19 +5,20 @@ use std::path::{Path, PathBuf};
 
 use drift_core::Size;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// File name of the configuration in the config directory.
 pub const CONFIG_FILE: &str = "host.toml";
 
-/// The RDP port. The listener binds it on loopback only unless the user widens `listen`.
+/// The RDP port.
 pub const DEFAULT_PORT: u16 = 3389;
 
 /// Settings the host reads at start.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct HostConfig {
-    /// Where the listener binds. Loopback by default: until pairing (HOST-8) exists, reaching the
-    /// host from the network is an explicit choice.
+    /// Where the listener binds: every interface by default. It only applies with
+    /// [`Self::pairing`]; without pairing the host stays on loopback ([`Self::effective_listen`]).
     pub listen: SocketAddr,
     /// The account clients sign in with (NLA). Its password lives in the Keychain.
     pub username: String,
@@ -25,15 +26,25 @@ pub struct HostConfig {
     pub desktop: Size<u32>,
     /// Inject the client's keyboard and mouse into this Mac (HOST-6). Off in the skeleton.
     pub inject_input: bool,
+    /// Device pairing (HOST-8): only devices that paired with a code shown on this Mac are served.
+    /// On by default; turning it off keeps the host on loopback.
+    pub pairing: bool,
+    /// The host's stable id in Bonjour adverts and pairing codes (created on first start).
+    pub host_id: Uuid,
+    /// The name devices see; empty means the Mac's name.
+    pub name: String,
 }
 
 impl Default for HostConfig {
     fn default() -> Self {
         Self {
-            listen: SocketAddr::from((Ipv4Addr::LOCALHOST, DEFAULT_PORT)),
+            listen: SocketAddr::from((Ipv4Addr::UNSPECIFIED, DEFAULT_PORT)),
             username: "drift".to_owned(),
             desktop: Size::new(1920, 1080),
             inject_input: false,
+            pairing: true,
+            host_id: Uuid::nil(),
+            name: String::new(),
         }
     }
 }
@@ -68,9 +79,16 @@ impl HostConfig {
         std::fs::write(&path, text).map_err(|e| ConfigError::Io(path, e))
     }
 
+    /// Where the listener really binds: [`Self::listen`] with pairing, loopback (same port)
+    /// without it (ADR `IOS-0` Consequences: the host is reachable from the network only when
+    /// unpaired devices are refused).
+    pub fn effective_listen(&self) -> SocketAddr {
+        if self.pairing { self.listen } else { SocketAddr::from((Ipv4Addr::LOCALHOST, self.listen.port())) }
+    }
+
     /// Whether the listener is reachable from other machines.
     pub fn listens_beyond_loopback(&self) -> bool {
-        !self.listen.ip().is_loopback()
+        !self.effective_listen().ip().is_loopback()
     }
 }
 
