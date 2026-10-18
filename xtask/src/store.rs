@@ -92,3 +92,35 @@ pub fn review_risks(binary: &[u8]) -> Vec<ReviewRisk> {
         .cloned()
         .collect()
 }
+
+/// The Developer ID Application identity Drift Host is signed with (SHA-1).
+pub const DEVELOPER_ID: &str = "";
+
+/// What `cargo xtask host-release` runs (STORE-4). Not yet implemented.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostReleasePlan {
+    /// The bundle.
+    pub app: PathBuf,
+    /// `codesign` argument lists, in order.
+    pub sign: Vec<Vec<String>>,
+    /// The disk image.
+    pub dmg: PathBuf,
+    /// `hdiutil` arguments.
+    pub hdiutil: Vec<String>,
+    /// `xcrun` arguments for notarization (credentials are added at run time).
+    pub notarize_args: Vec<String>,
+    /// `xcrun` arguments for stapling.
+    pub staple_args: Vec<String>,
+}
+
+/// Not yet implemented.
+pub fn host_release_plan(_root: &Path, _version: &str) -> HostReleasePlan {
+    HostReleasePlan {
+        app: PathBuf::new(),
+        sign: Vec::new(),
+        dmg: PathBuf::new(),
+        hdiutil: Vec::new(),
+        notarize_args: Vec::new(),
+        staple_args: Vec::new(),
+    }
+}

@@ -161,3 +161,48 @@ fn the_private_transparency_key_is_a_macos_only_feature() {
     let features = platform["dependencies"]["tauri"]["features"].as_array().unwrap();
     assert!(features.iter().any(|f| f.as_str() == Some("macos-private-api")));
 }
+
+// ---- STORE-4: Drift Host release ----------------------------------------------------------------
+
+#[test]
+fn the_host_runs_hardened_without_the_sandbox() {
+    let e = read("crates/drift-host-app/entitlements.plist");
+    assert_eq!(
+        plist_value(&e, "com.apple.security.app-sandbox"),
+        None,
+        "Drift Host cannot be sandboxed (IOS-0)"
+    );
+    for key in ["com.apple.security.cs.disable-library-validation", "com.apple.security.cs.allow-jit"] {
+        assert_eq!(plist_value(&e, key), None, "{key} would weaken the Hardened Runtime");
+    }
+}
+
+#[test]
+fn the_host_release_signs_inside_out_and_notarizes_the_dmg() {
+    let p = store::host_release_plan(Path::new("/repo"), "0.2.0");
+    let app = Path::new("/repo/target/release/bundle/Drift Host.app");
+    assert_eq!(p.app, app);
+    // Nested executable first, then the bundle (codesign --deep is not used for distribution).
+    let signed: Vec<_> = p.sign.iter().map(|s| s.last().cloned().unwrap_or_default()).collect();
+    assert_eq!(
+        signed,
+        [app.join("Contents/MacOS/drift-host").display().to_string(), app.display().to_string()]
+    );
+    for args in &p.sign {
+        let line = args.join(" ");
+        assert!(line.contains(&format!("--sign {}", store::DEVELOPER_ID)), "{line}");
+        assert!(line.contains("--options runtime"), "{line}");
+        assert!(line.contains("--timestamp"), "{line}");
+        assert!(line.contains("--entitlements /repo/crates/drift-host-app/entitlements.plist"), "{line}");
+    }
+    assert_eq!(p.dmg, Path::new("/repo/target/release/bundle/dmg/Drift Host_0.2.0_aarch64.dmg"));
+    let hdiutil = p.hdiutil.join(" ");
+    assert!(hdiutil.starts_with("create -volname Drift Host -srcfolder "), "{hdiutil}");
+    assert!(hdiutil.contains("-format UDZO"), "{hdiutil}");
+    assert_eq!(
+        p.notarize_args[..3],
+        ["notarytool", "submit", &p.dmg.display().to_string()].map(String::from)
+    );
+    assert!(p.notarize_args.contains(&"--wait".to_owned()));
+    assert_eq!(p.staple_args, ["stapler", "staple", &p.dmg.display().to_string()].map(String::from));
+}
