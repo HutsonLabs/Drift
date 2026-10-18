@@ -472,3 +472,12 @@ Recording in System Settings › Privacy & Security:
       Drift Host; the client log shows `Drift::Mac::v1 negotiated`. Connect the same client to
       the GNOME host: no such line, and the session works as before.
 
+### HOST-4 — Real-time encoder (ADR `HOST-4-realtime-encoder`)
+
+Measured on an M4 Pro on 2026-10-18 with `cargo run --release -p drift-video --example
+realtime_bench -- <width> <height> <frames>` while other builds ran. Still to do by hand:
+
+- [ ] **Quiet machine:** rerun the benchmark at 3840×2160, 2560×1600 and 1920×1080 with nothing
+      else running; update the ADR's table if the CPU-split or AVC444 rows move.
+- [ ] **M1:** run it on an M1 Mac (ADR `IOS-0` open question 5 asked about M1).
+

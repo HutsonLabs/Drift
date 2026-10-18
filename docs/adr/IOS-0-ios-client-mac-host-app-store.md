@@ -276,6 +276,11 @@ wry 0.55.1), tauri-cli 2.11.4.
    V8.1 and rejects AVC444 codec ids, and no encoder produces the two streams yet. DISP layouts
    reach the host, which must resize the GFX surface itself; CLIPRDR's server role exists.
 5. Can VideoToolbox's real-time H.264 encoder produce AVC444's two streams at 60 fps on M1? (HOST-4)
+   **Answered for an M4 Pro, not M1** (ADR `HOST-4-realtime-encoder`): one 4K60 stream is fine
+   (p50 23 ms), but AVC444's two streams hold 60 fps only up to about 1080p, about 45 fps at
+   2560×1600 and about 25 fps at 4K; the media engine is the limit. M1, with a smaller media
+   engine, will do no better; measuring it is a manual step. Drift's client also does not decode
+   AVC444 yet (`drift-gfx` treats it as unsupported), contrary to this ADR's context.
 6. Is `ironrdp-rdpeudp`'s lossy mode usable for GFX, or do Drift-to-Drift sessions need the
    QUIC fallback? (HOST-12) **Answered (ADR `HOST-12-quic-transport`): QUIC.** The vendored
    crates have no lossy mode, and reliable RDP-UDP2 collapses at 0.5 % random loss (p95 1.5 s at

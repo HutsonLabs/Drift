@@ -15,6 +15,7 @@ recording = ["dep:objc2-av-foundation", "dep:objc2-foundation"]
 [dependencies]
 drift-core.workspace = true
 thiserror.workspace = true
+rayon.workspace = true
 tracing.workspace = true
 objc2.workspace = true
 block2.workspace = true
