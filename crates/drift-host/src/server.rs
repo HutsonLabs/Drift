@@ -376,7 +376,8 @@ impl Host {
             };
             let connections = Connections { pairing, current, gfx: Arc::clone(&gfx), displays, quic };
             let listener = match listener {
-                Ok(tcp) => match TcpListener::from_std(tcp) {
+                // Registering with the reactor needs the runtime's context.
+                Ok(tcp) => match runtime.block_on(async { TcpListener::from_std(tcp) }) {
                     Ok(l) => Listener::Tcp(l),
                     Err(e) => {
                         tracing::error!(error = %e, "cannot use the listener");
