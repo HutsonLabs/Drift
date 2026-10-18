@@ -9,6 +9,7 @@
 //! | [`config`] | `host.toml`: listen address (loopback by default), account, desktop size | HOST-2 |
 //! | [`identity`] | the host's self-signed TLS certificate, created once and reused | HOST-2 |
 //! | [`gate`] | one session at a time | HOST-2 |
+//! | [`launch`] | start the host from its config directory (the command and the menu-bar app) | HOST-2, HOST-9 |
 //! | [`layout`] | client monitor layouts → desktop sizes the encoder accepts | HOST-2 |
 //! | [`input`] | input sinks: count/log only for now; HOST-6's injection plugs in here | HOST-2 |
 //! | [`frames`] | the test pattern, shown when the screen cannot be captured | HOST-2 |
@@ -35,6 +36,7 @@ pub mod gate;
 pub mod identity;
 pub mod inject;
 pub mod input;
+pub mod launch;
 pub mod layout;
 pub mod link;
 mod live;

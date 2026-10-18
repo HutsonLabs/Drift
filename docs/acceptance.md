@@ -548,3 +548,17 @@ chroma PSNR of 34.7 dB on coloured strokes. Still to do by hand:
       and blue text on white between a paired profile (AVC444) and the same Mac at 2560×1600
       (AVC420): coloured strokes stay crisp with AVC444.
 
+### HOST-9 — Menu-bar app (ADR `HOST-9-menu-bar`)
+
+`cargo xtask host-bundle`, then open `target/release/bundle/Drift Host.app`:
+
+- [ ] A display icon appears in the menu bar and no Dock icon. The menu starts with the status
+      line ("Waiting on 127.0.0.1:3389 (this Mac only)", or "Stopped: no password stored…" before
+      `drift-host set-password`), then paired devices, Start at Login and Quit Drift Host.
+- [ ] On a Mac without the grants, an alert explains Screen Recording first; "Open Settings" opens
+      Privacy › Screen & System Audio Recording. The icon shows a warning triangle until Screen
+      Recording and Accessibility are granted, and "Allow …" items disappear once they are.
+- [ ] Connect from Drift: the status line says "A device is connected"; disconnect: back to waiting.
+- [ ] Start at Login checks and unchecks; System Settings › General › Login Items lists Drift Host.
+- [ ] Quit Drift Host stops the listener (the port is free again).
+

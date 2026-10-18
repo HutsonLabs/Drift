@@ -83,8 +83,10 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   *ADR `HOST-7-link-hygiene`; the effect on a phone over Wi-Fi is a manual measurement.*
 - [ ] **HOST-8 Pairing and pins.** Code shown on the Mac, device key stored, host certificate
   pinned on the device. Pairing on by default; listener refuses unpaired devices.
-- [ ] **HOST-9 Menu-bar app.** Status, paired devices, permissions check (Screen Recording,
-  Accessibility, Local Network) with plain-language first-run guidance.
+- [~] **HOST-9 Menu-bar app.** Status, paired devices, permissions check (Screen Recording,
+  Accessibility, Local Network) with plain-language first-run guidance. *`drift-host-app` and `cargo xtask host-bundle` (ADR
+  `HOST-9-menu-bar`). The paired-devices list shows a placeholder until HOST-8's store implements
+  `PairedDevices`; looking at the real menu and alert is a manual step.*
 - [ ] **HOST-10 Virtual display.** `CGVirtualDisplay` created and resized from Display Control
   layouts; launch self-test; fallback to the physical display.
 - [~] **HOST-11 Clipboard and audio.** CLIPRDR server role reusing `drift-clipboard`'s mapping;
