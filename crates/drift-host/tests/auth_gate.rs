@@ -171,7 +171,9 @@ async fn clipboard_and_sound_wait_for_the_device_to_be_authorized() {
     while !got_clipboard {
         match tokio::time::timeout_at(deadline, events.recv()).await {
             Ok(Some(SessionEvent::ClipboardRemote(c))) => {
-                got_clipboard = c.text() == Some("secret on the host")
+                // Newest wins (M5-1): either the copy made while the stranger was connected or the
+                // one made after pairing, depending on when the 250 ms poll saw them.
+                got_clipboard = matches!(c.text(), Some("secret on the host" | "copied after pairing"))
             }
             Ok(Some(SessionEvent::State(SessionState::Failed { reason }))) => panic!("failed: {reason:?}"),
             Ok(Some(_)) => {}
