@@ -1614,8 +1614,10 @@ version = "0.2.0"
 dependencies = [
  "async-trait",
  "drift-apple",
+ "drift-capture",
  "drift-core",
  "drift-ext",
+ "drift-inject",
  "drift-rdp",
  "drift-testkit",
  "drift-video",

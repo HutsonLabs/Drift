@@ -67,6 +67,7 @@ async fn drift_connects_sees_the_pattern_and_its_input_reaches_the_host() {
         password: zeroize::Zeroizing::new(PASS.to_owned()),
         desktop: Size::new(1280, 800),
         frames: Box::new(|| Box::new(TestPattern::new())),
+        live: None,
         input: Box::new(input.clone()),
     })
     .unwrap();
