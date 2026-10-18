@@ -31,5 +31,9 @@ harness = false
 name = "paste"
 harness = false
 
+[[test]]
+name = "switcher"
+harness = false
+
 [lints]
 workspace = true
