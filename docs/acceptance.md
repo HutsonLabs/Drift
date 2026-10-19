@@ -380,6 +380,12 @@ moving picture, the session survives 40 s in the background, and with
 `FAKE_HOST_CLOSE_AFTER=25` the host's close is followed by a reconnect within a second while the
 app is in the background. Still to do by hand:
 
+- [ ] **Before every release: a release build launches** (ADR `IOS-fix-ipad-launch`). Debug builds
+      hid the 26.10 (4) launch crash. `cargo tauri ios build --target aarch64-sim` (no `--debug`),
+      install it in an iPad and an iPhone simulator of your own, launch, and check after 10 s that
+      `xcrun simctl spawn <device> launchctl list | grep drift` still lists it and that the
+      home-screen icon is Drift's waves.
+
 - [ ] **IOS-5 first light on a device:** a real iPad (signed with a development team) connects to
       the GNOME test host in Headless mode, shows the live desktop at the iPad's native size, and
       after 5 minutes in the background (long enough for iOS to suspend it) reconnects on return.

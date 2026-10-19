@@ -102,6 +102,88 @@ pub fn audit(src_tauri: &Path) -> Vec<String> {
     problems
 }
 
+/// The iPhone and iPad icon set, relative to `src-tauri/` (IOS-5: tracked in the Xcode project).
+pub const IOS_SET: &str = "gen/apple/Assets.xcassets/AppIcon.appiconset";
+
+/// The full-bleed vector source of the iOS set, relative to `src-tauri/`.
+pub const IOS_SOURCE: &str = "icons/icon-ios.svg";
+
+/// SHA-256 of the 1024 px icon `cargo tauri ios init` writes: Tauri's own logo, which shipped in
+/// TestFlight 26.10 (4) instead of Drift's.
+pub const TAURI_DEFAULT_IOS_ICON_SHA256: &str =
+    "00badc78c2ecb7460bbe02aeeca1e8848724ee133391bb3025df561007187eaf";
+
+/// Whether a PNG has an alpha channel (IHDR colour type 4 or 6, or 3 with a `tRNS` chunk).
+#[must_use]
+pub fn png_has_alpha(bytes: &[u8]) -> bool {
+    match bytes.get(25) {
+        Some(4 | 6) => true,
+        Some(3) => memchr::memmem::find(bytes, b"tRNS").is_some(),
+        _ => false,
+    }
+}
+
+/// Everything wrong with the iOS icon set under `src_tauri` (empty means it is right): every
+/// image `Contents.json` lists exists at its pixel size, is opaque (App Store Connect rejects
+/// transparency), and the set is not Tauri's default logo.
+#[must_use]
+pub fn ios_audit(src_tauri: &Path) -> Vec<String> {
+    use sha2::Digest as _;
+    let mut problems = Vec::new();
+    if !src_tauri.join(IOS_SOURCE).is_file() {
+        problems.push(format!("missing {IOS_SOURCE}"));
+    }
+    let set = src_tauri.join(IOS_SET);
+    let contents: serde_json::Value = match std::fs::read_to_string(set.join("Contents.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+    {
+        Some(v) => v,
+        None => return vec![format!("{IOS_SET}/Contents.json is missing or not JSON")],
+    };
+    let images = contents.get("images").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+    if images.is_empty() {
+        problems.push(format!("{IOS_SET}/Contents.json lists no images"));
+    }
+    for image in &images {
+        let Some(file) = image.get("filename").and_then(serde_json::Value::as_str) else { continue };
+        let points: f64 = image
+            .get("size")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|s| s.split('x').next())
+            .and_then(|w| w.parse().ok())
+            .unwrap_or(0.0);
+        let scale: f64 = image
+            .get("scale")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|s| s.trim_end_matches('x').parse().ok())
+            .unwrap_or(1.0);
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "icon sizes are small and positive"
+        )]
+        let expected = (points * scale).round() as u32;
+        let Ok(bytes) = std::fs::read(set.join(file)) else {
+            problems.push(format!("{IOS_SET}/{file} is missing"));
+            continue;
+        };
+        match png_size(&bytes) {
+            Some((w, h)) if w == expected && h == expected => {}
+            Some((w, h)) => problems.push(format!("{file} is {w}x{h}, expected {expected} square")),
+            None => problems.push(format!("{file} is not a PNG")),
+        }
+        if png_has_alpha(&bytes) {
+            problems.push(format!("{file} has an alpha channel; App Store icons must be opaque"));
+        }
+        let hash: String = sha2::Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
+        if hash == TAURI_DEFAULT_IOS_ICON_SHA256 {
+            problems.push(format!("{file} is Tauri's default logo; regenerate from {IOS_SOURCE}"));
+        }
+    }
+    problems
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -133,6 +133,11 @@ dbg_macro = "warn"
 print_stderr = "allow"
 large_futures = "warn"
 
+# tao 0.35.3 with one fix (third_party/tao/DRIFT-PATCHES.md): its iOS scene configuration was
+# returned already released, so release builds crashed at launch on iPad (IOS-fix-ipad-launch).
+[patch.crates-io]
+tao = { path = "third_party/tao" }
+
 # §0: optimised dependencies in dev. A debug-built decoder acks frames late and
 # g-r-d throttles from 60 to ~30 fps (verified).
 [profile.dev.package."*"]
