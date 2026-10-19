@@ -256,6 +256,8 @@ pub fn identity(profile: &ConnectionProfile, view: &SessionView) -> WindowIdenti
         name: display_name(&view.profile_name),
         host: profile.host.clone(),
         mode: view.mode,
+        kind: profile.kind(),
+        quality: view.stats.and_then(|s| s.host_quality),
         status: status_for(view),
         hint: greeter_hint(Some(view)),
         show_stats: view.show_stats,

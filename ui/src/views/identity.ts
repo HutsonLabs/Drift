@@ -1,10 +1,12 @@
-// A session window's title bar (UI-windows boards 4, 5, 7; decisions 5 and 6): the centred
-// identity capsule (mode glyph, name, host, then a status dot, or a spinner while connecting;
-// the greeter hint as its tooltip) and, on the right, Show Connections and Statistics. The whole
-// bar drags the window; nothing in it takes the keyboard (the title bar hands focus back).
+// A session window's title bar (UI-windows boards 4, 5, 7; decisions 5 and 6; UI-kinds F): the
+// centred identity capsule (kind glyph, name, the GNOME mode or the Mac's quality step, then a
+// status dot, or a spinner while connecting; the greeter hint, else the host, as its tooltip)
+// and, on the right, Show Connections and Statistics. The whole bar drags the window; nothing in
+// it takes the keyboard (the title bar hands focus back).
 import type { WindowIdentity } from "../bindings";
 import { h, mount } from "../dom";
-import { icon, modeGlyph } from "../icons";
+import { icon, kindGlyph } from "../icons";
+import { KIND_NAMES, QUALITY_NAMES, SHORT_MODE_NAMES } from "../kinds";
 import { STATUS_NAMES } from "../modes";
 
 /** What the title bar can ask for. */
@@ -21,18 +23,20 @@ export function renderIdentity(root: HTMLElement, id: WindowIdentity, on: Identi
       : id.status === "idle"
         ? null
         : h("span", { class: `status ${id.status}`, "aria-hidden": "true" });
+  // What is on the other end (UI-kinds F): the GNOME mode, or the Mac's live quality step.
+  const detail = id.kind === "mac" ? (id.quality ? QUALITY_NAMES[id.quality] : "Drift Host") : SHORT_MODE_NAMES[id.mode];
   const capsule = h(
     "div",
     {
       class: "ident",
       role: "group",
-      "aria-label": `${id.name}, ${id.host}, ${STATUS_NAMES[id.status]}`,
-      title: id.hint,
+      "aria-label": `${id.name}, ${KIND_NAMES[id.kind]}, ${detail}, ${STATUS_NAMES[id.status]}`,
+      title: id.hint ?? id.host,
       "data-tauri-drag-region": true,
     },
-    modeGlyph(id.mode, "small"),
+    kindGlyph(id.kind, "small"),
     h("span", { class: "name", "data-tauri-drag-region": true }, id.name),
-    h("span", { class: "host", "data-tauri-drag-region": true }, id.host),
+    h("span", { class: "detail", "data-tauri-drag-region": true }, detail),
     indicator,
   );
   // A click on a button must not move the keyboard off the page or the remote desktop.

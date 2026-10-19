@@ -122,3 +122,25 @@ export async function startConnections(fake = new FakeConnectionsApi(), clock = 
   await flush();
   return { root, app, fake, clock };
 }
+
+/** "+" (or ⌘N) → "Add GNOME Computer…": the New Connection sheet for a GNOME computer. */
+export async function addGnome(root: ParentNode): Promise<void> {
+  clickNamed(root.querySelector("header.toolbar")!, "New Connection");
+  await flush();
+  clickNamed(root.querySelector("[role=dialog][aria-label='Add a Connection']")!, "Add GNOME Computer…");
+  await flush();
+}
+
+/** "+" → "Pair a Mac…": the pairing sheet. */
+export async function pairMac(root: ParentNode): Promise<void> {
+  clickNamed(root.querySelector("header.toolbar")!, "New Connection");
+  await flush();
+  clickNamed(root.querySelector("[role=dialog][aria-label='Add a Connection']")!, "Pair a Mac…");
+  await flush();
+}
+
+function clickNamed(root: ParentNode, name: string): void {
+  const b = Array.from(root.querySelectorAll("button")).find((x) => (x.getAttribute("aria-label") ?? x.textContent ?? "").trim() === name);
+  if (!b) throw new Error(`no button "${name}"`);
+  b.click();
+}

@@ -12,6 +12,7 @@ pub mod commands;
 pub mod connections;
 pub mod dock;
 pub mod frames;
+pub mod gnome_menu;
 mod host;
 pub mod manager;
 pub mod menu;

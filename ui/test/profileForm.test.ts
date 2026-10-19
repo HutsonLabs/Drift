@@ -107,7 +107,7 @@ describe("mode-dependent fields", () => {
   test("the three modes are a labelled radio group, Headless first", () => {
     const { root } = mount(newModel("remote-login"));
     const group = root.querySelector("fieldset.mode");
-    expect(text(group?.querySelector("legend"))).toBe("Connection type");
+    expect(text(group?.querySelector("legend"))).toBe("GNOME session");
     const radios = Array.from(group?.querySelectorAll("input[type=radio]") ?? []) as HTMLInputElement[];
     expect(radios.map((r) => r.value)).toEqual(["headless", "desktop-sharing", "remote-login"]);
     expect(radios.filter((r) => r.checked).map((r) => r.value)).toEqual(["remote-login"]);

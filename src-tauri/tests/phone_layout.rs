@@ -106,6 +106,7 @@ fn every_soft_key_has_a_scancode() {
         (Backspace, 0x0E, false),
         (Enter, 0x1C, false),
         (Delete, 0x53, true),
+        (Space, 0x39, false),
     ];
     for (k, code, ext) in expected {
         assert_eq!(chord_events(&[k])[0], key(code, ext, true), "{k:?}");
@@ -140,4 +141,10 @@ fn landscape_controls_hide_after_a_quiet_spell() {
     assert!(a.visible(16.0), "use keeps them up");
     a.hide();
     assert!(!a.visible(13.5));
+}
+
+/// UI-kinds: the Mac key row's Command-Space needs a space key.
+#[test]
+fn space_is_a_soft_key() {
+    assert_eq!(SoftKey::from_name("space"), Some(SoftKey::Space));
 }

@@ -18,6 +18,8 @@ import type {
 import { h, mount } from "./dom";
 import { icon } from "./icons";
 import { DEFAULT_MODE } from "./modes";
+import { kindOf } from "./kinds";
+import { renderAddSheet } from "./views/addSheet";
 import { primaryLabel, tickPills } from "./views/card";
 import { renderConfirm } from "./views/confirm";
 import { type Filter, renderGallery } from "./views/gallery";
@@ -61,6 +63,8 @@ export class ConnectionsApp {
   private sheet: { model: FormModel; handle: SheetHandle } | null = null;
   /** The "Pair a Mac" sheet while it is open (IOS-9). */
   private pairing: PairSheetHandle | null = null;
+  /** The "Add a Connection" chooser is open (UI-kinds B). */
+  private adding = false;
   private timer: ReturnType<typeof setInterval> | null = null;
 
   private readonly page: HTMLElement;
@@ -79,7 +83,7 @@ export class ConnectionsApp {
   ) {
     const seg = (f: Filter, label: string) =>
       h("button", { type: "button", "aria-pressed": String(f === this.filter), onclick: () => this.setFilter(f) }, label);
-    this.filterButtons = { all: seg("all", "All"), open: seg("open", "Open") };
+    this.filterButtons = { all: seg("all", "All"), mac: seg("mac", "Macs"), gnome: seg("gnome", "GNOME"), open: seg("open", "Open") };
     this.count = h("span", { class: "count" });
     const search = h("input", {
       type: "search",
@@ -99,10 +103,10 @@ export class ConnectionsApp {
       h("h1", { "data-tauri-drag-region": true }, "Connections"),
       this.count,
       h("span", { class: "spacer", "data-tauri-drag-region": true }),
-      h("div", { class: "seg", role: "group", "aria-label": "Show" }, this.filterButtons.all, this.filterButtons.open),
+      h("div", { class: "seg", role: "group", "aria-label": "Show" }, Object.values(this.filterButtons)),
       h("div", { class: "search" }, icon("search"), search),
-      h("button", { type: "button", class: "tb-btn", "aria-label": "Pair a Mac", title: "Pair a Mac running Drift Host", onclick: () => void this.openPairing() }, icon("display")),
-      h("button", { type: "button", class: "tb-btn", "aria-label": "New Connection", title: "New Connection (⌘N)", onclick: () => void this.openNew() }, icon("plus")),
+      // One add button (UI-kinds B): it asks for the kind first.
+      h("button", { type: "button", class: "tb-btn", "aria-label": "New Connection", title: "Add a Mac or GNOME computer (⌘N)", onclick: () => this.openAdd() }, icon("plus")),
     );
     this.noticeSlot = h("div", { class: "notice-slot" });
     this.region = h("div", { class: "gallery-scroll" });
@@ -120,7 +124,7 @@ export class ConnectionsApp {
     // A drift-pair: link that launched the app opens "Pair a Mac" instead (IOS-9).
     const link = (await this.api.takePairingLink()) as string | null;
     if (link) await this.openPairing(link);
-    else if (this.entries.length === 0 && this.sheet === null) await this.openNew();
+    else if (this.entries.length === 0 && this.sheet === null) this.openAdd();
   }
 
   /** Open connections changed (the `connectionsChanged` event). */
@@ -148,7 +152,7 @@ export class ConnectionsApp {
   /** Cmd+N / Cmd+E / Edit Connection… from anywhere (the `connectionsIntentRequested` event). */
   async onIntent(intent: ConnectionsIntent): Promise<void> {
     if (intent.kind === "new") {
-      await this.openNew();
+      this.openAdd();
     } else if (intent.kind === "pair") {
       await this.openPairing(intent.uri);
     } else {
@@ -240,10 +244,13 @@ export class ConnectionsApp {
       mount(this.confirmLayer);
       this.updateInert();
     };
+    const mac = kindOf(e.profile) === "mac";
     renderConfirm(this.confirmLayer, {
-      title: `Delete “${e.profile.name}”?`,
-      message: "Its saved passwords are removed from your Keychain too. This can’t be undone.",
-      action: "Delete",
+      title: mac ? `Unpair “${e.profile.name}”?` : `Delete “${e.profile.name}”?`,
+      message: mac
+        ? "Drift forgets this Mac and its pinned key. To connect again, pair with a new code from the Mac."
+        : "Its saved passwords are removed from your Keychain too. This can’t be undone.",
+      action: mac ? "Unpair" : "Delete",
       cancel: () => {
         done();
         this.refocus();
@@ -298,6 +305,33 @@ export class ConnectionsApp {
   }
 
   // ---- the sheet ------------------------------------------------------------------------
+
+  /** "Add a Connection": which kind comes next (UI-kinds B). */
+  private openAdd(): void {
+    if (this.pairing) this.closePairing();
+    if (this.sheet) this.closeSheet();
+    this.adding = true;
+    const close = () => {
+      this.adding = false;
+      mount(this.sheetLayer);
+      this.updateInert();
+    };
+    renderAddSheet(this.sheetLayer, {
+      pairMac: () => {
+        close();
+        void this.openPairing();
+      },
+      addGnome: () => {
+        close();
+        void this.openNew();
+      },
+      cancel: () => {
+        close();
+        this.refocus();
+      },
+    });
+    this.updateInert();
+  }
 
   private async openNew(): Promise<void> {
     const p = (await this.api.newProfile(DEFAULT_MODE)) as ConnectionProfile_Serialize;
@@ -429,7 +463,7 @@ export class ConnectionsApp {
 
   private updateInert(): void {
     const confirm = this.confirmLayer.childElementCount > 0;
-    const sheet = this.sheet !== null || this.pairing !== null;
+    const sheet = this.sheet !== null || this.pairing !== null || this.adding;
     this.page.toggleAttribute("inert", sheet || confirm);
     this.sheetLayer.toggleAttribute("inert", confirm);
   }
@@ -451,7 +485,7 @@ export class ConnectionsApp {
       {
         primary: (id) => this.primary(id),
         menu: (id, at) => this.menu(id, at),
-        create: () => void this.openNew(),
+        create: () => this.openAdd(),
         edit: (id) => this.openEdit(id),
         duplicate: (id) => void this.duplicate(id),
         remove: (id) => this.askRemove(id),

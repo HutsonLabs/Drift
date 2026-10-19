@@ -1,6 +1,7 @@
 // Profile fields (M1-6, M3-2), shown in the configuration sheet (views/sheet.ts): the rows of a
 // FormModel, reading them back, the validation shown inline, and the password changes to save.
-// The connection mode decides which credential fields exist:
+// A Mac running Drift Host gets its own rows (UI-kinds E: pairing, display, clipboard, touch).
+// For a GNOME computer the connection mode decides which credential fields exist:
 // - Remote Login: the *system* RDP credentials, an optional Linux user (greeter hint) and an
 //   explicit opt-in to store the Linux password so Drift types it at the GNOME login screen.
 // - Headless / Desktop Sharing: one RDP credential set.
@@ -17,6 +18,7 @@ import type {
 } from "../bindings";
 import { actionButton, h } from "../dom";
 import { icon, modeGlyph } from "../icons";
+import { kindOf } from "../kinds";
 import { MODE_ORDER } from "../modes";
 
 /** Everything the form renders. */
@@ -193,6 +195,7 @@ export function fieldOf(id: string): ProfileField | undefined {
  */
 export function formFields(model: FormModel, on: FieldIntents, draft: () => FormDraft): Node[] {
   const p = model.profile;
+  if (kindOf(p) === "mac") return macFields(model);
   const cred = CREDENTIALS[p.mode];
   const isLogin = p.mode === "remote-login";
   const needsPassword = model.isNew || !model.hasRdpPassword;
@@ -202,7 +205,7 @@ export function formFields(model: FormModel, on: FieldIntents, draft: () => Form
     // The mode explanation is part of the group's description, so VoiceOver reads it with the
     // radio buttons instead of leaving it as unattached text (M9-4).
     { class: "mode field", "aria-describedby": "mode-hint" },
-    h("legend", {}, "Connection type"),
+    h("legend", {}, "GNOME session"),
     h(
       "div",
       { class: "segmented" },
@@ -315,7 +318,7 @@ export function formFields(model: FormModel, on: FieldIntents, draft: () => Form
         "Sends typed characters instead of key positions, so the Mac keyboard layout applies."),
       checkField("adaptive", "Resize the remote desktop to fit the window", sharing ? false : (p.display.adaptive ?? true),
         sharing ? "Desktop Sharing can’t resize the remote screen; Drift scales it to fit." : null, sharing),
-      checkField("retina", "Use Retina resolution", p.display.retina ?? true,
+      checkField("retina", "Render at 2× (Retina)", p.display.retina ?? true,
         "Renders GNOME at 2× on Retina displays for sharp text."),
       selectField("clipboard", "Clipboard", p.clipboard ?? "text-and-images", [
         ["text-and-images", "Text and images"],
@@ -352,6 +355,69 @@ export function formFields(model: FormModel, on: FieldIntents, draft: () => Form
     greeter ?? "",
     pin ?? "",
     advanced,
+  ].filter((n): n is HTMLElement => n !== "");
+}
+
+/**
+ * A Mac's rows (UI-kinds E): name, the pairing (account and pinned host key), display, a note on
+ * the keyboard, clipboard and touch. No mode, RDP credentials or GNOME keyboard options: the
+ * pairing set those, and keys go to the Mac unchanged. Unpair is the footer's button.
+ */
+function macFields(model: FormModel): Node[] {
+  const p = model.profile;
+  return [
+    model.error ? h("p", { class: "form-error", role: "alert" }, model.error) : "",
+    group(textField("profile-name", "Name", p.name, { autocomplete: "off", placeholder: "e.g. Mac mini" })),
+    h(
+      "section",
+      { class: "pairing", "aria-labelledby": "pairing-title" },
+      h("h3", { class: "group-title", id: "pairing-title" }, "Pairing"),
+      group(
+        h("div", { class: "field info" }, h("span", { class: "info-label" }, "Account"), h("span", {}, `Paired as “${p.rdp_username}”`)),
+        h("div", { class: "field info" }, h("span", { class: "info-label" }, "Address"), h("span", {}, `${p.host}:${p.port}`)),
+        p.cert_pin
+          ? h(
+              "div",
+              { class: "field pin" },
+              h("span", { class: "pin-label", id: "pin-label" }, "Host key (SHA-256)"),
+              h("code", { class: "fingerprint", "aria-labelledby": "pin-label" }, p.cert_pin),
+            )
+          : null,
+      ),
+    ),
+    h(
+      "section",
+      { class: "mac-display", "aria-labelledby": "mac-display-title" },
+      h("h3", { class: "group-title", id: "mac-display-title" }, "Display"),
+      group(
+        checkField("adaptive", "Fit the Mac’s screen to this window", p.display.adaptive ?? true,
+          "Drift Host gives this window a virtual display and resizes it with the window. Off: it keeps the size it started with."),
+        checkField("retina", "Use Retina resolution", p.display.retina ?? true, "Renders the Mac at 2× on Retina displays for sharp text."),
+        h("p", { class: "hint group-note" }, "Quality follows the Mac: it steps down on a busy link and back up when it clears."),
+      ),
+    ),
+    h(
+      "section",
+      { class: "mac-keys", "aria-labelledby": "mac-keys-title" },
+      h("h3", { class: "group-title", id: "mac-keys-title" }, "Keyboard and pointer"),
+      group(
+        h(
+          "p",
+          { class: "hint group-note" },
+          "⌘ ⌥ ⌃ ⇧ and the keyboard layout go to the Mac unchanged. ⌘Tab and ⌘Space go to the Mac while its window is in front. On iPad, the Mac’s menus show in the menu bar.",
+        ),
+        selectField("clipboard", "Clipboard", p.clipboard ?? "text-and-images", [
+          ["text-and-images", "Text and images"],
+          ["text", "Text only"],
+          ["off", "Off"],
+        ]),
+        selectField("touch", "Touch on iPhone and iPad", p.touch ?? "auto", [
+          ["auto", "Automatic (trackpad on iPhone, direct on iPad)"],
+          ["trackpad", "Trackpad"],
+          ["direct", "Tap where you touch"],
+        ]),
+      ),
+    ),
   ].filter((n): n is HTMLElement => n !== "");
 }
 

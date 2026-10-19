@@ -47,6 +47,11 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   explicit user action, so iOS never shows its paste prompt unasked.
 - [✓] **IOS-11 Session switcher.** On iOS, the UI-windows "one window per connection" becomes an
   in-app switcher (or scenes, if IOS-1 says Tauri allows them).
+- [✓] **UI-kinds Mac and GNOME targets.** Part 2 of `docs/design/mockup-targets.html` on macOS,
+  iPad and iPhone (ADR `UI-kinds-target-kinds`): the kind from `paired_host`, the All / Macs /
+  GNOME / Open filter, one kind-first add flow, kind badges and Mac tiles, a sheet per kind, the
+  title bar's GNOME mode or Mac quality step, GNOME menus in the iPad menu bar, and a key row per
+  kind on iPhone.
 
 ## HOST — Drift Host (Mac)
 

@@ -42,8 +42,8 @@ describe("iPhone key row", () => {
     expect(calls).toEqual([["sendKeys", ["control", "alt", "escape"]]]);
     expect(button(root, "Control").getAttribute("aria-pressed")).toBe("false");
     // Tapping a latched modifier again unlatches it without sending anything.
-    button(root, "Command").click();
-    button(root, "Command").click();
+    button(root, "Super").click();
+    button(root, "Super").click();
     button(root, "Tab").click();
     expect(calls.at(-1)).toEqual(["sendKeys", ["tab"]]);
   });

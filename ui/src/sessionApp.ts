@@ -4,7 +4,7 @@
 // has a session: Cancel while connecting and the error sheet's Close close the window, and Edit
 // Connection… opens this profile's edit sheet on the Connections window.
 import type { Result } from "./api";
-import type { ErrorAction, PhoneControls, SessionView_Serialize, TouchMode, WindowIdentity, commands } from "./bindings";
+import type { ErrorAction, HostKind, PhoneControls, SessionView_Serialize, TouchMode, WindowIdentity, commands } from "./bindings";
 import { mount } from "./dom";
 import { renderCertificatePrompt } from "./views/certificate";
 import { renderConnecting } from "./views/connecting";
@@ -47,6 +47,8 @@ export class SessionApp {
   private sessionAt = 0;
   /** This window's profile (for Edit Connection…); it never changes for a window. */
   private profileId: string | null = null;
+  /** What is on the other end (picks the iPhone key row); it never changes for a window. */
+  private kind: HostKind = "gnome";
   private timer: ReturnType<typeof setInterval> | null = null;
   /** iPhone: whether the key row shows, and the session's touch mode (IOS-8). */
   private controls: PhoneControls = { visible: false, touch: "auto" };
@@ -60,7 +62,10 @@ export class SessionApp {
   /** Learns which profile this window belongs to. */
   async start(): Promise<void> {
     const r = (await this.api.windowIdentity()) as Result<WindowIdentity>;
-    if (r.status === "ok") this.profileId = r.data.profile_id;
+    if (r.status === "ok") {
+      this.profileId = r.data.profile_id;
+      this.kind = r.data.kind;
+    }
     // iPhone: the controls may have been announced before this page listened (IOS-8).
     const controls = await this.api.phoneControls?.();
     if (controls) this.onPhoneControls(controls);
@@ -149,7 +154,7 @@ export class SessionApp {
       sendKeys: (keys) => void this.api.sendKeys(keys),
       typeText: (text) => void this.api.typeText(text),
       setTouchMode: (mode) => void this.api.setTouchMode(mode as TouchMode),
-    });
+    }, this.kind);
   }
 
   private renderReconnect(): void {

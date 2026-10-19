@@ -1,12 +1,14 @@
 // The configuration sheet (UI-windows boards 2–3, decision 15): a document-modal sheet on the
-// Connections window. Fixed header (glyph, name, host:port and trust status, Connect or Show
-// Window) and footer (Cancel / Add / Add & Connect, or Delete… / Cancel / Save); the profile
+// Connections window. Fixed header (kind glyph, name, host:port or "Drift Host · host" and trust
+// status, Connect or Show Window) and footer (Cancel / Add / Add & Connect, or Delete… (Unpair…
+// for a Mac) / Cancel / Save); the profile
 // rows scroll between them. Esc cancels. Validation is Rust's (`validate_profile`), run on every
 // edit; issues show inline on fields the user has edited, and the default button stays disabled
 // until there are none.
 import type { ConnectionProfile_Serialize, ProfileField, ProfileIssue } from "../bindings";
 import { h, mount } from "../dom";
-import { icon, modeGlyph } from "../icons";
+import { icon, kindGlyph } from "../icons";
+import { kindOf } from "../kinds";
 import {
   advancedSummary,
   type FieldIntents,
@@ -57,12 +59,13 @@ export function renderSheet(root: HTMLElement, model: FormModel, on: SheetIntent
   const intents: FieldIntents = { change: () => on.change(handle.draft()), forgetCertificate: () => on.forgetCertificate() };
 
   const titleId = "cfg-title";
+  const mac = kindOf(p) === "mac";
   const meta = model.isNew
     ? h("p", { class: "meta" }, MODES[p.mode].label)
     : h(
         "p",
         { class: "meta" },
-        h("span", {}, `${p.host}:${p.port}`),
+        h("span", {}, mac ? `Drift Host · ${p.host}` : `${p.host}:${p.port}`),
         p.cert_pin ? [" ", h("span", { class: "sep", "aria-hidden": "true" }, "·"), " ", h("span", { class: "trusted" }, icon("shield"), "Trusted")] : "",
       );
   const headAction = model.isNew
@@ -73,7 +76,7 @@ export function renderSheet(root: HTMLElement, model: FormModel, on: SheetIntent
   const head = h(
     "header",
     { class: "cfg-head" },
-    modeGlyph(p.mode, "large"),
+    kindGlyph(kindOf(p), "large"),
     h("div", { class: "cfg-title" }, h("h2", { id: titleId }, model.isNew ? "New Connection" : p.name || "Connection"), meta),
     h("span", { class: "spacer" }),
     headAction,
@@ -87,7 +90,7 @@ export function renderSheet(root: HTMLElement, model: FormModel, on: SheetIntent
     { class: "cfg-foot" },
     model.isNew
       ? h("span", { class: "note" }, "Passwords are kept in your Keychain")
-      : h("button", { type: "button", class: "destructive", onclick: () => on.remove() }, "Delete…"),
+      : h("button", { type: "button", class: "destructive", onclick: () => on.remove() }, mac ? "Unpair…" : "Delete…"),
     !model.isNew && model.open ? h("span", { class: "note live-note" }, h("span", { class: "status live", "aria-hidden": "true" }), "Applies on next connect") : "",
     h("span", { class: "spacer" }),
     h("button", { type: "button", onclick: () => on.cancel() }, "Cancel"),
