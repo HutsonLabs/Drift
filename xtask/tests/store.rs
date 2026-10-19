@@ -56,7 +56,7 @@ fn the_short_description_names_both_kinds_of_host() {
 
 #[test]
 fn the_mas_package_is_universal_and_signed_by_the_installer_identity() {
-    let p = store::mas_plan(Path::new("/repo"), None);
+    let p = store::mas_plan(Path::new("/repo"), None, None);
     let line = p.tauri_args.join(" ");
     assert!(line.contains("--target universal-apple-darwin"), "{line}");
     assert!(line.contains("--bundles app"), "{line}");
@@ -72,7 +72,7 @@ fn the_mas_package_is_universal_and_signed_by_the_installer_identity() {
 
 #[test]
 fn a_given_profile_is_embedded_in_the_app() {
-    let p = store::mas_plan(Path::new("/repo"), Some(Path::new("/profiles/drift.provisionprofile")));
+    let p = store::mas_plan(Path::new("/repo"), Some(Path::new("/profiles/drift.provisionprofile")), None);
     let (from, to) = p.embed_profile.unwrap();
     assert_eq!(from, Path::new("/profiles/drift.provisionprofile"));
     assert_eq!(
@@ -205,4 +205,11 @@ fn the_host_release_signs_inside_out_and_notarizes_the_dmg() {
     );
     assert!(p.notarize_args.contains(&"--wait".to_owned()));
     assert_eq!(p.staple_args, ["stapler", "staple", &p.dmg.display().to_string()].map(String::from));
+}
+
+#[test]
+fn mas_plan_sets_the_build_number_through_a_config_override() {
+    let p = store::mas_plan(Path::new("/repo"), None, Some(3));
+    let tail = &p.tauri_args[p.tauri_args.len() - 2..];
+    assert_eq!(tail, ["--config", r#"{"bundle":{"macOS":{"bundleVersion":"3"}}}"#]);
 }

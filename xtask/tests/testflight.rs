@@ -83,3 +83,12 @@ fn jwt_helpers() {
     let body = testflight::token_body("KEY", "ISSUER", 100);
     assert_eq!(body.split('.').count(), 2);
 }
+
+#[test]
+fn the_mac_upload_validates_and_uploads_the_installer_package() {
+    let pkg = std::path::Path::new("/repo/target/universal-apple-darwin/release/bundle/mas/Drift.pkg");
+    let (validate, upload) = testflight::mac_altool_args(pkg);
+    assert_eq!(validate, ["altool", "--validate-app", "-f", pkg.to_str().unwrap(), "-t", "macos"]);
+    assert_eq!(upload[1], "--upload-app");
+    assert_eq!(upload[5], "macos");
+}

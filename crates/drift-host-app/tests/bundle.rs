@@ -29,9 +29,12 @@ fn bundle_is_a_menu_bar_agent_with_its_own_identity() {
 
 #[test]
 fn bundle_version_is_the_workspace_version() {
+    // Marketing version `yy.mm` (Cargo carries it as `yy.mm.0`); the build is a plain integer.
     let p = plist();
-    assert_eq!(value(&p, "CFBundleShortVersionString").as_deref(), Some(env!("CARGO_PKG_VERSION")));
-    assert_eq!(value(&p, "CFBundleVersion").as_deref(), Some(env!("CARGO_PKG_VERSION")));
+    let short = env!("CARGO_PKG_VERSION").strip_suffix(".0").unwrap();
+    assert_eq!(value(&p, "CFBundleShortVersionString").as_deref(), Some(short));
+    let build = value(&p, "CFBundleVersion").unwrap();
+    assert!(build.parse::<u32>().is_ok_and(|n| n > 0), "CFBundleVersion {build} is not a build number");
 }
 
 #[test]
