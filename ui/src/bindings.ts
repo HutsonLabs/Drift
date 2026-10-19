@@ -422,6 +422,16 @@ export type HostAdvert = {
 	fingerprint: CertFingerprint,
 };
 
+/**
+ *  What is on the other end of a profile (UI-kinds): it drives the gallery, the configuration
+ *  sheet, the title bar, the iPhone key row and the iPad menu bar.
+ */
+export type HostKind = 
+/**  A Mac running Drift Host, paired with this device (IOS-9). */
+"mac" | 
+/**  A GNOME computer (GNOME Remote Desktop); its [`ConnectMode`] says how. */
+"gnome";
+
 /**  A Drift Host's quality step (EXT-4), as the HUD names it. */
 export type HostQuality = 
 /**  Full bit rate and frame rate. */
@@ -818,8 +828,15 @@ export type WindowIdentity = {
 	name: string,
 	/**  Host as saved in the profile. */
 	host: string,
-	/**  Connection mode (picks the glyph). */
+	/**  Connection mode (a GNOME computer's capsule names it). */
 	mode: ConnectMode,
+	/**  What is on the other end (picks the glyph, the capsule's detail and the iPhone key row). */
+	kind: HostKind,
+	/**
+	 *  The quality step a Drift Host reports (EXT-4), shown in a Mac's capsule; `None` before
+	 *  the first report and for GNOME.
+	 */
+	quality: HostQuality | null,
 	/**  Dot or spinner. */
 	status: ConnectionStatus,
 	/**  Greeter hint (tooltip) while the GNOME login screen waits. */

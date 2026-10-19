@@ -124,6 +124,8 @@ pub enum SoftKey {
     Enter,
     /// Forward delete.
     Delete,
+    /// Space (the Mac key row's ⌘Space).
+    Space,
 }
 
 impl SoftKey {
@@ -143,6 +145,7 @@ impl SoftKey {
             Self::Backspace => Scancode::new(0x0E),
             Self::Enter => Scancode::new(0x1C),
             Self::Delete => Scancode::ext(0x53),
+            Self::Space => Scancode::new(0x39),
         }
     }
 

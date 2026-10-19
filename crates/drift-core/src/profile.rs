@@ -208,6 +208,18 @@ impl<'de> Deserialize<'de> for CertFingerprint {
     }
 }
 
+/// What is on the other end of a profile (UI-kinds): it drives the gallery, the configuration
+/// sheet, the title bar, the iPhone key row and the iPad menu bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "kebab-case")]
+pub enum HostKind {
+    /// A Mac running Drift Host, paired with this device (IOS-9).
+    Mac,
+    /// A GNOME computer (GNOME Remote Desktop); its [`ConnectMode`] says how.
+    Gnome,
+}
+
 /// A saved connection (plan §3). Contains no secrets.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
@@ -267,6 +279,11 @@ impl ConnectionProfile {
             clipboard: ClipboardPrefs::default(),
             touch: TouchMode::default(),
         }
+    }
+
+    /// The profile's kind: a profile paired with a Drift Host is a Mac, any other is GNOME.
+    pub const fn kind(&self) -> HostKind {
+        if self.paired_host.is_some() { HostKind::Mac } else { HostKind::Gnome }
     }
 
     /// Serializes the profile as a TOML document.

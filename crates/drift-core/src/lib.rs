@@ -41,8 +41,8 @@ pub use input::{InputEvent, MomentumPhase, MouseButton, ScrollPhase, SwipeDirect
 pub use layout::{DisplayControlCaps, MonitorLayout, desired_layout};
 pub use messages::{ErrorAction, ErrorExplanation, explain_disconnect};
 pub use profile::{
-    CertFingerprint, ClipboardPrefs, CmdAs, ConnectMode, ConnectionProfile, DisplayPrefs, KeyboardPrefs,
-    ProfileError, ProfileField, ProfileIssue, ProfileProblem, SecretRole, TouchMode,
+    CertFingerprint, ClipboardPrefs, CmdAs, ConnectMode, ConnectionProfile, DisplayPrefs, HostKind,
+    KeyboardPrefs, ProfileError, ProfileField, ProfileIssue, ProfileProblem, SecretRole, TouchMode,
 };
 pub use reconnect::{ReconnectConfig, ReconnectDecision, ReconnectPolicy};
 pub use state::{ConnectStage, DisconnectReason, InvalidTransition, SessionState};

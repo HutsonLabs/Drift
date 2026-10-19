@@ -1,9 +1,11 @@
-// One gallery card (UI-windows board 1, decision 16): a 16:9 preview (the mode's gradient and
-// glyph, or the session's live thumbnail), the state pills, the one primary action shown on hover
-// and focus, then glyph, name, `host · mode` and the ⋯ button.
+// One gallery card (UI-windows board 1, decision 16; UI-kinds C, D): a 16:9 preview (a Mac tile
+// or the GNOME mode's gradient and glyph, or the session's live thumbnail) with the kind badge,
+// the state pills, the one primary action shown on hover and focus, then the kind glyph, name,
+// `Drift Host · host` or `host · mode`, and the ⋯ button.
 import type { ConnectionStatus, OpenConnection, ProfileEntry_Serialize } from "../bindings";
 import { h } from "../dom";
-import { icon, MODE_ICONS, modeGlyph } from "../icons";
+import { icon, KIND_ICONS, kindGlyph, MODE_ICONS } from "../icons";
+import { KIND_DESCRIPTIONS, KIND_NAMES, kindOf } from "../kinds";
 import { MODE_NAMES, STATUS_NAMES } from "../modes";
 
 /** Everything a card draws. */
@@ -46,10 +48,16 @@ export function primaryLabel(open: boolean): string {
   return open ? "Show Window" : "Connect";
 }
 
-/** The VoiceOver label: "<name>, <mode>, <host>, <state>". */
+/** The VoiceOver label: "<name>, <mode>, <host>, <state>" ("Mac running Drift Host" for a Mac). */
 export function cardLabel(entry: ProfileEntry_Serialize, status: ConnectionStatus): string {
   const p = entry.profile;
-  return `${p.name}, ${MODE_NAMES[p.mode]}, ${p.host}, ${STATUS_NAMES[status]}`;
+  const what = kindOf(p) === "mac" ? KIND_DESCRIPTIONS.mac : MODE_NAMES[p.mode];
+  return `${p.name}, ${what}, ${p.host}, ${STATUS_NAMES[status]}`;
+}
+
+/** The line under the name: "Drift Host · <host>" for a Mac, "<host> · <mode>" for GNOME. */
+export function cardDetail(p: ProfileEntry_Serialize["profile"]): string {
+  return kindOf(p) === "mac" ? `Drift Host · ${p.host}` : `${p.host} · ${MODE_NAMES[p.mode]}`;
 }
 
 function pills(open: OpenConnection | null, since: number, now: number): (HTMLElement | null)[] {
@@ -117,13 +125,18 @@ export function renderCard(model: CardModel, now: number, on: CardIntents): HTML
     on.menu(p.id, { x: r.left, y: r.bottom + 4 });
   });
 
+  const kind = kindOf(p);
+  // Idle art follows the kind: a muted Mac tile, or the GNOME mode's gradient and glyph.
   const thumb = h(
     "div",
     {
-      class: ["thumb", `thumb-${p.mode}`, thumbnail ? "live" : null, status === "reconnecting" ? "dim" : null].filter(Boolean).join(" "),
+      class: ["thumb", kind === "mac" ? "thumb-mac" : `thumb-${p.mode}`, thumbnail ? "live" : null, status === "reconnecting" ? "dim" : null]
+        .filter(Boolean)
+        .join(" "),
     },
-    thumbnail ? h("img", { class: "shot", src: thumbnail, alt: "", draggable: "false" }) : icon(MODE_ICONS[p.mode]),
+    thumbnail ? h("img", { class: "shot", src: thumbnail, alt: "", draggable: "false" }) : icon(kind === "mac" ? KIND_ICONS.mac : MODE_ICONS[p.mode]),
     pills(model.open, model.since, now),
+    h("span", { class: `kind kind-${kind}`, "aria-hidden": "true" }, icon(KIND_ICONS[kind]), KIND_NAMES[kind]),
     h("div", { class: "over" }, primary),
   );
 
@@ -134,8 +147,8 @@ export function renderCard(model: CardModel, now: number, on: CardIntents): HTML
     h(
       "div",
       { class: "card-info" },
-      modeGlyph(p.mode),
-      h("span", { class: "item-text" }, h("span", { class: "item-name" }, p.name), h("span", { class: "item-detail" }, `${p.host} · ${MODE_NAMES[p.mode]}`)),
+      kindGlyph(kind),
+      h("span", { class: "item-text" }, h("span", { class: "item-name" }, p.name), h("span", { class: "item-detail" }, cardDetail(p))),
       more,
     ),
   );

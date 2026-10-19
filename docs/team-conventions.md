@@ -77,6 +77,7 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `STORE-4-host-release` | `cargo xtask host-release [--notarize]`: Developer ID, inside-out signing, Hardened Runtime, no sandbox or entitlements, notarized and stapled DMG |
 | `RELEASE-pipeline` | iOS and macOS in lockstep (one yy.mm version, one build number, both DMGs too); `cargo xtask release`: ordered resumable steps, manifest, preflight, gate receipt, yy.mm versions and one build number, publish only behind flags, determinism and its limits |
 | `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility |
+| `UI-kinds-target-kinds` | Mac (Drift Host) and GNOME target kinds from `paired_host`: All / Macs / GNOME filter, kind-first add flow, a sheet per kind, title-bar mode or quality step, GNOME menus in the iPad menu bar, per-kind iPhone key row |
 
 ## Commands
 

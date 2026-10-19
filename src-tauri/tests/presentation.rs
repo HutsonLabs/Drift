@@ -381,8 +381,14 @@ fn identity_carries_the_kind_and_a_drift_hosts_quality() {
     let mut mac = ConnectionProfile::new("MacBook Pro", "macbook-pro.local", ConnectMode::Headless);
     mac.paired_host = Some(uuid::Uuid::from_u128(9));
     let mut live = SessionView::new(&mac);
-    live.apply(&SessionEvent::State(SessionState::Connected { desktop: DesktopSize::new(1280, 800), scale: 100 }));
+    live.apply(&SessionEvent::State(SessionState::Connected {
+        desktop: DesktopSize::new(1280, 800),
+        scale: 100,
+    }));
     assert_eq!((identity(&mac, &live).kind, identity(&mac, &live).quality), (HostKind::Mac, None));
-    live.apply(&SessionEvent::Stats(SessionStats { host_quality: Some(QualityLevel::Medium), ..SessionStats::default() }));
+    live.apply(&SessionEvent::Stats(SessionStats {
+        host_quality: Some(QualityLevel::Medium),
+        ..SessionStats::default()
+    }));
     assert_eq!(identity(&mac, &live).quality, Some(HostQuality::Medium));
 }
