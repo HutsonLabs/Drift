@@ -35,3 +35,11 @@ fn the_vector_source_is_committed_so_the_icons_can_be_regenerated() {
     assert!(svg.contains("<svg"), "the source is an SVG");
     assert!(svg.len() > 200, "the source is a real drawing, not a placeholder");
 }
+
+/// IOS-fix: the iPhone and iPad icon is Drift's waves (`icon-ios.svg`, full bleed), opaque, at
+/// every size `Contents.json` lists, and never Tauri's default logo again (TestFlight 26.10 (4)).
+#[test]
+fn the_ios_app_icon_is_drifts_opaque_waves() {
+    let problems = icons::ios_audit(&xtask::repo::root().join("src-tauri"));
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
+}
