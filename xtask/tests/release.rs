@@ -128,17 +128,17 @@ fn dry_run_skips_notarization_and_publish_flags_add_steps() {
     assert!(dry.contains(&StepId::Ios) && dry.contains(&StepId::Checksums));
     assert!(dry.contains(&StepId::SyncCheck), "the lockstep check runs in a dry run too");
 
-    let all = release::steps(Options { testflight: true, github: true, ..Options::default() }).unwrap();
+    let all = release::steps(Options { testflight: true, spaces: true, ..Options::default() }).unwrap();
     let tail = &all[all.len() - 3..];
-    assert_eq!(tail, [StepId::Testflight, StepId::WhatsNew, StepId::Github]);
+    assert_eq!(tail, [StepId::Testflight, StepId::WhatsNew, StepId::Spaces]);
 
     assert!(release::steps(Options { dry_run: true, testflight: true, ..Options::default() }).is_err());
-    assert!(release::steps(Options { dry_run: true, github: true, ..Options::default() }).is_err());
+    assert!(release::steps(Options { dry_run: true, spaces: true, ..Options::default() }).is_err());
 }
 
 #[test]
 fn only_network_and_publish_steps_retry() {
-    for s in [StepId::Notarize, StepId::Testflight, StepId::WhatsNew, StepId::Github, StepId::BuildNumber] {
+    for s in [StepId::Notarize, StepId::Testflight, StepId::WhatsNew, StepId::Spaces, StepId::BuildNumber] {
         assert!(s.retries(), "{s:?}");
     }
     for s in [StepId::Clean, StepId::Ios, StepId::Checksums, StepId::Preflight] {
@@ -245,10 +245,10 @@ fn notes_must_be_filled_in() {
 }
 
 #[test]
-fn checksums_and_github_notes() {
+fn checksums_and_release_notes() {
     let sums = release::sha256sums(&[("b.dmg".into(), "22".into()), ("a.dmg".into(), "11".into())]);
     assert_eq!(sums, "11  a.dmg\n22  b.dmg\n");
-    let notes = release::github_notes("# Drift 26.10\n\nHello.\n", &sums);
+    let notes = release::release_notes("# Drift 26.10\n\nHello.\n", &sums);
     assert!(notes.starts_with("# Drift 26.10"));
     assert!(notes.contains("SHA-256") && notes.contains("11  a.dmg"));
 }
@@ -324,14 +324,14 @@ fn every_artifact_must_embed_the_same_version_and_build() {
 // the sync check refuses a release that lacks any of the four artifacts.
 #[test]
 fn drift_and_drift_host_always_ship_together() {
-    for (dry_run, testflight, github) in [
+    for (dry_run, testflight, spaces) in [
         (true, false, false),
         (false, false, false),
         (false, true, false),
         (false, true, true),
         (false, false, true),
     ] {
-        let steps = release::steps(Options { dry_run, testflight, github }).unwrap();
+        let steps = release::steps(Options { dry_run, testflight, spaces }).unwrap();
         for step in [StepId::Ios, StepId::MacAppStore, StepId::MacDmg, StepId::HostDmg, StepId::SyncCheck] {
             assert!(steps.contains(&step), "{step:?} missing from {steps:?}");
         }
@@ -349,6 +349,49 @@ fn drift_and_drift_host_always_ship_together() {
         let err = release::check_sync(&without, "26.10", 5).unwrap_err().to_string();
         assert!(err.contains(&format!("{missing:?} is missing")), "{err}");
     }
+}
+
+// RELEASE-spaces Red: releases are published on spaces.hutson.cloud (Forgejo), never GitHub, and
+// an existing build can be published without rebuilding it.
+#[test]
+fn releases_publish_on_spaces_hutson_cloud() {
+    assert_eq!(release::SPACES_API, "https://spaces.hutson.cloud/api/v1");
+    assert_eq!(release::SPACES_REPO, "HutsonLabs/drift");
+    let body = release::spaces_release("26.10", 6, "99c04eb0", "# Drift 26.10\n\nHello.\n", "11  a.dmg\n");
+    assert_eq!(body["tag_name"], "v26.10.6");
+    assert_eq!(body["target_commitish"], "99c04eb0");
+    assert_eq!(body["name"], "Drift 26.10 (6)");
+    assert_eq!(body["draft"], false);
+    assert_eq!(body["prerelease"], false);
+    let text = body["body"].as_str().unwrap();
+    assert!(text.starts_with("# Drift 26.10") && text.contains("11  a.dmg"), "{text}");
+    assert_eq!(
+        release::published_files("26.10", 6),
+        ["Drift_26.10.6_aarch64.dmg", "Drift-Host_26.10.6_aarch64.dmg", "SHA256SUMS"]
+    );
+}
+
+#[test]
+fn only_a_finished_notarized_lockstep_build_can_be_published_later() {
+    let done = |s| record(s, StepStatus::Done, Vec::new());
+    let finished = || {
+        let mut m = manifest(vec![done(StepId::Notarize), done(StepId::Checksums), done(StepId::SyncCheck)]);
+        m.dry_run = false;
+        m
+    };
+    release::publishable(&finished()).unwrap();
+    let mut dry = finished();
+    dry.dry_run = true;
+    assert!(release::publishable(&dry).unwrap_err().to_string().contains("dry run"));
+    for step in [StepId::Notarize, StepId::Checksums, StepId::SyncCheck] {
+        let mut m = finished();
+        m.steps.retain(|r| r.step != step);
+        let err = release::publishable(&m).unwrap_err().to_string();
+        assert!(err.contains(&format!("{step:?}")), "{err}");
+    }
+    let mut failed = finished();
+    failed.steps.push(record(StepId::SyncCheck, StepStatus::Failed, Vec::new()));
+    assert!(release::publishable(&failed).is_err(), "the latest SyncCheck failed");
 }
 
 #[test]
