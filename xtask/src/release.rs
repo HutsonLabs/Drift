@@ -567,7 +567,9 @@ pub fn asc_sync(builds: &[(Platform, u32)]) -> AscSync {
 }
 
 /// Lockstep check: every artifact's embedded `(CFBundleShortVersionString, CFBundleVersion)`
-/// equals `(version, build)`, and both App Store platforms are present.
+/// equals `(version, build)`, and all four are present: both App Store platforms, and Drift's
+/// and Drift Host's DMGs. Drift and Drift Host always ship together, whether or not either
+/// changed since the last release (RELEASE-lockstep).
 pub fn check_sync(
     found: &[(ArtifactKind, Option<(String, String)>)],
     version: &str,
@@ -575,7 +577,9 @@ pub fn check_sync(
 ) -> Result<()> {
     let want = (version.to_owned(), build.to_string());
     let mut wrong = Vec::new();
-    for kind in [ArtifactKind::IosIpa, ArtifactKind::MacAppStorePkg] {
+    for kind in
+        [ArtifactKind::IosIpa, ArtifactKind::MacAppStorePkg, ArtifactKind::MacDmg, ArtifactKind::HostDmg]
+    {
         if !found.iter().any(|(k, _)| *k == kind) {
             wrong.push(format!("{kind:?} is missing"));
         }
@@ -587,7 +591,14 @@ pub fn check_sync(
             None => wrong.push(format!("{kind:?}: cannot read its Info.plist")),
         }
     }
-    if wrong.is_empty() { Ok(()) } else { bail!("iOS and macOS are out of step: {}", wrong.join("; ")) }
+    if wrong.is_empty() {
+        Ok(())
+    } else {
+        bail!(
+            "the release is out of step (iOS, Mac App Store, Drift and Drift Host ship together): {}",
+            wrong.join("; ")
+        )
+    }
 }
 
 /// The platforms still to upload, given whether App Store Connect has the build on iOS and on

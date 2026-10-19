@@ -16,6 +16,11 @@ no single-platform command. If App Store Connect shows the platforms on differen
 uploaded one platform and failed on the other, run `--resume`: it uploads the missing one
 with the same N.
 
+**Drift and Drift Host ship together:** every release builds all four artifacts (iOS `.ipa`,
+Mac App Store `.pkg`, Drift DMG, Drift Host DMG) with the same version and N, even when one of
+the apps has not changed since the last release. Never skip or hold back an unchanged app, and
+never decide what counts as a material change; `sync-check` fails if any artifact is missing.
+
 ## Ask first
 
 Get the user's explicit go-ahead in this conversation before each of these; never infer it:
