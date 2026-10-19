@@ -159,3 +159,8 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   M9-5 release path; Hardened Runtime without the App Sandbox. *`cargo xtask host-release
   --notarize` (ADR `STORE-4-host-release`); a notarized, stapled DMG passed Gatekeeper on
   2026-10-18. Not published.*
+
+- [✓] **RELEASE Release pipeline.** One command from a clean `main` to every artifact, resumable,
+  with a manifest; publishing only with `--testflight` / `--github`. *`cargo xtask release`,
+  notes in `release/notes/`, skill `.claude/skills/release`, ADR `RELEASE-pipeline`;
+  supersedes the M9-5 `bundle` stub.*

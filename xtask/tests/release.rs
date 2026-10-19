@@ -45,11 +45,19 @@ fn version_formats_read_and_write() {
 
     let json = "{\n  \"name\": \"x\",\n  \"version\": \"26.10.0\",\n  \"deps\": {\"version\": \"9\"}\n}\n";
     assert_eq!(release::read_version(json, Format::JsonVersion).as_deref(), Some("26.10.0"));
-    assert!(release::write_version(json, Format::JsonVersion, "26.11.0").unwrap().contains("\"version\": \"26.11.0\""));
+    assert!(
+        release::write_version(json, Format::JsonVersion, "26.11.0")
+            .unwrap()
+            .contains("\"version\": \"26.11.0\"")
+    );
 
     let plist = "<dict>\n\t<key>CFBundleShortVersionString</key>\n\t<string>26.10</string>\n</dict>";
     assert_eq!(release::read_version(plist, Format::PlistShort).as_deref(), Some("26.10"));
-    assert!(release::write_version(plist, Format::PlistShort, "26.11").unwrap().contains("<string>26.11</string>"));
+    assert!(
+        release::write_version(plist, Format::PlistShort, "26.11")
+            .unwrap()
+            .contains("<string>26.11</string>")
+    );
 
     let yml = "        CFBundleShortVersionString: \"26.10\"\n        CFBundleVersion: \"1\"\n";
     assert_eq!(release::read_version(yml, Format::YamlShort).as_deref(), Some("26.10"));
@@ -60,9 +68,11 @@ fn version_formats_read_and_write() {
 #[test]
 fn mismatched_or_malformed_versions_are_reported() {
     let file = |path: &'static str, semver: bool| VersionFile { path, format: Format::JsonVersion, semver };
-    let ok = vec![(file("a", true), Some("26.10.0".to_owned())), (file("b", false), Some("26.10".to_owned()))];
+    let ok =
+        vec![(file("a", true), Some("26.10.0".to_owned())), (file("b", false), Some("26.10".to_owned()))];
     assert_eq!(release::check_versions(&ok).unwrap(), "26.10");
-    let bad = vec![(file("a", true), Some("26.10.0".to_owned())), (file("b", false), Some("26.11".to_owned()))];
+    let bad =
+        vec![(file("a", true), Some("26.10.0".to_owned())), (file("b", false), Some("26.11".to_owned()))];
     let err = release::check_versions(&bad).unwrap_err().to_string();
     assert!(err.contains('b') && err.contains("26.11"), "{err}");
     assert!(release::check_versions(&[(file("a", true), None)]).is_err());
@@ -72,7 +82,10 @@ fn mismatched_or_malformed_versions_are_reported() {
 #[test]
 fn set_version_rewrites_every_file() {
     let files = vec![
-        (VersionFile { path: "Cargo.toml", format: Format::CargoWorkspace, semver: true }, "version = \"26.10.0\"\n".to_owned()),
+        (
+            VersionFile { path: "Cargo.toml", format: Format::CargoWorkspace, semver: true },
+            "version = \"26.10.0\"\n".to_owned(),
+        ),
         (
             VersionFile { path: "x.plist", format: Format::PlistShort, semver: false },
             "<key>CFBundleShortVersionString</key>\n<string>26.10</string>".to_owned(),
@@ -203,7 +216,10 @@ fn artifact_names_and_the_output_directory() {
     let root = Path::new("/repo");
     assert_eq!(release::out_dir(root, "26.10", 4), PathBuf::from("/repo/target/release-out/26.10-4"));
     assert_eq!(release::artifact_name(ArtifactKind::IosIpa, "26.10", 4), "Drift_26.10.4_iOS.ipa");
-    assert_eq!(release::artifact_name(ArtifactKind::MacAppStorePkg, "26.10", 4), "Drift_26.10.4_MacAppStore.pkg");
+    assert_eq!(
+        release::artifact_name(ArtifactKind::MacAppStorePkg, "26.10", 4),
+        "Drift_26.10.4_MacAppStore.pkg"
+    );
     assert_eq!(release::artifact_name(ArtifactKind::MacDmg, "26.10", 4), "Drift_26.10.4_aarch64.dmg");
     assert_eq!(release::artifact_name(ArtifactKind::HostDmg, "26.10", 4), "Drift-Host_26.10.4_aarch64.dmg");
     assert_eq!(release::tag("26.10", 4), "v26.10.4");
@@ -231,4 +247,15 @@ fn checksums_and_github_notes() {
     let notes = release::github_notes("# Drift 26.10\n\nHello.\n", &sums);
     assert!(notes.starts_with("# Drift 26.10"));
     assert!(notes.contains("SHA-256") && notes.contains("11  a.dmg"));
+}
+
+#[test]
+fn the_current_version_has_release_notes_and_the_template_is_in_sync() {
+    let root = xtask::repo::root();
+    let version = release::check_versions(&release::read_versions(&root).unwrap()).unwrap();
+    let notes = std::fs::read_to_string(release::notes_path(&root, &version)).unwrap();
+    release::validate_notes(&notes).unwrap();
+    assert!(!release::whats_new(&notes).is_empty());
+    let template = std::fs::read_to_string(root.join("release/notes/TEMPLATE.md")).unwrap();
+    assert_eq!(template, release::NOTES_TEMPLATE);
 }
