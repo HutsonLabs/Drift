@@ -211,14 +211,6 @@ code.fp { font: 11px var(--mono); color: var(--secondary); word-break: break-all
 .ipad-menubar { height: 26px; display: flex; align-items: center; gap: 16px; padding: 0 18px; font-size: 12px; font-weight: 600; background: oklch(0.97 0 0 / 0.86); border-bottom: 0.5px solid var(--hairline); backdrop-filter: blur(20px); }
 .ipad-menubar b { font-weight: 800; }
 .ipad-menubar .remote { color: var(--accent); }
-.ipad-split { display: flex; height: calc(100% - 24px); }
-.ipad-side { width: 210px; padding: 8px 10px; border-right: 0.5px solid var(--hairline); background: oklch(0.94 0.006 250); }
-.ipad-side h3 { font-size: 22px; font-weight: 700; padding: 6px 8px 12px; }
-.side-item { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 9px; font-size: 13.5px; font-weight: 600; }
-.side-item .c { margin-left: auto; color: var(--tertiary); font-weight: 600; font-size: 12px; }
-.side-item.on { background: var(--accent); color: white; } .side-item.on .c { color: oklch(1 0 0 / 0.8); }
-.side-sec { font-size: 11px; font-weight: 700; color: var(--tertiary); text-transform: uppercase; letter-spacing: 0.05em; padding: 14px 8px 4px; }
-.ipad-main { flex: 1; overflow: hidden; }
 .ipad-nav { display: flex; align-items: center; gap: 10px; padding: 8px 20px 4px; }
 .ipad-nav h1 { font-size: 26px; font-weight: 700; }
 .switcher { position: absolute; left: 14px; top: 34px; z-index: 3; width: 34px; height: 34px; border-radius: 17px; display: grid; place-items: center; background: oklch(0.2 0.01 260 / 0.55); color: white; backdrop-filter: blur(10px); }
@@ -608,27 +600,11 @@ table.cmp { margin-top: 22px; border-collapse: separate; border-spacing: 0; widt
 
       <!-- iPad proposed -->
       <div class="col">
-        <div class="device-label">iPad · Connections with a sidebar</div>
-        <div class="ipad" style="position:relative"><span class="n go pin" style="left:30px;top:70px">G</span><div class="screen">
+        <div class="device-label">iPad · Connections (same gallery as the Mac)</div>
+        <div class="ipad"><div class="screen">
           <div class="status-bar"><span>14:02 Sat 18 Oct</span><span>Wi-Fi ▮▮▮ 82%</span></div>
-          <div class="ipad-split">
-            <div class="ipad-side">
-              <h3>Drift</h3>
-              <div class="side-item on"><svg class="i"><use href="#i-grid"/></svg>All<span class="c">5</span></div>
-              <div class="side-item"><svg class="i"><use href="#i-stack"/></svg>Open<span class="c">1</span></div>
-              <div class="side-sec">Macs</div>
-              <div class="side-item"><svg class="i"><use href="#k-mac"/></svg>MacBook Pro<span class="c" style="color:var(--good)">●</span></div>
-              <div class="side-item"><svg class="i"><use href="#k-mac"/></svg>Mac mini</div>
-              <div class="side-item" style="color:var(--accent)"><svg class="i"><use href="#i-plus"/></svg>Pair a Mac…</div>
-              <div class="side-sec">GNOME</div>
-              <div class="side-item"><svg class="i" style="color:var(--gnome)"><use href="#k-gnome"/></svg>Studio Workstation</div>
-              <div class="side-item"><svg class="i" style="color:var(--gnome)"><use href="#k-gnome"/></svg>Fedora Server</div>
-              <div class="side-item"><svg class="i" style="color:var(--gnome)"><use href="#k-gnome"/></svg>Office Desktop</div>
-              <div class="side-item" style="color:var(--accent)"><svg class="i"><use href="#i-plus"/></svg>Add GNOME Computer…</div>
-            </div>
-            <div class="ipad-main">
-              <div class="ipad-nav"><h1>All</h1><span class="spacer"></span><span class="search">Search</span></div>
-              <div class="gallery-scroll" style="--cols:2">
+              <div class="ipad-nav"><h1>Connections</h1><span class="spacer"></span><span class="seg" style="position:relative"><span class="n go pin" style="left:-26px;top:3px">G</span><span class="on">All</span><span>Macs</span><span>GNOME</span><span>Open</span></span><span class="search">Search</span><span class="tb-btn"><svg class="i"><use href="#i-plus"/></svg></span></div>
+              <div class="gallery-scroll" style="--cols:3">
                 <div class="gallery-head"><h2>Macs</h2><span>2</span></div>
                 <div class="gallery">
                   <article class="card"><div class="thumb"><div class="desk desk-mac"><div class="bar"><span class="apple"></span><b>Xcode</b><span>File</span><span>Edit</span><span class="r">14:02</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i><i></i></div></div><div class="pills"><span class="pill"><span class="dot"></span>Live</span></div><span class="kind mac"><svg class="i"><use href="#k-mac"/></svg>Mac</span></div>
@@ -642,8 +618,6 @@ table.cmp { margin-top: 22px; border-collapse: separate; border-spacing: 0; widt
                   <article class="card"><div class="thumb thumb-login"><svg class="i big"><use href="#i-login"/></svg><span class="kind gnome"><svg class="i"><use href="#k-gnome"/></svg>GNOME</span></div><div class="card-info"><span class="glyph g-gnome"><svg class="i"><use href="#k-gnome"/></svg></span><span class="item-text"><span class="item-name">Office Desktop</span><span class="item-detail">10.0.4.21 · Remote Login</span></span><span class="more">⋯</span></div></article>
                 </div>
               </div>
-            </div>
-          </div>
         </div></div>
       </div>
 
@@ -693,7 +667,7 @@ table.cmp { margin-top: 22px; border-collapse: separate; border-spacing: 0; widt
       <div><span class="n go">D</span><span><b>Idle art matches the kind.</b> A saved Mac gets a muted macOS-style tile and GNOME keeps the mode gradients. Thumbnails stay in memory only.</span></div>
       <div><span class="n go">E</span><span><b>Each kind gets its own sheet.</b> A Mac drops the mode picker, RDP credentials, <code>grdctl</code> hints, "⌘ sends" and Mac layout. It shows pairing, link path (HOST-14), virtual display (HOST-10), quality (EXT-4), HDR (EXT-5) and menu mirroring (EXT-3).</span></div>
       <div><span class="n go">F</span><span><b>The title bar says what's on the other end.</b> It shows the kind glyph, plus the GNOME mode, or the Mac's live quality step.</span></div>
-      <div><span class="n go">G</span><span><b>iPad gets a sidebar</b> grouped by kind, with an add item in each group. iPhone keeps the single-column gallery with a kind segment at the top.</span></div>
+      <div><span class="n go">G</span><span><b>iPad uses the Mac's gallery</b>, with the same kind filter, badges and one "+". No sidebar. iPhone uses the same gallery in one column.</span></div>
       <div><span class="n go">H</span><span><b>The iPad menu bar fits the kind.</b> A Mac mirrors its menus (as now). GNOME gets Drift's own Session / Keys menus plus Activities and Show Apps, so the bar isn't empty.</span></div>
       <div><span class="n go">I</span><span><b>Each kind gets its own key row.</b> Mac: ⌃ ⌥ ⇧ ⌘ with ⌘Space and ⌘Tab. GNOME: Ctrl Alt ⇧ Super and an Activities key. Pick from the kind in <code>renderKeyRow</code>.</span></div>
     </div>
