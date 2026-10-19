@@ -34,18 +34,23 @@ pub struct MasPlan {
     pub embed_profile: Option<(PathBuf, PathBuf)>,
 }
 
-/// The Mac App Store plan for the repository at `root`, embedding `profile` if given.
+/// The Mac App Store plan for the repository at `root`, embedding `profile` if given, with
+/// build number `build` (`CFBundleVersion`) when given.
 ///
 /// The profile is copied in *before* the app is re-signed (see `main.rs`), because the
 /// signature seals `Contents/`.
-pub fn mas_plan(root: &Path, profile: Option<&Path>) -> MasPlan {
+pub fn mas_plan(root: &Path, profile: Option<&Path>, build: Option<u32>) -> MasPlan {
     let bundle = root.join("target").join(UNIVERSAL).join("release").join("bundle");
     let app = bundle.join("macos").join("Drift.app");
     let pkg = bundle.join("mas").join("Drift.pkg");
-    let tauri_args =
+    let mut tauri_args =
         ["tauri", "build", "--target", UNIVERSAL, "--bundles", "app", "--config", "tauri.mas.conf.json"]
             .map(str::to_owned)
             .to_vec();
+    if let Some(build) = build {
+        tauri_args.push("--config".to_owned());
+        tauri_args.push(format!(r#"{{"bundle":{{"macOS":{{"bundleVersion":"{build}"}}}}}}"#));
+    }
     let productbuild_args = vec![
         "--component".to_owned(),
         app.display().to_string(),
