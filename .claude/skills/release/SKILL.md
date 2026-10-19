@@ -1,6 +1,6 @@
 ---
 name: release
-description: Release Drift deterministically — build every artifact (iOS App Store .ipa, Mac App Store .pkg, Drift and Drift Host Developer ID DMGs), notarize, upload to TestFlight, publish a GitHub DMG release. Use when asked to release, ship, cut a release, push a TestFlight build, publish a dmg, or bump the version.
+description: Release Drift deterministically — build every artifact (iOS App Store .ipa, Mac App Store .pkg, Drift and Drift Host Developer ID DMGs), notarize, upload to TestFlight, publish the DMG release on spaces.hutson.cloud (never GitHub). Use when asked to release, ship, cut a release, push a TestFlight build, publish a dmg, or bump the version.
 ---
 
 # Release Drift
@@ -27,8 +27,10 @@ Get the user's explicit go-ahead in this conversation before each of these; neve
 
 - **Version bump commit** (`--set-version`, then the commit and push to `main`).
 - **TestFlight upload** (`--testflight`): visible to testers.
-- **GitHub publish** (`--github`): the GitHub repository is public; tags and releases cannot be
-  taken back quietly.
+- **Release on spaces.hutson.cloud** (`--spaces`, or `--publish <yy.mm>-<build>` for a finished
+  build): tags and releases are seen by everyone with access. Releases are never published on
+  GitHub. Needs `FORGEJO_API_KEY` (a spaces.hutson.cloud token with repository write access) from
+  `~/code/term.hut/.env`; preflight checks it against the server.
 
 A dry run, preflight and building artifacts need no permission.
 
@@ -44,7 +46,7 @@ A dry run, preflight and building artifacts need no permission.
    `chore(release): 26.11`, push `main`. Build numbers are automatic (App Store Connect's
    highest + 1, shared by iOS and Mac); do not edit them.
 3. Notes: `release/notes/<yy.mm>.md` must exist without TODOs. Its `## What to Test` section
-   becomes TestFlight's "What to Test"; the whole file plus checksums becomes the GitHub notes.
+   becomes TestFlight's "What to Test"; the whole file plus checksums becomes the release notes.
 4. Gate: the pipeline reuses `target/ci-receipts/<HEAD>` from a passing `cargo xtask ci` on a
    clean tree, or runs the gate itself (about 40 minutes).
 5. Rehearse: `cargo xtask release --dry-run` (builds and validates all four artifacts; branch
@@ -53,8 +55,12 @@ A dry run, preflight and building artifacts need no permission.
    ```sh
    cargo xtask release                       # build, notarize, checksums
    cargo xtask release --testflight          # + upload to TestFlight, What to Test
-   cargo xtask release --testflight --github # + tag v<yy.mm>.<build>, GitHub release
+   cargo xtask release --testflight --spaces # + tag v<yy.mm>.<build>, release on spaces.hutson.cloud
+   cargo xtask release --publish 26.10-6     # publish a finished build later, without rebuilding
    ```
+   `--publish` checks the run was notarized and sync-checked, that every artifact still has its
+   recorded checksum, and that the build's commit is on `origin/main`; the tag goes on that
+   commit, not on HEAD.
    Output: `target/release-out/<yy.mm>-<build>/` with the artifacts, `SHA256SUMS`,
    `manifest.json` and `release.log`.
 
@@ -66,7 +72,7 @@ A dry run, preflight and building artifacts need no permission.
   times with backoff.
 - A new commit means a new release: `--resume` refuses a different commit or version.
 - Uploads are idempotent: a build number App Store Connect already has is not uploaded again,
-  an existing GitHub release is not recreated.
+  an existing release on spaces.hutson.cloud is reused and only missing files are attached.
 
 ## Verify
 
@@ -85,5 +91,5 @@ iOS and Mac App Store packages are validated by `altool --validate-app` inside t
 - Disk: `rm -rf target/release-out/<dir> src-tauri/gen/apple/build target/*/release/bundle`
   after the release (builds need ~40 GB free).
 - A TestFlight build cannot be deleted; expire it in App Store Connect and ship the next build.
-- A wrong GitHub release: `gh release delete v<yy.mm>.<build> --repo HutsonLabs/drift` and
-  `git push github :refs/tags/v<yy.mm>.<build>` (and `origin`) — only with the user's consent.
+- A wrong release: delete it in spaces.hutson.cloud (HutsonLabs/drift › Releases) and
+  `git push origin :refs/tags/v<yy.mm>.<build>` — only with the user's consent.

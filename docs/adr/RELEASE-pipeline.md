@@ -39,10 +39,10 @@ that is missing any of the four (`xtask/tests/release.rs`,
 
 1. **One command**, `cargo xtask release`, with named steps in a fixed order: preflight, gate,
    build number, clean, iOS, Mac App Store, Drift DMG, Drift Host DMG, notarize, checksums,
-   sync check, then the publish steps TestFlight (both platforms), What to Test, GitHub. The
+   sync check, then the publish steps TestFlight (both platforms), What to Test, Spaces. The
    order and the rules are data in
    `xtask::release` and tested in `xtask/tests/release.rs`; `xtask/src/release_cmd.rs` runs them.
-2. **Publishing is opt-in.** `--testflight` and `--github` add the publish steps; without them
+2. **Publishing is opt-in.** `--testflight` and `--spaces` add the publish steps; without them
    nothing leaves the Mac except the read-only App Store Connect query, `altool` validation
    and notarization. `--dry-run` also skips notarization and cannot be combined with a
    publish flag. The `release` skill (`.claude/skills/release/SKILL.md`) requires the user's
@@ -77,14 +77,24 @@ that is missing any of the four (`xtask/tests/release.rs`,
    `src-tauri/gen/apple` (Tauri writes the build number into the iOS `Info.plist`, xcodegen
    re-quotes `project.pbxproj`) and fails the step on any other changed or new file. The first
    dry run found exactly this: the iOS build dirtied `Info.plist`, so the resume refused to start.
-8. **Reliability.** Network steps (build number, notarization, uploads, What to Test, GitHub)
+8. **Reliability.** Network steps (build number, notarization, uploads, What to Test, Spaces)
    retry three times with 10/30/90 s backoff; every long step has a timeout. Uploads check App
    Store Connect for the build first, notarization checks `stapler validate` first, and the
-   GitHub step reuses an existing tag at HEAD and an existing release, so reruns do not
-   duplicate anything.
+   Spaces step reuses an existing tag on the build's commit and an existing release (attaching
+   only missing files), so reruns do not duplicate anything.
 9. **Tags** are `v<yy.mm>.<build>` (three parts, like the earlier `v0.2.0`), annotated, pushed
-   to `origin` and `github`; the GitHub release carries both DMGs and `SHA256SUMS`, with the
+   to `origin`; the release on spaces.hutson.cloud carries both DMGs and `SHA256SUMS`, with the
    notes file plus the checksums as its notes.
+
+**Releases live on spaces.hutson.cloud, never GitHub** (RELEASE-spaces, 2026-10-19). The
+`--github` flag, the `github` remote push and `gh release create` are gone. `--spaces` creates
+the release through the Forgejo API (`https://spaces.hutson.cloud/api/v1`, repository
+`HutsonLabs/drift`, token in `FORGEJO_API_KEY`, sent to `curl` on stdin). `--publish
+<yy.mm>-<build>` publishes a finished build without rebuilding it: the run must not be a dry
+run, notarization, checksums and the sync check must have finished, every artifact must still
+match its recorded SHA-256, and the build's commit must be on `origin/main`; the tag is placed on
+that commit. A new commit (a fix to the pipeline itself, say) therefore does not force a new
+build of an already notarized release.
 10. **Determinism.** Every build step inherits `SOURCE_DATE_EPOCH` (HEAD's commit time),
     `CARGO_INCREMENTAL=0` and `RUSTFLAGS` remapping the checkout to `.` and cargo home to
     `/cargo`; builds use `--locked` and `bun install --frozen-lockfile`; bundle outputs are

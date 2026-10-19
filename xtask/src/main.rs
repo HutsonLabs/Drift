@@ -92,7 +92,7 @@ enum Cmd {
     /// Release pipeline (ADR `RELEASE-pipeline`): preflight, gate, one build number for iOS and
     /// macOS, every artifact into `target/release-out/<yy.mm>-<build>/` with `manifest.json` and
     /// `SHA256SUMS`, the lockstep check, notarization; publishing only with `--testflight` /
-    /// `--github`. Needs the App Store Connect key in the environment
+    /// `--spaces` (spaces.hutson.cloud, never GitHub). Needs the App Store Connect key in the environment
     /// (`set -a; . ~/code/term.hut/.env; set +a`).
     Release {
         /// Build and validate everything; never notarize, upload or publish.
@@ -102,9 +102,14 @@ enum Cmd {
         /// "What to Test".
         #[arg(long)]
         testflight: bool,
-        /// Tag `v<yy.mm>.<build>`, push the tag and publish both DMGs as a GitHub release.
+        /// Tag `v<yy.mm>.<build>`, push the tag to `origin` and publish both DMGs as a release on
+        /// spaces.hutson.cloud (token in `FORGEJO_API_KEY`).
         #[arg(long)]
-        github: bool,
+        spaces: bool,
+        /// Publish an earlier finished build on spaces.hutson.cloud without rebuilding it
+        /// (`yy.mm-build`, a directory in `target/release-out`).
+        #[arg(long, value_name = "YY.MM-BUILD")]
+        publish: Option<String>,
         /// Continue the last run of this version and commit; finished steps with intact
         /// outputs are skipped and the build number is reused.
         #[arg(long)]
@@ -189,14 +194,17 @@ fn run(cmd: Cmd) -> Result<()> {
         Cmd::Release {
             dry_run,
             testflight,
-            github,
+            spaces,
+            publish,
             resume,
             build_number,
             profile,
             set_version,
             verify_reproducible,
         } => {
-            if let Some(version) = set_version {
+            if let Some(dir) = publish {
+                release_cmd::publish(&root, &dir)
+            } else if let Some(version) = set_version {
                 release_cmd::set_version(&root, &version)
             } else if verify_reproducible {
                 release_cmd::verify_reproducible(&root)
@@ -204,7 +212,7 @@ fn run(cmd: Cmd) -> Result<()> {
                 release_cmd::run(
                     &root,
                     &release_cmd::Args {
-                        options: xtask::release::Options { dry_run, testflight, github },
+                        options: xtask::release::Options { dry_run, testflight, spaces },
                         resume,
                         build_number,
                         profile,
