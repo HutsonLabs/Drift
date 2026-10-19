@@ -10,9 +10,12 @@ Read `plan.md` §0–§5 first; it is the source of truth. This page summarises 
      `test(<ID>): …`;
   2. implement until green, commit `feat(<ID>): …`;
   3. refactor, commit `refactor(<ID>): …`; `cargo xtask ci` must pass.
-- **Nothing is pushed.** The GitHub remote is public: no `git push`, no GitHub PRs, no forks, no
-  upstream IronRDP PRs. A "PR" is a local branch that the integrator merges with `--no-ff`; the
-  merge commit message records the Red tests and their failing output.
+- **Push only to `origin` on spaces.hutson.cloud**
+  (`ssh://git@spaces.hutson.cloud:2222/HutsonLabs/drift.git`): push each task branch with
+  `git push -u origin task/<ID>-<slug>` before finishing. **Never push to GitHub** (it is public):
+  no GitHub PRs, no forks, no upstream IronRDP PRs. Check `git remote -v` first; if `origin` is
+  anything else, leave the branch local. A "PR" is a task branch that the integrator merges into
+  `main` with `--no-ff`; the merge commit message records the Red tests and their failing output.
 - Do not tick `plan.md` checkboxes; the integrator does that.
 
 ## ADRs
