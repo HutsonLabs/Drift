@@ -602,6 +602,24 @@ pub fn to_upload(ios_present: bool, macos_present: bool) -> Vec<Platform> {
         .collect()
 }
 
+// ---- a clean tree after every build -------------------------------------------------------------
+
+/// Tracked paths the Xcode build rewrites (Tauri writes the build number into the iOS
+/// `Info.plist`, xcodegen re-quotes `project.pbxproj`); the pipeline restores them after each build
+/// step so the tree stays clean and `--resume` can run.
+pub const RESTORED_AFTER_BUILD: &[&str] = &["src-tauri/gen/apple"];
+
+/// Paths in `git status --porcelain` output outside [`RESTORED_AFTER_BUILD`]: changes a build
+/// step must not make.
+pub fn unexpected_changes(porcelain: &str) -> Vec<String> {
+    porcelain
+        .lines()
+        .filter_map(|l| l.get(3..))
+        .map(|p| p.trim().trim_matches('"').to_owned())
+        .filter(|p| !RESTORED_AFTER_BUILD.iter().any(|r| p == r || p.starts_with(&format!("{r}/"))))
+        .collect()
+}
+
 // ---- names, notes, checksums -------------------------------------------------------------------
 
 /// `target/release-out/<yy.mm>-<build>`.

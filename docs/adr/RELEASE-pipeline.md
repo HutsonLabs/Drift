@@ -63,6 +63,10 @@ them back in step; the build-number step says so.
    version and commit. A finished step is skipped only if every output it recorded still has
    the recorded SHA-256; preflight and the gate always run; stapling updates the DMG records.
    A failed step is recorded in the manifest with its error before the run stops.
+   Every build step must leave the tree as preflight found it: the pipeline restores
+   `src-tauri/gen/apple` (Tauri writes the build number into the iOS `Info.plist`, xcodegen
+   re-quotes `project.pbxproj`) and fails the step on any other changed or new file. The first
+   dry run found exactly this: the iOS build dirtied `Info.plist`, so the resume refused to start.
 8. **Reliability.** Network steps (build number, notarization, uploads, What to Test, GitHub)
    retry three times with 10/30/90 s backoff; every long step has a timeout. Uploads check App
    Store Connect for the build first, notarization checks `stapler validate` first, and the

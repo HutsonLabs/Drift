@@ -47,6 +47,11 @@ fn git(root: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_owned())
 }
 
+fn git_porcelain(root: &Path) -> Result<String> {
+    let out = Command::new("git").args(["status", "--porcelain"]).current_dir(root).output()?;
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
 fn tree_is_clean(root: &Path) -> Result<bool> {
     Ok(git(root, &["status", "--porcelain"])?.is_empty())
 }
@@ -504,7 +509,19 @@ pub fn run(root: &Path, args: &Args) -> Result<()> {
         }
         let at = now();
         log(Some(&out), &format!("==> {step:?}"));
-        let result = with_retries(step, || run_step(step, &ctx, &mut manifest));
+        let result = with_retries(step, || run_step(step, &ctx, &mut manifest)).and_then(|outputs| {
+            // Builds must leave the tree as preflight found it: restore what Xcode rewrites,
+            // refuse anything else.
+            for path in release::RESTORED_AFTER_BUILD {
+                git(root, &["checkout", "--", path])?;
+            }
+            let changed = release::unexpected_changes(&git_porcelain(root)?);
+            if changed.is_empty() {
+                Ok(outputs)
+            } else {
+                bail!("{step:?} changed tracked or new files: {}", changed.join(", "))
+            }
+        });
         match result {
             Ok(outputs) => {
                 manifest.done(step, at, now(), outputs);
