@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use xtask::release::{
-    self, Artifact, ArtifactKind, Format, Manifest, Options, StepId, StepRecord, StepStatus, VersionFile,
+    self, Artifact, ArtifactKind, AscSync, Format, Manifest, Options, Platform, StepId, StepRecord, StepStatus,
+    UploadState, VersionFile,
 };
 
 // ---- version files ---------------------------------------------------------------------------
@@ -115,6 +116,7 @@ fn the_default_plan_builds_everything_and_publishes_nothing() {
             StepId::HostDmg,
             StepId::Notarize,
             StepId::Checksums,
+            StepId::SyncCheck,
         ]
     );
 }
@@ -124,6 +126,7 @@ fn dry_run_skips_notarization_and_publish_flags_add_steps() {
     let dry = release::steps(Options { dry_run: true, ..Options::default() }).unwrap();
     assert!(!dry.contains(&StepId::Notarize));
     assert!(dry.contains(&StepId::Ios) && dry.contains(&StepId::Checksums));
+    assert!(dry.contains(&StepId::SyncCheck), "the lockstep check runs in a dry run too");
 
     let all = release::steps(Options { testflight: true, github: true, ..Options::default() }).unwrap();
     let tail = &all[all.len() - 3..];
@@ -163,6 +166,7 @@ fn manifest(steps: Vec<StepRecord>) -> Manifest {
         dry_run: true,
         steps,
         artifacts: Vec::new(),
+        uploads: BTreeMap::new(),
     }
 }
 
@@ -258,4 +262,84 @@ fn the_current_version_has_release_notes_and_the_template_is_in_sync() {
     assert!(!release::whats_new(&notes).is_empty());
     let template = std::fs::read_to_string(root.join("release/notes/TEMPLATE.md")).unwrap();
     assert_eq!(template, release::NOTES_TEMPLATE);
+}
+
+// ---- lockstep: iOS and macOS always share one version and one build number --------------------
+
+const BUILDS: &str = r#"{
+  "data": [
+    {"type":"builds","id":"b1","attributes":{"version":"1"},"relationships":{"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"pi"}}}},
+    {"type":"builds","id":"b2","attributes":{"version":"2"},"relationships":{"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"pi"}}}},
+    {"type":"builds","id":"b3","attributes":{"version":"3"},"relationships":{"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"pm"}}}}
+  ],
+  "included": [
+    {"type":"preReleaseVersions","id":"pi","attributes":{"platform":"IOS","version":"26.10"}},
+    {"type":"preReleaseVersions","id":"pm","attributes":{"platform":"MAC_OS","version":"26.10"}}
+  ]
+}"#;
+
+#[test]
+fn builds_are_read_per_platform_and_the_next_number_spans_all_platforms() {
+    let builds = release::builds_by_platform(BUILDS).unwrap();
+    assert_eq!(
+        builds,
+        vec![(Platform::Ios, 1), (Platform::Ios, 2), (Platform::MacOs, 3)]
+    );
+    assert_eq!(release::next_build(&builds), 4);
+    assert_eq!(release::next_build(&[]), 1);
+}
+
+#[test]
+fn the_app_store_connect_state_is_classified() {
+    // Today's state: iOS 2, macOS 3 → diverged; the next release uses 4 on both.
+    let today = [(Platform::Ios, 1), (Platform::Ios, 2), (Platform::MacOs, 3)];
+    assert_eq!(release::asc_sync(&today), AscSync::Diverged { ios: 2, macos: 3 });
+    assert_eq!(release::asc_sync(&[]), AscSync::Empty);
+    assert_eq!(release::asc_sync(&[(Platform::Ios, 4), (Platform::MacOs, 4)]), AscSync::InSync(4));
+    // N on one platform only: an interrupted release, resumed with the same N.
+    assert_eq!(
+        release::asc_sync(&[(Platform::Ios, 3), (Platform::MacOs, 3), (Platform::Ios, 4)]),
+        AscSync::Partial { build: 4, missing: Platform::MacOs }
+    );
+}
+
+#[test]
+fn every_artifact_must_embed_the_same_version_and_build() {
+    let same = |v: &str, b: &str| Some((v.to_owned(), b.to_owned()));
+    let ok = [
+        (ArtifactKind::IosIpa, same("26.10", "4")),
+        (ArtifactKind::MacAppStorePkg, same("26.10", "4")),
+        (ArtifactKind::MacDmg, same("26.10", "4")),
+        (ArtifactKind::HostDmg, same("26.10", "4")),
+    ];
+    release::check_sync(&ok, "26.10", 4).unwrap();
+    let mut bad = ok.clone();
+    bad[1] = (ArtifactKind::MacAppStorePkg, same("26.10", "3"));
+    let err = release::check_sync(&bad, "26.10", 4).unwrap_err().to_string();
+    assert!(err.contains("MacAppStorePkg") && err.contains('3'), "{err}");
+    bad[1] = (ArtifactKind::MacAppStorePkg, None);
+    assert!(release::check_sync(&bad, "26.10", 4).is_err(), "unreadable");
+    assert!(release::check_sync(&ok[..1], "26.10", 4).is_err(), "both App Store platforms are required");
+}
+
+#[test]
+fn uploads_are_per_platform_and_resume_only_the_missing_one() {
+    assert_eq!(release::to_upload(false, false), vec![Platform::Ios, Platform::MacOs]);
+    assert_eq!(release::to_upload(true, false), vec![Platform::MacOs]);
+    assert_eq!(release::to_upload(true, true), Vec::<Platform>::new());
+    let mut m = manifest(vec![]);
+    m.record_upload(Platform::Ios, UploadState::Uploaded);
+    m.record_upload(Platform::MacOs, UploadState::Failed);
+    let back = Manifest::from_json(&m.to_json().unwrap()).unwrap();
+    assert_eq!(back.uploads.get(&Platform::Ios), Some(&UploadState::Uploaded));
+    assert_eq!(back.uploads.get(&Platform::MacOs), Some(&UploadState::Failed));
+}
+
+#[test]
+fn there_is_no_single_platform_publish_path_in_the_docs() {
+    let root = xtask::repo::root();
+    let conventions = std::fs::read_to_string(root.join("docs/team-conventions.md")).unwrap();
+    assert!(!conventions.contains("xtask testflight"), "TestFlight goes through `xtask release --testflight`");
+    let skill = std::fs::read_to_string(root.join(".claude/skills/release/SKILL.md")).unwrap();
+    assert!(skill.contains("lockstep"), "the skill states the lockstep rule");
 }
