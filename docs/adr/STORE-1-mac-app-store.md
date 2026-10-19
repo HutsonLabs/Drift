@@ -30,14 +30,13 @@
   Connect app record (`altool --list-apps` lists Boards, Iceberg and term.hut only). Creating
   them changes the account, so it was not done. Until then the package has no embedded profile
   and App Store validation rejects it (STORE-2).
-- **Export compliance (`ITSAppUsesNonExemptEncryption`) is not set.** Drift encrypts the whole
-  session with its own TLS (rustls with ring) and uses NTLM/CredSSP for sign-in; it does not
-  rely only on Apple's OS crypto, and the encryption is not limited to authentication. That
-  reads as standard, mass-market encryption (ECCN 5D992, License Exception ENC
-  §740.17(b)(1)), which usually means answering "yes, uses non-exempt encryption", choosing
-  "standard encryption algorithms", and filing BIS's annual self-classification report. This
-  is a legal answer for the account owner. On 2026-10-18 the owner chose to leave the key unset
-  for now, so App Store Connect asks the export questions on each upload.
+- **Export compliance: `ITSAppUsesNonExemptEncryption = false`** (owner's decision,
+  2026-10-18), in `src-tauri/Info.plist` and the iOS `Info.plist`. Drift encrypts the whole
+  session with its own TLS (rustls with ring) and uses NTLM/CredSSP; these are standard
+  algorithms in a mass-market product (ECCN 5D992, License Exception ENC §740.17(b)(1)), which is
+  *exempt* in Apple's terms. `true` means non-exempt and needs approved documentation and an
+  `ITSEncryptionExportComplianceCode`; App Store validation rejected it without one (90592). The
+  owner files BIS's annual self-classification report.
 - **Skipped for now (owner, 2026-10-18).** No App ID, profiles or App Store Connect record are
   created; STORE-1 to STORE-3 stay `[~]` until the owner sets the account up.
 

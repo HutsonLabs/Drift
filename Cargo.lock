@@ -1440,7 +1440,7 @@ dependencies = [
 
 [[package]]
 name = "drift-app"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "dispatch2",
  "drift-apple",
@@ -1479,7 +1479,7 @@ dependencies = [
 
 [[package]]
 name = "drift-apple"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "block2",
  "dispatch2",
@@ -1503,7 +1503,7 @@ dependencies = [
 
 [[package]]
 name = "drift-capture"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "block2",
  "dispatch2",
@@ -1523,7 +1523,7 @@ dependencies = [
 
 [[package]]
 name = "drift-clipboard"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "drift-core",
  "drift-testkit",
@@ -1539,7 +1539,7 @@ dependencies = [
 
 [[package]]
 name = "drift-codec"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "criterion",
  "drift-core",
@@ -1555,7 +1555,7 @@ dependencies = [
 
 [[package]]
 name = "drift-core"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "proptest",
  "serde",
@@ -1568,7 +1568,7 @@ dependencies = [
 
 [[package]]
 name = "drift-e2e"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "drift-clipboard",
  "drift-core",
@@ -1584,7 +1584,7 @@ dependencies = [
 
 [[package]]
 name = "drift-ext"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "drift-core",
  "ironrdp-core",
@@ -1597,7 +1597,7 @@ dependencies = [
 
 [[package]]
 name = "drift-gfx"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "drift-codec",
  "drift-core",
@@ -1616,7 +1616,7 @@ dependencies = [
 
 [[package]]
 name = "drift-host"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "async-trait",
  "dispatch2",
@@ -1665,7 +1665,7 @@ dependencies = [
 
 [[package]]
 name = "drift-host-app"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "block2",
  "drift-apple",
@@ -1682,7 +1682,7 @@ dependencies = [
 
 [[package]]
 name = "drift-inject"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "drift-core",
  "drift-ext",
@@ -1694,7 +1694,7 @@ dependencies = [
 
 [[package]]
 name = "drift-input"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "drift-core",
  "proptest",
@@ -1702,7 +1702,7 @@ dependencies = [
 
 [[package]]
 name = "drift-ios"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "block2",
  "dispatch2",
@@ -1723,7 +1723,7 @@ dependencies = [
 
 [[package]]
 name = "drift-macos"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "block2",
  "dispatch2",
@@ -1746,7 +1746,7 @@ dependencies = [
 
 [[package]]
 name = "drift-rdp"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "drift-clipboard",
  "drift-codec",
@@ -1782,7 +1782,7 @@ dependencies = [
 
 [[package]]
 name = "drift-render"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "block2",
  "drift-core",
@@ -1804,7 +1804,7 @@ dependencies = [
 
 [[package]]
 name = "drift-testkit"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "async-trait",
  "drift-core",
@@ -1834,7 +1834,7 @@ dependencies = [
 
 [[package]]
 name = "drift-transport"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "drift-core",
  "drift-testkit",
@@ -1850,7 +1850,7 @@ dependencies = [
 
 [[package]]
 name = "drift-video"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "block2",
  "drift-core",
@@ -8071,7 +8071,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.2.0"
+version = "26.10.0"
 dependencies = [
  "anyhow",
  "clap",

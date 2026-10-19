@@ -35,24 +35,21 @@
 The owner created the App Store Connect record ("Drift - Screen sharing", SKU HL005, app id
 6824351800; bundle id `com.hutsonlabs.drift`, universal) and asked for TestFlight.
 
-- `tauri.conf.json` sets `bundle.iOS.developmentTeam` (`M9Z3N2R97A`) and `bundleVersion`.
-  `CFBundleVersion` must grow with every upload: pass `--build-number <n>` (or raise
-  `bundleVersion`) for the next one.
-- Build, validate and upload, with the App Store Connect API key from `~/code/term.hut/.env`
-  (`APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_KEY_PATH`; never printed or committed):
-
-  ```text
-  (cd ui && bun run build)
-  set -a; . ~/code/term.hut/.env; set +a
-  cd src-tauri && cargo tauri ios build --export-method app-store-connect --build-number <n>
-  export API_PRIVATE_KEYS_DIR="$(dirname "$APPLE_API_KEY_PATH")"
-  xcrun altool --validate-app -f gen/apple/build/arm64/Drift.ipa -t ios --apiKey "$APPLE_KEY_ID" --apiIssuer "$APPLE_API_ISSUER"
-  xcrun altool --upload-app   -f gen/apple/build/arm64/Drift.ipa -t ios --apiKey "$APPLE_KEY_ID" --apiIssuer "$APPLE_API_ISSUER"
-  ```
-
-  With the API key in the environment, Xcode signs automatically and created the
+- Versions: the marketing version is `yy.mm` (`CFBundleShortVersionString`, e.g. `26.10`), set
+  in the iOS `Info.plist`, `project.yml` and `src-tauri/Info.plist`; Cargo and `tauri.conf.json`
+  carry the semver form `26.10.0`. The build number grows by one with every upload, across
+  versions.
+- `tauri.conf.json` sets `bundle.iOS.developmentTeam` (`M9Z3N2R97A`).
+- `cargo xtask testflight [--dry-run] [--build-number N]` does it all: asks App Store Connect
+  for the highest build number and uses the next one (passed as a `bundleVersion` config
+  override, because `--build-number` would append to it: `1.2`), builds the UI and the App Store
+  `.ipa`, validates it and uploads it. It reads the App Store Connect key from
+  `APPLE_API_KEY_PATH`, `APPLE_KEY_ID` and `APPLE_API_ISSUER`
+  (`set -a; . ~/code/term.hut/.env; set +a`); the token goes to `curl` on stdin and is never
+  printed. With the key in the environment, Xcode signs automatically and created the
   "iOS Team Store Provisioning Profile: com.hutsonlabs.drift" on the first build.
 - Testers: the internal group "Drift Internal" (all builds) holds the account holder. Internal
   testers must be App Store Connect users; external testers need Beta App Review.
-- Export compliance stays unanswered in `Info.plist` (owner's decision), so each build asks the
-  encryption question in App Store Connect before testers can install it.
+- Export compliance: `ITSAppUsesNonExemptEncryption = false` (ADR `STORE-1-mac-app-store`), so
+  builds need no per-build answer. Build 1, uploaded before the key, got the same answer through
+  the App Store Connect API.

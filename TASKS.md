@@ -142,7 +142,8 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   universal, sandboxed, Apple Distribution-signed app in an installer-signed `.pkg` (ADR
   `STORE-1-mac-app-store`). Blocked on the account: no `com.hutsonlabs.drift` App ID, profile or
   app record. Owner's decisions (2026-10-18): skipped for now — no App ID, profiles or App Store
-  Connect record are created — and `ITSAppUsesNonExemptEncryption` stays unset.*
+  Connect record are created. Export compliance: `ITSAppUsesNonExemptEncryption = false`
+  (standard, mass-market encryption; exempt).*
 - [~] **STORE-2 Review-risk check.** Upload a build to App Store Connect and validate it,
   including the transparent webview (ADR open question 7). Plan native overlays if it fails.
   *Validate only (no upload, per the owner). `altool --validate-app` needs an App Store Connect
@@ -152,8 +153,9 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 - [✓] **STORE-3 iOS App Store packaging.** `NSLocalNetworkUsageDescription`,
   `NSBonjourServices`, privacy manifest, TestFlight build. *Usage strings, privacy manifest and
   App Store export options are in, iOS no longer carries wry's private transparency key, and the
-  900 MB `libapp.a` is no longer bundled (ADR `STORE-3-ios-app-store`). Build 0.2.0 (1) passed
-  validation and is on TestFlight in the internal group "Drift Internal" (2026-10-18).*
+  900 MB `libapp.a` is no longer bundled (ADR `STORE-3-ios-app-store`). Builds 0.2.0 (1) and
+  26.10 (2) passed validation and are on TestFlight in the internal group "Drift Internal"
+  (2026-10-18); `cargo xtask testflight` uploads the next one.*
 - [✓] **STORE-4 Drift Host release.** Developer ID signing, notarization and DMG through the
   M9-5 release path; Hardened Runtime without the App Sandbox. *`cargo xtask host-release
   --notarize` (ADR `STORE-4-host-release`); a notarized, stapled DMG passed Gatekeeper on

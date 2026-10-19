@@ -95,6 +95,7 @@ another JS package manager.
 | `cargo xtask host-setup-check` | read-only check of the GNOME host over SSH (M0-4, `docs/gnome-host-setup.md`) |
 | `cargo xtask bundle` | M9-5 (stub until then) |
 | `cargo xtask review-risk <app>` | private-API strings App Review may flag in a built Mac or iOS app (STORE-2) |
+| `cargo xtask testflight [--dry-run] [--build-number N]` | iOS: next build number from App Store Connect, App Store `.ipa`, validate, upload to TestFlight (STORE-3); needs the API key env from `~/code/term.hut/.env` |
 | `cargo xtask host-release [--notarize]` | Drift Host: Developer ID, DMG, notarization + stapling (STORE-4); never publishes |
 | `cargo xtask mas-package [--profile F]` | the Mac App Store `.pkg`: universal, sandboxed, Apple Distribution + installer signature (STORE-1) |
 | `cargo tauri dev` / `cargo tauri build` | run / bundle the app (UI is built by bun first) |

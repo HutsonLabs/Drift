@@ -71,8 +71,13 @@ targets:
         UIApplicationSupportsIndirectInputEvents: true
         # ProMotion iPhones only go above 60 Hz with this (IOS-4).
         CADisableMinimumFrameDurationOnPhone: true
-        CFBundleShortVersionString: 0.2.0
-        CFBundleVersion: "0.2.0"
+        # Marketing version yy.mm; the build number grows with every upload (`cargo xtask testflight`).
+        CFBundleShortVersionString: "26.10"
+        CFBundleVersion: "1"
+        # Export compliance: only exempt encryption in Apple's terms — standard algorithms (TLS,
+        # CredSSP), mass market, ECCN 5D992 under §740.17(b)(1); the owner files BIS's annual
+        # self-classification report (ADR STORE-3-ios-app-store).
+        ITSAppUsesNonExemptEncryption: false
     entitlements:
       path: drift-app_iOS/drift-app_iOS.entitlements
     scheme:
