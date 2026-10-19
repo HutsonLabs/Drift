@@ -343,3 +343,12 @@ fn there_is_no_single_platform_publish_path_in_the_docs() {
     let skill = std::fs::read_to_string(root.join(".claude/skills/release/SKILL.md")).unwrap();
     assert!(skill.contains("lockstep"), "the skill states the lockstep rule");
 }
+
+#[test]
+fn builds_may_only_touch_the_generated_xcode_project() {
+    let porcelain = " M src-tauri/gen/apple/drift-app_iOS/Info.plist\n M src-tauri/gen/apple/drift-app.xcodeproj/project.pbxproj\n";
+    assert!(release::unexpected_changes(porcelain).is_empty());
+    let dirty = " M src-tauri/gen/apple/project.yml\n M Cargo.lock\n?? stray.txt\n";
+    assert_eq!(release::unexpected_changes(dirty), ["Cargo.lock", "stray.txt"]);
+    assert_eq!(release::RESTORED_AFTER_BUILD, ["src-tauri/gen/apple"]);
+}
