@@ -188,6 +188,8 @@ export function identity(over: Partial<WindowIdentity> = {}): WindowIdentity {
     name: "Homelab",
     host: "gnome.local",
     mode: "remote-login",
+    kind: "gnome",
+    quality: null,
     status: "live",
     hint: null,
     show_stats: false,

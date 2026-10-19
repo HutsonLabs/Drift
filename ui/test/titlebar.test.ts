@@ -34,25 +34,26 @@ async function start(fake = new FakeTitlebarApi()) {
 }
 
 describe("identity capsule", () => {
-  test("pulls the identity on load: glyph, name, host and a live dot", async () => {
+  test("pulls the identity on load: kind glyph, name, GNOME mode and a live dot", async () => {
     const { root, fake, app } = await start();
     expect(fake.calls).toContainEqual(["windowIdentity"]);
     const capsule = root.querySelector(".ident") as HTMLElement;
-    expect(capsule.querySelector(".glyph-remote-login")).not.toBeNull();
+    expect(capsule.querySelector(".glyph-gnome")).not.toBeNull();
     expect(text(capsule.querySelector(".name"))).toBe("Homelab");
-    expect(text(capsule.querySelector(".host"))).toBe("gnome.local");
+    expect(text(capsule.querySelector(".detail"))).toBe("Remote Login");
     expect(capsule.querySelector(".status.live")).not.toBeNull();
     expect(capsule.querySelector(".spin")).toBeNull();
     // VoiceOver hears the status, not a coloured dot.
-    expect(capsule.getAttribute("aria-label")).toBe("Homelab, gnome.local, Live");
+    expect(capsule.getAttribute("aria-label")).toBe("Homelab, GNOME, Remote Login, Live");
     app.dispose();
   });
 
-  test("one glyph per mode", async () => {
+  test("a GNOME capsule names its mode", async () => {
     const { root, app } = await start();
+    const names = { headless: "Headless", "desktop-sharing": "Desktop Sharing", "remote-login": "Remote Login" } as const;
     for (const mode of ["headless", "desktop-sharing", "remote-login"] as const) {
       app.onIdentity(identity({ mode }));
-      expect(root.querySelector(`.ident .glyph-${mode}`)).not.toBeNull();
+      expect(text(root.querySelector(".ident .detail"))).toBe(names[mode]);
     }
     app.dispose();
   });
@@ -62,7 +63,7 @@ describe("identity capsule", () => {
     app.onIdentity(identity({ status: "connecting" }));
     expect(root.querySelector(".ident .spin")).not.toBeNull();
     expect(root.querySelector(".ident .status")).toBeNull();
-    expect(root.querySelector(".ident")?.getAttribute("aria-label")).toBe("Homelab, gnome.local, Connecting");
+    expect(root.querySelector(".ident")?.getAttribute("aria-label")).toBe("Homelab, GNOME, Remote Login, Connecting");
     app.onIdentity(identity({ status: "reconnecting" }));
     expect(root.querySelector(".ident .status.reconnecting")).not.toBeNull();
     app.onIdentity(identity({ status: "failed" }));
@@ -71,9 +72,9 @@ describe("identity capsule", () => {
     app.dispose();
   });
 
-  test("the greeter hint is the capsule's tooltip", async () => {
+  test("the greeter hint is the capsule's tooltip; otherwise the host", async () => {
     const { root, app } = await start();
-    expect(root.querySelector(".ident")?.hasAttribute("title")).toBe(false);
+    expect(root.querySelector(".ident")?.getAttribute("title")).toBe("gnome.local");
     app.onIdentity(identity({ hint: "Log in as “hutson” on the GNOME login screen." }));
     expect(root.querySelector(".ident")?.getAttribute("title")).toBe("Log in as “hutson” on the GNOME login screen.");
     app.dispose();

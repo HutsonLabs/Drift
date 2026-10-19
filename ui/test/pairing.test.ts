@@ -4,7 +4,7 @@
 // as Trusted. Test values only.
 import { describe, expect, test } from "bun:test";
 import type { HostAdvert } from "../src/bindings";
-import { FakeConnectionsApi, startConnections } from "./fakes";
+import { FakeConnectionsApi, pairMac, startConnections } from "./fakes";
 import { button, field, flush, hasButton, text, type } from "./helpers";
 
 const STUDIO: HostAdvert = {
@@ -18,8 +18,7 @@ const STUDIO: HostAdvert = {
 
 async function pairSheet(fake = new FakeConnectionsApi()) {
   const started = await startConnections(fake);
-  button(started.root.querySelector("header.toolbar")!, "Pair a Mac").click();
-  await flush();
+  await pairMac(started.root);
   const sheet = started.root.querySelector<HTMLElement>("[role=dialog][aria-label='Pair a Mac']");
   if (!sheet) throw new Error("no pairing sheet");
   return { ...started, sheet };
