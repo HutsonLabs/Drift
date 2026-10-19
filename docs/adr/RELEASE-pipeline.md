@@ -6,15 +6,31 @@
 
 ## Context
 
-Releases took several hand-run commands (`testflight`, `testflight --macos`, `host-release`,
-a Drift DMG by hand), each picking its own build number and output folder. A failure halfway
+Releases took several hand-run commands (a TestFlight upload per platform, `host-release`, a
+Drift DMG by hand), each picking its own build number and output folder; iOS and macOS ended
+up on different builds (26.10 (2) and 26.10 (3)). A failure halfway
 meant starting again, and nothing recorded what a release was built from.
 
 ## Decisions
 
+**Lockstep.** iOS and macOS are always released together and never out of version or build
+sync. One release is one `yy.mm` version and one build number N, used by the iOS `.ipa`,
+the Mac App Store `.pkg` and both DMGs. N is App Store Connect's highest build on **any**
+platform + 1, chosen once. There is no single-platform publish path (the old
+`cargo xtask testflight` is gone). The `sync-check` step reads `CFBundleShortVersionString`
+and `CFBundleVersion` back out of every artifact and refuses to go on unless all equal
+(version, N); it runs on every run, including a resume, right before any upload. Uploads
+start only after both App Store artifacts are built, validated and checked; each platform's
+upload state is in the manifest; if one upload fails, `--resume` uploads the missing one
+with the same N (App Store Connect is asked first, so nothing is sent twice) and never picks
+a new N. When App Store Connect is already out of step (today iOS 2, macOS 3), or a number
+exists on one platform only, a new release still uses the highest + 1 on both, which puts
+them back in step; the build-number step says so.
+
 1. **One command**, `cargo xtask release`, with named steps in a fixed order: preflight, gate,
    build number, clean, iOS, Mac App Store, Drift DMG, Drift Host DMG, notarize, checksums,
-   then the publish steps TestFlight, What to Test, GitHub. The order and the rules are data in
+   sync check, then the publish steps TestFlight (both platforms), What to Test, GitHub. The
+   order and the rules are data in
    `xtask::release` and tested in `xtask/tests/release.rs`; `xtask/src/release_cmd.rs` runs them.
 2. **Publishing is opt-in.** `--testflight` and `--github` add the publish steps; without them
    nothing leaves the Mac except the read-only App Store Connect query, `altool` validation

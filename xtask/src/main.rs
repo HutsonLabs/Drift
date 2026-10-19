@@ -89,42 +89,27 @@ enum Cmd {
         #[arg(long)]
         notarize: bool,
     },
-    /// Build the iOS App Store `.ipa`, validate it and upload it to TestFlight (STORE-3). The build
-    /// number is one above App Store Connect's highest. Reads the App Store Connect key from
-    /// `APPLE_API_KEY_PATH`, `APPLE_KEY_ID` and `APPLE_API_ISSUER`.
-    Testflight {
-        /// Build and validate, but do not upload.
-        #[arg(long)]
-        dry_run: bool,
-        /// Use this build number instead of asking App Store Connect.
-        #[arg(long)]
-        build_number: Option<u32>,
-        /// Upload the Mac App Store package instead of the iOS app (STORE-1).
-        #[arg(long)]
-        macos: bool,
-        /// The Mac App Store provisioning profile to embed (with `--macos`).
-        #[arg(long)]
-        profile: Option<PathBuf>,
-    },
-    /// Release pipeline (ADR `RELEASE-pipeline`): preflight, gate, build number, every artifact into
-    /// `target/release-out/<yy.mm>-<build>/` with `manifest.json` and `SHA256SUMS`, notarization;
-    /// publishing only with `--testflight` / `--github`. Needs the App Store Connect key in the
-    /// environment (`set -a; . ~/code/term.hut/.env; set +a`).
+    /// Release pipeline (ADR `RELEASE-pipeline`): preflight, gate, one build number for iOS and
+    /// macOS, every artifact into `target/release-out/<yy.mm>-<build>/` with `manifest.json` and
+    /// `SHA256SUMS`, the lockstep check, notarization; publishing only with `--testflight` /
+    /// `--github`. Needs the App Store Connect key in the environment
+    /// (`set -a; . ~/code/term.hut/.env; set +a`).
     Release {
         /// Build and validate everything; never notarize, upload or publish.
         #[arg(long)]
         dry_run: bool,
-        /// Upload the iOS and Mac App Store builds to TestFlight and set "What to Test".
+        /// Upload the iOS and the Mac App Store builds (always both) to TestFlight and set
+        /// "What to Test".
         #[arg(long)]
         testflight: bool,
         /// Tag `v<yy.mm>.<build>`, push the tag and publish both DMGs as a GitHub release.
         #[arg(long)]
         github: bool,
         /// Continue the last run of this version and commit; finished steps with intact
-        /// outputs are skipped.
+        /// outputs are skipped and the build number is reused.
         #[arg(long)]
         resume: bool,
-        /// Use this build number instead of App Store Connect's highest + 1.
+        /// Use this build number instead of App Store Connect's highest + 1 (both platforms).
         #[arg(long)]
         build_number: Option<u32>,
         /// The Mac App Store provisioning profile (default: STORE-1's copy in
@@ -226,9 +211,6 @@ fn run(cmd: Cmd) -> Result<()> {
                     },
                 )
             }
-        }
-        Cmd::Testflight { dry_run, build_number, macos, profile } => {
-            testflight(&root, dry_run, build_number, macos.then_some(profile.as_deref()))
         }
         Cmd::HostSetupCheck { host, headless, report, save_report } => {
             host_setup_check(host, &headless, report.as_deref(), save_report.as_deref())
@@ -356,74 +338,6 @@ fn asc_request(method: &str, path: &str, json: Option<&str>) -> Result<String> {
         );
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
-}
-
-fn testflight(
-    root: &Path,
-    dry_run: bool,
-    build_number: Option<u32>,
-    mac: Option<Option<&Path>>,
-) -> Result<()> {
-    use xtask::testflight;
-    let (key, key_id, issuer) = asc_key()?;
-    let plist = std::fs::read_to_string(root.join("src-tauri/gen/apple/drift-app_iOS/Info.plist"))?;
-    let version = testflight::plist_string(&plist, "CFBundleShortVersionString").unwrap_or_default();
-    if !testflight::is_marketing_version(&version) {
-        bail!("the iOS marketing version {version:?} is not yy.mm");
-    }
-    let build = match build_number {
-        Some(n) => n,
-        None => {
-            let json = asc_get(&format!(
-                "/v1/builds?filter%5Bapp%5D={}&fields%5Bbuilds%5D=version&limit=200",
-                testflight::APP_ID
-            ))?;
-            testflight::next_build_number(&testflight::build_versions(&json)?)
-        }
-    };
-    println!("==> Drift {version} ({build}){}", if mac.is_some() { " for macOS" } else { "" });
-    let keys_dir = Path::new(&key).parent().context("the API key has no directory")?.to_owned();
-    let altool = |args: &[String], what: &str| {
-        checked(
-            Command::new("xcrun")
-                .args(args)
-                .args(["--apiKey", &key_id, "--apiIssuer", &issuer])
-                .env("API_PRIVATE_KEYS_DIR", &keys_dir),
-            what,
-        )
-    };
-    if let Some(profile) = mac {
-        let profile = profile.context("--macos needs --profile <Mac App Store provisioning profile>")?;
-        let ui = root.join("ui");
-        checked(Command::new(bun()).args(["install", "--frozen-lockfile"]).current_dir(&ui), "bun install")?;
-        let pkg = mas_package_build(root, Some(profile), Some(build))?;
-        let (validate, upload) = testflight::mac_altool_args(&pkg);
-        altool(&validate, "altool --validate-app")?;
-        if dry_run {
-            println!("validated {} (dry run: not uploaded)", pkg.display());
-        } else {
-            altool(&upload, "altool --upload-app")?;
-            println!("uploaded Drift {version} ({build}) for macOS to TestFlight");
-        }
-        return Ok(());
-    }
-    let plan = testflight::plan(root, build);
-    let ui = root.join("ui");
-    checked(Command::new(bun()).args(["install", "--frozen-lockfile"]).current_dir(&ui), "bun install")?;
-    checked(Command::new(bun()).args(["run", "build"]).current_dir(&ui), "bun run build")?;
-    std::fs::create_dir_all(root.join("src-tauri/gen/apple/assets"))?;
-    checked(
-        Command::new(cargo()).args(&plan.build_args).current_dir(root.join("src-tauri")),
-        "cargo tauri ios build",
-    )?;
-    altool(&plan.validate_args, "altool --validate-app")?;
-    if dry_run {
-        println!("validated {} (dry run: not uploaded)", plan.ipa.display());
-    } else {
-        altool(&plan.upload_args, "altool --upload-app")?;
-        println!("uploaded Drift {version} ({build}) to TestFlight");
-    }
-    Ok(())
 }
 
 fn host_release(root: &Path, notarize: bool) -> Result<()> {

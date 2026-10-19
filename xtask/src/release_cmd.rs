@@ -7,7 +7,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context as _, Result, bail};
 use sha2::{Digest as _, Sha256};
-use xtask::release::{self, Artifact, ArtifactKind, Manifest, Options, StepId};
+use xtask::release::{self, Artifact, ArtifactKind, Manifest, Options, Platform, StepId};
 use xtask::{store, testflight};
 
 use super::{asc_get, asc_key, asc_request, bun, cargo, checked, host_dmg, mas_package_build};
@@ -427,13 +427,31 @@ pub fn run(root: &Path, args: &Args) -> Result<()> {
         None => {
             let build = match args.build_number {
                 Some(n) => n,
-                None => with_retries(StepId::BuildNumber, || {
-                    let json = asc_get(&format!(
-                        "/v1/builds?filter%5Bapp%5D={}&fields%5Bbuilds%5D=version&limit=200",
-                        testflight::APP_ID
-                    ))?;
-                    Ok(testflight::next_build_number(&testflight::build_versions(&json)?))
-                })?,
+                None => {
+                    let builds = with_retries(StepId::BuildNumber, || {
+                        release::builds_by_platform(&asc_get(&format!(
+                            "/v1/builds?filter%5Bapp%5D={}&fields%5Bbuilds%5D=version,preReleaseVersion\
+                             &include=preReleaseVersion&fields%5BpreReleaseVersions%5D=platform&limit=200",
+                            testflight::APP_ID
+                        ))?)
+                    })?;
+                    // Lockstep: one number for iOS and macOS, above everything on either.
+                    match release::asc_sync(&builds) {
+                        release::AscSync::Partial { build, missing } => eprintln!(
+                            "xtask: warning: build {build} exists without {missing:?}: an interrupted release. \
+                             Resume it with --resume to upload the missing platform with {build}; this run \
+                             starts {} on both.",
+                            release::next_build(&builds)
+                        ),
+                        release::AscSync::Diverged { ios, macos } => eprintln!(
+                            "xtask: App Store Connect is out of step (iOS {ios}, macOS {macos}); this release \
+                             uses {} on both.",
+                            release::next_build(&builds)
+                        ),
+                        _ => {}
+                    }
+                    release::next_build(&builds)
+                }
             };
             let out = release::out_dir(root, &version, build);
             if out.exists() {
@@ -457,6 +475,7 @@ pub fn run(root: &Path, args: &Args) -> Result<()> {
                 dry_run: opts.dry_run,
                 steps: Vec::new(),
                 artifacts: Vec::new(),
+                uploads: std::collections::BTreeMap::new(),
             };
             (out, m)
         }
@@ -643,34 +662,80 @@ fn run_step(step: StepId, ctx: &Ctx<'_>, manifest: &mut Manifest) -> Result<Vec<
             manifest.artifacts = artifacts;
             Ok(vec![checksums])
         }
-        StepId::Testflight => {
-            for (platform, kind, args) in [
-                ("IOS", ArtifactKind::IosIpa, testflight::plan(root, build).upload_args),
-                ("MAC_OS", ArtifactKind::MacAppStorePkg, Vec::new()),
+        StepId::SyncCheck => {
+            let mut found = Vec::new();
+            for kind in [
+                ArtifactKind::IosIpa,
+                ArtifactKind::MacAppStorePkg,
+                ArtifactKind::MacDmg,
+                ArtifactKind::HostDmg,
             ] {
                 let file = out.join(release::artifact_name(kind, version, build));
-                if asc_build_id(platform, build)?.is_some() {
-                    log(
-                        Some(out),
-                        &format!("    TestFlight already has {platform} build {build}; not uploading"),
-                    );
-                    continue;
+                if file.exists() {
+                    found.push((kind, embedded_version(kind, &file, out)));
                 }
-                let args = if kind == ArtifactKind::IosIpa {
-                    args.iter()
-                        .map(|a| if a.ends_with(".ipa") { file.display().to_string() } else { a.clone() })
-                        .collect()
-                } else {
-                    testflight::mac_altool_args(&file).1
+            }
+            release::check_sync(&found, version, build)?;
+            log(Some(out), &format!("    every artifact embeds {version} ({build})"));
+            Ok(Vec::new())
+        }
+        StepId::Testflight => {
+            // Lockstep: only after both platforms were built, validated and checked (SyncCheck
+            // runs right before this step on every run, including a resume).
+            let mut failed = Vec::new();
+            let present = |p: Platform| asc_build_id(p.asc_name(), build).map(|id| id.is_some());
+            let (ios, macos) = (present(Platform::Ios)?, present(Platform::MacOs)?);
+            for p in Platform::ALL {
+                if (p == Platform::Ios && ios) || (p == Platform::MacOs && macos) {
+                    if manifest.uploads.get(&p) != Some(&release::UploadState::Uploaded) {
+                        manifest.record_upload(p, release::UploadState::AlreadyPresent);
+                    }
+                    log(Some(out), &format!("    TestFlight already has {p:?} build {build}; not uploading"));
+                }
+            }
+            for p in release::to_upload(ios, macos) {
+                let args = match p {
+                    Platform::Ios => {
+                        let ipa = out.join(release::artifact_name(ArtifactKind::IosIpa, version, build));
+                        testflight::plan(root, build)
+                            .upload_args
+                            .iter()
+                            .map(|a| if a.ends_with(".ipa") { ipa.display().to_string() } else { a.clone() })
+                            .collect::<Vec<_>>()
+                    }
+                    Platform::MacOs => {
+                        testflight::mac_altool_args(&out.join(release::artifact_name(
+                            ArtifactKind::MacAppStorePkg,
+                            version,
+                            build,
+                        )))
+                        .1
+                    }
                 };
-                altool(&args, &format!("altool --upload-app ({platform})"), step.timeout())?;
+                let result = with_retries(StepId::Testflight, || {
+                    altool(&args, &format!("altool --upload-app ({p:?})"), step.timeout())
+                });
+                match result {
+                    Ok(()) => manifest.record_upload(p, release::UploadState::Uploaded),
+                    Err(e) => {
+                        manifest.record_upload(p, release::UploadState::Failed);
+                        failed.push(format!("{p:?}: {e:#}"));
+                    }
+                }
+                save(out, manifest)?;
+            }
+            if !failed.is_empty() {
+                bail!(
+                    "upload failed ({}); --resume uploads the missing platform with build {build}",
+                    failed.join("; ")
+                );
             }
             Ok(Vec::new())
         }
         StepId::WhatsNew => {
             let notes = std::fs::read_to_string(release::notes_path(root, version))?;
             let text = release::whats_new(&notes);
-            for platform in ["IOS", "MAC_OS"] {
+            for platform in Platform::ALL.map(Platform::asc_name) {
                 let id = wait_for_build(platform, build, step.timeout())?;
                 set_whats_new(&id, &text, out)?;
                 log(Some(out), &format!("    {platform} build {build}: What to Test set"));
@@ -685,6 +750,87 @@ fn run_step(step: StepId, ctx: &Ctx<'_>, manifest: &mut Manifest) -> Result<Vec<
             Ok(Vec::new())
         }
     }
+}
+
+/// `(CFBundleShortVersionString, CFBundleVersion)` of the app inside an artifact.
+fn embedded_version(kind: ArtifactKind, file: &Path, out: &Path) -> Option<(String, String)> {
+    let read = |plist: &Path| -> Option<(String, String)> {
+        let get = |key: &str| {
+            Command::new("plutil")
+                .args(["-extract", key, "raw", "-o", "-"])
+                .arg(plist)
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
+        };
+        Some((get("CFBundleShortVersionString")?, get("CFBundleVersion")?))
+    };
+    let scratch = out.join("sync-check");
+    let _ = std::fs::remove_dir_all(&scratch);
+    std::fs::create_dir_all(&scratch).ok()?;
+    let result = match kind {
+        ArtifactKind::IosIpa => {
+            let ok = Command::new("unzip")
+                .args(["-q", "-o"])
+                .arg(file)
+                .args(["Payload/Drift.app/Info.plist", "-d"])
+                .arg(&scratch)
+                .status()
+                .is_ok_and(|s| s.success());
+            if ok { read(&scratch.join("Payload/Drift.app/Info.plist")) } else { None }
+        }
+        ArtifactKind::MacAppStorePkg => {
+            let expanded = scratch.join("pkg");
+            let ok = Command::new("pkgutil")
+                .arg("--expand-full")
+                .arg(file)
+                .arg(&expanded)
+                .status()
+                .is_ok_and(|s| s.success());
+            if ok { find_plist(&expanded, "Drift.app").and_then(|p| read(&p)) } else { None }
+        }
+        ArtifactKind::MacDmg | ArtifactKind::HostDmg => {
+            let mount = scratch.join("mnt");
+            std::fs::create_dir_all(&mount).ok()?;
+            let ok = Command::new("hdiutil")
+                .args(["attach", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint"])
+                .arg(&mount)
+                .arg(file)
+                .stdout(std::process::Stdio::null())
+                .status()
+                .is_ok_and(|s| s.success());
+            let app = if kind == ArtifactKind::MacDmg { "Drift.app" } else { "Drift Host.app" };
+            let found = if ok { read(&mount.join(app).join("Contents/Info.plist")) } else { None };
+            if ok {
+                let _ = Command::new("hdiutil").args(["detach", "-quiet"]).arg(&mount).status();
+            }
+            found
+        }
+        ArtifactKind::Checksums => None,
+    };
+    let _ = std::fs::remove_dir_all(&scratch);
+    result
+}
+
+/// `<…>/<app>/Contents/Info.plist` somewhere under `dir`.
+fn find_plist(dir: &Path, app: &str) -> Option<PathBuf> {
+    for entry in std::fs::read_dir(dir).ok()?.flatten() {
+        let path = entry.path();
+        if path.file_name().is_some_and(|n| n == app) {
+            let plist = path.join("Contents/Info.plist");
+            if plist.is_file() {
+                return Some(plist);
+            }
+        }
+        if path.is_dir()
+            && !path.is_symlink()
+            && let Some(found) = find_plist(&path, app)
+        {
+            return Some(found);
+        }
+    }
+    None
 }
 
 /// Drift for Mac with Developer ID in a signed DMG (not yet notarized).

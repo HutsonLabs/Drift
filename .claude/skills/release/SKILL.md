@@ -8,6 +8,14 @@ description: Release Drift deterministically — build every artifact (iOS App S
 One command does everything: `cargo xtask release` (ADR `docs/adr/RELEASE-pipeline.md`).
 It never uploads or publishes unless asked with a flag.
 
+**Lockstep rule:** iOS and macOS ship in lockstep — always released together, with the same `yy.mm` version
+and the same build number N (App Store Connect's highest on any platform + 1), and that N is
+also in both DMGs. Never upload one platform alone and never pick numbers by hand; there is
+no single-platform command. If App Store Connect shows the platforms on different builds
+(for example iOS 2, macOS 3), the next release uses the highest + 1 on both. If a release
+uploaded one platform and failed on the other, run `--resume`: it uploads the missing one
+with the same N.
+
 ## Ask first
 
 Get the user's explicit go-ahead in this conversation before each of these; never infer it:

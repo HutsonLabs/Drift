@@ -40,13 +40,12 @@ The owner created the App Store Connect record ("Drift - Screen sharing", SKU HL
   carry the semver form `26.10.0`. The build number grows by one with every upload, across
   versions.
 - `tauri.conf.json` sets `bundle.iOS.developmentTeam` (`M9Z3N2R97A`).
-- `cargo xtask testflight [--dry-run] [--build-number N]` does it all: asks App Store Connect
-  for the highest build number and uses the next one (passed as a `bundleVersion` config
-  override, because `--build-number` would append to it: `1.2`), builds the UI and the App Store
-  `.ipa`, validates it and uploads it. It reads the App Store Connect key from
-  `APPLE_API_KEY_PATH`, `APPLE_KEY_ID` and `APPLE_API_ISSUER`
-  (`set -a; . ~/code/term.hut/.env; set +a`); the token goes to `curl` on stdin and is never
-  printed. With the key in the environment, Xcode signs automatically and created the
+- iOS ships only together with macOS, through `cargo xtask release --testflight` (ADR
+  `RELEASE-pipeline`): App Store Connect's highest build number on any platform + 1, passed as a
+  `bundleVersion` config override (Tauri's `--build-number` would append to it: `1.2`), the same
+  for both platforms. It reads the App Store Connect key from `APPLE_API_KEY_PATH`,
+  `APPLE_KEY_ID` and `APPLE_API_ISSUER` (`set -a; . ~/code/term.hut/.env; set +a`); the token
+  goes to `curl` on stdin and is never printed. With the key in the environment, Xcode signs automatically and created the
   "iOS Team Store Provisioning Profile: com.hutsonlabs.drift" on the first build.
 - Testers: the internal group "Drift Internal" (all builds) holds the account holder. Internal
   testers must be App Store Connect users; external testers need Beta App Review.

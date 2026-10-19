@@ -30,12 +30,13 @@
   the App Store Connect API for both Apple Distribution certificates; a copy lives in
   `~/Library/MobileDevice/Provisioning Profiles/Drift_Mac_App_Store.provisionprofile`
   (re-download it from the developer portal on another Mac).
-- `cargo xtask testflight --macos --profile <profile> [--dry-run]` builds the universal
-  package with the next build number (a `bundle.macOS.bundleVersion` config override), validates
-  it and uploads it. The Mac and iOS builds share one build-number sequence. Tauri notarizes
-  whenever App Store Connect credentials are in its environment, so the Mac App Store build step
-  runs without them (an App Store package is never notarized).
-- Build 26.10 (3) for macOS passed validation and was uploaded to TestFlight.
+- Mac App Store builds ship only together with iOS, through `cargo xtask release --testflight`
+  (ADR `RELEASE-pipeline`): one version and one build number for both platforms, set with a
+  `bundle.macOS.bundleVersion` config override. Tauri notarizes whenever App Store Connect
+  credentials are in its environment, so the Mac App Store build step runs without them (an
+  App Store package is never notarized).
+- Build 26.10 (3) for macOS passed validation and was uploaded to TestFlight (before the
+  lockstep rule; iOS stood at 26.10 (2), so the next release uses build 4 on both).
 - **Export compliance: `ITSAppUsesNonExemptEncryption = false`** (owner's decision,
   2026-10-18), in `src-tauri/Info.plist` and the iOS `Info.plist`. Drift encrypts the whole
   session with its own TLS (rustls with ring) and uses NTLM/CredSSP; these are standard

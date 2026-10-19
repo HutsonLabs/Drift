@@ -192,6 +192,9 @@ pub enum StepId {
     Notarize,
     /// `SHA256SUMS` over the artifacts.
     Checksums,
+    /// Lockstep: every artifact embeds the same version and build number (read back from the
+    /// files), so iOS and macOS never ship out of sync.
+    SyncCheck,
     /// Upload the `.ipa` and `.pkg` (skipped when App Store Connect already has the build).
     Testflight,
     /// "What to Test" on both TestFlight builds.
@@ -237,6 +240,7 @@ pub fn steps(options: Options) -> Result<Vec<StepId>> {
         steps.push(StepId::Notarize);
     }
     steps.push(StepId::Checksums);
+    steps.push(StepId::SyncCheck);
     if options.testflight {
         steps.extend([StepId::Testflight, StepId::WhatsNew]);
     }
@@ -339,9 +343,17 @@ pub struct Manifest {
     pub steps: Vec<StepRecord>,
     /// Final artifacts.
     pub artifacts: Vec<Artifact>,
+    /// TestFlight upload state per App Store platform (a resume uploads only what is missing).
+    #[serde(default)]
+    pub uploads: BTreeMap<Platform, UploadState>,
 }
 
 impl Manifest {
+    /// Records the upload state of `platform`.
+    pub fn record_upload(&mut self, platform: Platform, state: UploadState) {
+        self.uploads.insert(platform, state);
+    }
+
     fn record(&mut self, record: StepRecord) {
         self.steps.retain(|r| r.step != record.step);
         self.steps.push(record);
@@ -402,9 +414,10 @@ impl Manifest {
 
 /// Whether `--resume` may skip `step`: it finished (or was skipped) before and every output it
 /// recorded still has the recorded hash (`hash_of` gets the file name; `None` = missing).
-/// Preflight and the gate always run; the build number and the clean step are kept once done.
+/// Preflight, the gate and the lockstep check always run; the build number and the clean step
+/// are kept once done.
 pub fn should_skip(step: StepId, manifest: &Manifest, hash_of: impl Fn(&Path) -> Option<String>) -> bool {
-    if matches!(step, StepId::Preflight | StepId::Gate) {
+    if matches!(step, StepId::Preflight | StepId::Gate | StepId::SyncCheck) {
         return false;
     }
     let Some(record) = manifest.steps.iter().find(|r| r.step == step) else { return false };
@@ -423,6 +436,170 @@ pub fn resumable(manifest: &Manifest, version: &str, git_sha: &str) -> Result<()
         bail!("the earlier run built commit {}, not {git_sha}; start a new release", manifest.git_sha);
     }
     Ok(())
+}
+
+// ---- lockstep: iOS and macOS share one version and one build number ---------------------------
+
+/// An App Store platform Drift ships on. Both always get the same version and build number.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum Platform {
+    /// iPhone and iPad (`IOS` in App Store Connect).
+    #[serde(rename = "IOS")]
+    Ios,
+    /// The Mac App Store (`MAC_OS`).
+    #[serde(rename = "MAC_OS")]
+    MacOs,
+}
+
+impl Platform {
+    /// Both platforms, in upload order.
+    pub const ALL: [Self; 2] = [Self::Ios, Self::MacOs];
+
+    /// The App Store Connect name.
+    pub fn asc_name(self) -> &'static str {
+        match self {
+            Self::Ios => "IOS",
+            Self::MacOs => "MAC_OS",
+        }
+    }
+
+    fn from_asc(name: &str) -> Option<Self> {
+        match name {
+            "IOS" => Some(Self::Ios),
+            "MAC_OS" => Some(Self::MacOs),
+            _ => None,
+        }
+    }
+}
+
+/// Where a platform's TestFlight upload stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum UploadState {
+    /// Uploaded by this release.
+    Uploaded,
+    /// App Store Connect already had this build (an earlier attempt), so nothing was sent.
+    AlreadyPresent,
+    /// The upload failed; `--resume` tries it again with the same build number.
+    Failed,
+}
+
+/// `(platform, build number)` of every build in a `GET /v1/builds?include=preReleaseVersion`
+/// response; builds on other platforms (visionOS) and non-numeric numbers are left out.
+pub fn builds_by_platform(json: &str) -> Result<Vec<(Platform, u32)>> {
+    let value: serde_json::Value =
+        serde_json::from_str(json).context("App Store Connect sent invalid JSON")?;
+    let platforms: BTreeMap<&str, Platform> = value["included"]
+        .as_array()
+        .map(|inc| {
+            inc.iter()
+                .filter(|i| i["type"] == "preReleaseVersions")
+                .filter_map(|i| {
+                    Some((i["id"].as_str()?, Platform::from_asc(i["attributes"]["platform"].as_str()?)?))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let data = value["data"].as_array().context("the builds response has no data")?;
+    Ok(data
+        .iter()
+        .filter_map(|b| {
+            let pre = b["relationships"]["preReleaseVersion"]["data"]["id"].as_str()?;
+            let number = b["attributes"]["version"].as_str()?.split('.').next()?.parse().ok()?;
+            Some((*platforms.get(pre)?, number))
+        })
+        .collect())
+}
+
+/// The next release's build number: one above the highest on **any** platform.
+pub fn next_build(builds: &[(Platform, u32)]) -> u32 {
+    builds.iter().map(|(_, n)| *n).max().map_or(1, |n| n.saturating_add(1))
+}
+
+/// How the two platforms stand in App Store Connect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AscSync {
+    /// No builds yet.
+    Empty,
+    /// Both platforms' newest build is this number.
+    InSync(u32),
+    /// The newest number exists on one platform only: an interrupted release; `--resume` uploads
+    /// the missing platform with the same number.
+    Partial {
+        /// The number.
+        build: u32,
+        /// The platform without it.
+        missing: Platform,
+    },
+    /// The platforms' newest builds differ (and neither is a partial release of the other's
+    /// number); the next release uses the highest + 1 on both, which brings them back in step.
+    Diverged {
+        /// iOS's newest.
+        ios: u32,
+        /// macOS's newest.
+        macos: u32,
+    },
+}
+
+/// Classifies App Store Connect's builds.
+pub fn asc_sync(builds: &[(Platform, u32)]) -> AscSync {
+    let newest = |p: Platform| builds.iter().filter(|(q, _)| *q == p).map(|(_, n)| *n).max();
+    let has = |p: Platform, n: u32| builds.iter().any(|(q, m)| *q == p && *m == n);
+    match (newest(Platform::Ios), newest(Platform::MacOs)) {
+        (None, None) => AscSync::Empty,
+        (Some(i), Some(m)) if i == m => AscSync::InSync(i),
+        (Some(i), m)
+            if m.is_none_or(|m| i > m)
+                && !has(Platform::MacOs, i)
+                && m.is_none_or(|m| has(Platform::Ios, m)) =>
+        {
+            AscSync::Partial { build: i, missing: Platform::MacOs }
+        }
+        (i, Some(m))
+            if i.is_none_or(|i| m > i)
+                && !has(Platform::Ios, m)
+                && i.is_none_or(|i| has(Platform::MacOs, i)) =>
+        {
+            AscSync::Partial { build: m, missing: Platform::Ios }
+        }
+        (i, m) => AscSync::Diverged { ios: i.unwrap_or(0), macos: m.unwrap_or(0) },
+    }
+}
+
+/// Lockstep check: every artifact's embedded `(CFBundleShortVersionString, CFBundleVersion)`
+/// equals `(version, build)`, and both App Store platforms are present.
+pub fn check_sync(
+    found: &[(ArtifactKind, Option<(String, String)>)],
+    version: &str,
+    build: u32,
+) -> Result<()> {
+    let want = (version.to_owned(), build.to_string());
+    let mut wrong = Vec::new();
+    for kind in [ArtifactKind::IosIpa, ArtifactKind::MacAppStorePkg] {
+        if !found.iter().any(|(k, _)| *k == kind) {
+            wrong.push(format!("{kind:?} is missing"));
+        }
+    }
+    for (kind, embedded) in found {
+        match embedded {
+            Some(v) if *v == want => {}
+            Some((v, b)) => wrong.push(format!("{kind:?} embeds {v} ({b}), not {version} ({build})")),
+            None => wrong.push(format!("{kind:?}: cannot read its Info.plist")),
+        }
+    }
+    if wrong.is_empty() { Ok(()) } else { bail!("iOS and macOS are out of step: {}", wrong.join("; ")) }
+}
+
+/// The platforms still to upload, given whether App Store Connect has the build on iOS and on
+/// macOS.
+pub fn to_upload(ios_present: bool, macos_present: bool) -> Vec<Platform> {
+    Platform::ALL
+        .into_iter()
+        .filter(|p| match p {
+            Platform::Ios => !ios_present,
+            Platform::MacOs => !macos_present,
+        })
+        .collect()
 }
 
 // ---- names, notes, checksums -------------------------------------------------------------------

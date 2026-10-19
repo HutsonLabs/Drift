@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use xtask::release::{
-    self, Artifact, ArtifactKind, AscSync, Format, Manifest, Options, Platform, StepId, StepRecord, StepStatus,
-    UploadState, VersionFile,
+    self, Artifact, ArtifactKind, AscSync, Format, Manifest, Options, Platform, StepId, StepRecord,
+    StepStatus, UploadState, VersionFile,
 };
 
 // ---- version files ---------------------------------------------------------------------------
@@ -281,10 +281,7 @@ const BUILDS: &str = r#"{
 #[test]
 fn builds_are_read_per_platform_and_the_next_number_spans_all_platforms() {
     let builds = release::builds_by_platform(BUILDS).unwrap();
-    assert_eq!(
-        builds,
-        vec![(Platform::Ios, 1), (Platform::Ios, 2), (Platform::MacOs, 3)]
-    );
+    assert_eq!(builds, vec![(Platform::Ios, 1), (Platform::Ios, 2), (Platform::MacOs, 3)]);
     assert_eq!(release::next_build(&builds), 4);
     assert_eq!(release::next_build(&[]), 1);
 }
@@ -339,7 +336,10 @@ fn uploads_are_per_platform_and_resume_only_the_missing_one() {
 fn there_is_no_single_platform_publish_path_in_the_docs() {
     let root = xtask::repo::root();
     let conventions = std::fs::read_to_string(root.join("docs/team-conventions.md")).unwrap();
-    assert!(!conventions.contains("xtask testflight"), "TestFlight goes through `xtask release --testflight`");
+    assert!(
+        !conventions.contains("xtask testflight"),
+        "TestFlight goes through `xtask release --testflight`"
+    );
     let skill = std::fs::read_to_string(root.join(".claude/skills/release/SKILL.md")).unwrap();
     assert!(skill.contains("lockstep"), "the skill states the lockstep rule");
 }

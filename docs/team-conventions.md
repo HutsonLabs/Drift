@@ -75,7 +75,7 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `STORE-2-review-risk` | `drawsBackground` is wry's private transparency key (macOS and iOS); iOS uses public transparency; native overlays for the MAS build if review rejects; `cargo xtask review-risk` |
 | `STORE-3-ios-app-store` | privacy manifest from a scan of the built app, export options that never upload, `macos-private-api` via `drift-macos` only, `libapp.a` linked not bundled |
 | `STORE-4-host-release` | `cargo xtask host-release [--notarize]`: Developer ID, inside-out signing, Hardened Runtime, no sandbox or entitlements, notarized and stapled DMG |
-| `RELEASE-pipeline` | `cargo xtask release`: ordered resumable steps, manifest, preflight, gate receipt, yy.mm versions and one build number, publish only behind flags, determinism and its limits |
+| `RELEASE-pipeline` | iOS and macOS in lockstep (one yy.mm version, one build number, both DMGs too); `cargo xtask release`: ordered resumable steps, manifest, preflight, gate receipt, yy.mm versions and one build number, publish only behind flags, determinism and its limits |
 | `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility |
 
 ## Commands
@@ -95,10 +95,9 @@ another JS package manager.
 | `cargo xtask import-fixtures [--staging DIR]` | sanitize + import `~/code/drift-spikes/fixtures-staging` into `fixtures/` (M0-3, ADR `M0-3-fixture-capture-and-sanitization`) |
 | `cargo xtask host-setup-check` | read-only check of the GNOME host over SSH (M0-4, `docs/gnome-host-setup.md`) |
 | `cargo xtask bundle` | M9-5 (stub; superseded by `cargo xtask release`) |
-| `cargo xtask release [--dry-run] [--testflight] [--github] [--resume]` | the release pipeline (ADR `RELEASE-pipeline`, skill `.claude/skills/release`): preflight, gate receipt, one build number, iOS `.ipa`, Mac App Store `.pkg`, Drift and Drift Host DMGs, notarization, `SHA256SUMS`, `manifest.json` in `target/release-out/<yy.mm>-<build>/`; publishes only with a flag |
+| `cargo xtask release [--dry-run] [--testflight] [--github] [--resume]` | the release pipeline (ADR `RELEASE-pipeline`, skill `.claude/skills/release`); iOS and macOS always together, one build number: preflight, gate receipt, one build number, iOS `.ipa`, Mac App Store `.pkg`, Drift and Drift Host DMGs, notarization, `SHA256SUMS`, `manifest.json` in `target/release-out/<yy.mm>-<build>/`; publishes only with a flag |
 | `cargo xtask release --set-version YY.MM` / `--verify-reproducible` | rewrite every version file (+ `Cargo.lock`, notes from `release/notes/TEMPLATE.md`); build `drift-host` twice and compare |
 | `cargo xtask review-risk <app>` | private-API strings App Review may flag in a built Mac or iOS app (STORE-2) |
-| `cargo xtask testflight [--macos --profile P] [--dry-run] [--build-number N]` | iOS (or, with `--macos`, the Mac App Store package): next build number from App Store Connect, App Store `.ipa`, validate, upload to TestFlight (STORE-3); needs the API key env from `~/code/term.hut/.env` |
 | `cargo xtask host-release [--notarize]` | Drift Host: Developer ID, DMG, notarization + stapling (STORE-4); never publishes |
 | `cargo xtask mas-package [--profile F]` | the Mac App Store `.pkg`: universal, sandboxed, Apple Distribution + installer signature (STORE-1) |
 | `cargo tauri dev` / `cargo tauri build` | run / bundle the app (UI is built by bun first) |

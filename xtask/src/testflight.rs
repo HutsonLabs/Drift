@@ -1,13 +1,9 @@
-//! `cargo xtask testflight`: build, validate and upload the iOS app (STORE-3, ADR
-//! `STORE-3-ios-app-store`).
-//!
-//! The marketing version is `yy.mm` (`CFBundleShortVersionString`, set by hand in the iOS
-//! `Info.plist` and `project.yml`); the build number grows by one with every upload. It is one
-//! above the highest build App Store Connect already has for Drift, so it never repeats and
-//! never needs a commit.
+//! App Store helpers for `cargo xtask release` (STORE-1, STORE-3, ADR `RELEASE-pipeline`): the
+//! iOS build/validate/upload arguments, the Mac `altool` arguments, `yy.mm` versions, build
+//! numbers and the App Store Connect token.
 //!
 //! The decisions are pure and tested here; `main.rs` signs the App Store Connect token with the
-//! `openssl` CLI, talks to the API with `curl` and runs `cargo tauri` and `altool`.
+//! `openssl` CLI and talks to the API with `curl`.
 
 use std::path::{Path, PathBuf};
 
@@ -50,7 +46,7 @@ pub fn plist_string(plist: &str, key: &str) -> Option<String> {
     Some(rest[start..end].to_owned())
 }
 
-/// What `cargo xtask testflight` runs for build number `build`.
+/// What the release's iOS step runs for build number `build`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Plan {
     /// `cargo` arguments that archive and export the App Store `.ipa` (run in `src-tauri`).
