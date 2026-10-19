@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Drift — Mac vs GNOME targets (macOS, iPad, iPhone)</title>
+<style>
+/* ============================================================================================
+   Drift target mockup. Static: it shows the app as built today on macOS, iPad and iPhone, then a
+   proposal that treats "Mac running Drift Host" and "GNOME computer" as two kinds of target.
+   Tokens follow ui/src/styles.css (Avenir Next, oklch accent, glass groups).
+   ============================================================================================ */
+:root {
+  --font: "Avenir Next", "Avenir", -apple-system, system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --accent: oklch(0.6 0.15 245);
+  --accent-soft: color-mix(in oklab, var(--accent) 16%, transparent);
+  --good: oklch(0.62 0.15 150);
+  --warn: oklch(0.74 0.15 70);
+  --danger: oklch(0.56 0.2 25);
+  --text: oklch(0.22 0.02 255);
+  --secondary: oklch(0.45 0.02 255);
+  --tertiary: oklch(0.58 0.015 255);
+  --group: oklch(1 0 0 / 0.66);
+  --sheet: oklch(0.99 0.003 250 / 0.94);
+  --field: oklch(1 0 0 / 0.85);
+  --hairline: oklch(0.3 0.02 255 / 0.11);
+  --rim: oklch(1 0 0 / 0.75);
+  --shadow-window: 0 30px 70px -20px oklch(0.25 0.05 260 / 0.4), 0 10px 24px -10px oklch(0.25 0.05 260 / 0.25);
+  --shadow-control: 0 1px 2px oklch(0.25 0.05 260 / 0.14);
+  /* The two target kinds. */
+  --mac: oklch(0.58 0.02 260);
+  --mac-tint: oklch(0.55 0.13 285);
+  --gnome: oklch(0.6 0.14 250);
+  --gnome-tint: oklch(0.62 0.15 35);
+}
+* { box-sizing: border-box; }
+html { background: oklch(0.955 0.006 250); }
+body { margin: 0; font: 500 13px/1.45 var(--font); color: var(--text); -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4, p { margin: 0; }
+kbd { font: 600 10px var(--mono); }
+
+/* ---- page ------------------------------------------------------------------------------- */
+.page { max-width: 1480px; margin: 0 auto; padding: 48px 40px 120px; }
+.page > header h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { color: var(--secondary); font-size: 15px; max-width: 900px; margin-top: 8px; }
+.part { margin-top: 64px; }
+.part > h2 { font-size: 22px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+.part > h2 .tag { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 8px; border-radius: 6px; }
+.tag.today { background: oklch(0.9 0.02 255); color: var(--secondary); }
+.tag.next { background: var(--accent-soft); color: var(--accent); }
+.part > p.lede { color: var(--secondary); font-size: 14px; max-width: 920px; margin-top: 6px; }
+.stage {
+  margin-top: 22px; padding: 36px; border-radius: 28px; display: flex; flex-wrap: wrap; gap: 36px; align-items: flex-start;
+  background:
+    radial-gradient(900px 500px at 15% 10%, oklch(0.86 0.06 240), transparent 70%),
+    radial-gradient(800px 600px at 90% 80%, oklch(0.88 0.06 320), transparent 70%),
+    oklch(0.92 0.02 260);
+}
+.device-label { font-size: 12px; font-weight: 700; color: var(--secondary); letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 10px; }
+.col { display: flex; flex-direction: column; }
+
+/* ---- callouts ----------------------------------------------------------------------------- */
+.n { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--danger); color: white; font: 700 11px var(--font); flex: none; box-shadow: 0 0 0 2px white; }
+.n.go { background: var(--accent); }
+.pin { position: absolute; z-index: 5; }
+.notes { margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 10px 28px; }
+.notes div { display: flex; gap: 10px; font-size: 13px; color: var(--secondary); }
+.notes b { color: var(--text); }
+
+/* ---- shared glass bits (from ui/src/styles.css) ------------------------------------------- */
+.glass { background: oklch(0.975 0.004 250 / 0.82); backdrop-filter: blur(30px) saturate(1.6); }
+.seg { display: inline-flex; background: oklch(0.3 0.02 255 / 0.07); border-radius: 8px; padding: 2px; }
+.seg span { padding: 2px 10px; border-radius: 6px; font-size: 12px; color: var(--secondary); }
+.seg span.on { background: white; color: var(--text); box-shadow: var(--shadow-control); }
+.search { display: inline-flex; align-items: center; gap: 6px; width: 170px; height: 26px; padding: 0 9px; border-radius: 8px; background: oklch(0.3 0.02 255 / 0.07); color: var(--tertiary); font-size: 12px; }
+.tb-btn { width: 28px; height: 26px; border-radius: 7px; display: grid; place-items: center; color: var(--secondary); }
+.tb-btn:hover { background: oklch(0.3 0.02 255 / 0.06); }
+svg.i { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---- macOS window ------------------------------------------------------------------------- */
+.mac-win { position: relative; border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-window), 0 0 0 0.5px oklch(0 0 0 / 0.2); }
+.mac-win .toolbar { height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 14px 0 88px; position: relative; }
+.lights { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); display: flex; gap: 8px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
+.lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+.toolbar h1 { font-size: 15px; font-weight: 700; }
+.toolbar .count { color: var(--tertiary); font-size: 12px; }
+.spacer { flex: 1; }
+.gallery-scroll { padding: 6px 22px 22px; }
+.gallery-head { display: flex; align-items: baseline; gap: 8px; margin: 14px 2px 10px; }
+.gallery-head h2 { font-size: 13px; font-weight: 700; }
+.gallery-head span { font-size: 12px; color: var(--tertiary); }
+.gallery { display: grid; gap: 16px; grid-template-columns: repeat(var(--cols, 4), 1fr); }
+
+/* ---- card --------------------------------------------------------------------------------- */
+.card { position: relative; border-radius: 14px; background: var(--group); box-shadow: 0 0 0 0.5px var(--hairline), var(--shadow-control); overflow: hidden; }
+.thumb { aspect-ratio: 16 / 10; position: relative; display: grid; place-items: center; overflow: hidden; }
+.thumb > svg.big { width: 34px; height: 34px; color: white; opacity: 0.9; stroke-width: 1.4; }
+.thumb-headless { background: linear-gradient(140deg, oklch(0.62 0.12 250), oklch(0.5 0.14 275)); }
+.thumb-sharing { background: linear-gradient(140deg, oklch(0.68 0.12 175), oklch(0.55 0.12 210)); }
+.thumb-login { background: linear-gradient(140deg, oklch(0.7 0.13 60), oklch(0.58 0.15 30)); }
+.thumb.dim > :not(.pills) { filter: saturate(0.4) brightness(0.8); }
+.pills { position: absolute; left: 8px; top: 8px; display: flex; gap: 5px; }
+.thumb:has(.desk) .pills { top: 24px; }
+.thumb:has(.desk .bar) .kind { bottom: auto; top: 24px; }
+.ipad-menubar > * { white-space: nowrap; }
+.phone-pic .phone-cap { top: 18px !important; bottom: auto !important; }
+.stage > .col { max-width: 100%; }
+.mac-win, .ipad { max-width: 100%; }
+.pill { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: oklch(0.2 0.02 260 / 0.55); color: white; backdrop-filter: blur(8px); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+.dot.warn { background: var(--warn); }
+.card-info { display: flex; align-items: center; gap: 9px; padding: 9px 10px 10px; }
+.glyph { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; color: white; flex: none; }
+.glyph svg { width: 15px; height: 15px; }
+.glyph.small { width: 18px; height: 18px; border-radius: 5px; }
+.glyph.small svg { width: 11px; height: 11px; }
+.g-headless { background: linear-gradient(140deg, oklch(0.62 0.12 250), oklch(0.5 0.14 275)); }
+.g-sharing { background: linear-gradient(140deg, oklch(0.68 0.12 175), oklch(0.55 0.12 210)); }
+.g-login { background: linear-gradient(140deg, oklch(0.7 0.13 60), oklch(0.58 0.15 30)); }
+.g-mac { background: linear-gradient(160deg, oklch(0.42 0.01 260), oklch(0.25 0.01 260)); }
+.g-gnome { background: linear-gradient(160deg, oklch(0.62 0.14 250), oklch(0.5 0.15 262)); }
+.item-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.item-name { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-detail { font-size: 11.5px; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.more { color: var(--tertiary); font-weight: 700; letter-spacing: 1px; }
+.card.add { display: grid; place-items: center; align-content: center; gap: 6px; background: transparent; box-shadow: none; border: 1.5px dashed oklch(0.3 0.02 255 / 0.22); color: var(--secondary); min-height: 150px; font-weight: 600; }
+.card.add .plus { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: oklch(0.3 0.02 255 / 0.07); }
+.card.add kbd { color: var(--tertiary); }
+.card.ring { box-shadow: 0 0 0 2px var(--danger), var(--shadow-control); }
+/* proposed: kind badge on the thumbnail */
+.kind { position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px 0 6px; border-radius: 10px; font-size: 10.5px; font-weight: 700; color: white; backdrop-filter: blur(8px); }
+.kind svg { width: 11px; height: 11px; }
+.kind.mac { background: oklch(0.2 0.01 260 / 0.65); }
+.kind.gnome { background: oklch(0.42 0.14 255 / 0.75); }
+.chip { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 5px; vertical-align: 1px; }
+.chip.mac { background: oklch(0.3 0.01 260 / 0.1); color: oklch(0.35 0.01 260); }
+.chip.gnome { background: color-mix(in oklab, var(--gnome) 16%, transparent); color: oklch(0.45 0.14 255); }
+
+/* ---- fake remote desktops ----------------------------------------------------------------- */
+.desk { position: absolute; inset: 0; font-size: 10px; }
+.desk-gnome { background: radial-gradient(120% 90% at 70% 110%, oklch(0.55 0.16 30), transparent 60%), linear-gradient(160deg, oklch(0.36 0.1 265), oklch(0.22 0.06 270)); }
+.desk-gnome .bar { position: absolute; left: 0; right: 0; top: 0; height: 1.5em; background: black; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 0.8em; font-size: 0.8em; font-weight: 600; }
+.desk-gnome .bar .acts { display: flex; gap: 0.3em; }
+.desk-gnome .bar .acts i { width: 0.6em; height: 0.6em; border-radius: 50%; background: white; opacity: 0.5; }
+.desk-gnome .bar .acts i:first-child { width: 1.6em; border-radius: 0.3em; opacity: 1; }
+.desk-gnome .dock { position: absolute; bottom: 0.6em; left: 50%; transform: translateX(-50%); display: flex; gap: 0.4em; padding: 0.4em; border-radius: 1em; background: oklch(0.3 0.01 260 / 0.7); }
+.desk-gnome .dock i { width: 1.6em; height: 1.6em; border-radius: 0.5em; background: oklch(0.65 0.14 250); }
+.desk-gnome .dock i:nth-child(2) { background: oklch(0.7 0.15 60); } .desk-gnome .dock i:nth-child(3) { background: oklch(0.6 0.16 150); } .desk-gnome .dock i:nth-child(4) { background: oklch(0.85 0.01 260); }
+.desk-gnome .winbox { position: absolute; left: 14%; top: 18%; width: 52%; height: 52%; border-radius: 0.8em; background: oklch(0.97 0 0); box-shadow: 0 0.4em 1.4em oklch(0 0 0 / 0.4); }
+.desk-gnome .winbox::before { content: ""; display: block; height: 1.8em; border-radius: 0.8em 0.8em 0 0; background: oklch(0.92 0 0); }
+.desk-mac { background: radial-gradient(110% 90% at 20% 100%, oklch(0.7 0.14 330), transparent 60%), radial-gradient(90% 80% at 90% 0%, oklch(0.68 0.13 230), transparent 60%), oklch(0.45 0.12 280); }
+.desk-mac .bar { position: absolute; left: 0; right: 0; top: 0; height: 1.3em; background: oklch(1 0 0 / 0.35); backdrop-filter: blur(6px); color: oklch(0.15 0 0); display: flex; align-items: center; gap: 1em; padding: 0 0.8em; font-size: 0.75em; font-weight: 700; }
+.desk-mac .bar .apple { width: 0.8em; height: 0.8em; border-radius: 50% 50% 45% 45%; background: oklch(0.15 0 0); }
+.desk-mac .bar b ~ span { font-weight: 500; }
+.desk-mac .bar .r { margin-left: auto; font-weight: 500; }
+.desk-mac .dock { position: absolute; bottom: 0.5em; left: 50%; transform: translateX(-50%); display: flex; gap: 0.35em; padding: 0.35em 0.45em; border-radius: 1.1em; background: oklch(1 0 0 / 0.3); backdrop-filter: blur(6px); box-shadow: inset 0 0 0 0.05em oklch(1 0 0 / 0.5); }
+.desk-mac .dock i { width: 1.7em; height: 1.7em; border-radius: 0.45em; background: oklch(0.65 0.15 240); }
+.desk-mac .dock i:nth-child(2) { background: oklch(0.72 0.17 145); } .desk-mac .dock i:nth-child(3) { background: oklch(0.8 0.14 85); } .desk-mac .dock i:nth-child(4) { background: oklch(0.62 0.2 25); } .desk-mac .dock i:nth-child(5) { background: oklch(0.95 0 0); }
+.desk-mac .winbox { position: absolute; left: 22%; top: 16%; width: 50%; height: 56%; border-radius: 0.7em; background: oklch(0.98 0 0 / 0.95); box-shadow: 0 0.6em 1.8em oklch(0 0 0 / 0.35); }
+.desk-mac .winbox::before { content: "● ● ●"; display: block; padding: 0.35em 0.6em; font-size: 0.7em; letter-spacing: 0.15em; color: oklch(0.75 0 0); }
+.greeter-desk { position: absolute; inset: 0; background: linear-gradient(160deg, oklch(0.3 0.03 265), oklch(0.18 0.02 270)); display: grid; place-items: center; }
+.greeter-desk i { width: 30%; height: 12%; border-radius: 0.6em; background: oklch(1 0 0 / 0.12); }
+
+/* ---- sheet -------------------------------------------------------------------------------- */
+.sheet { width: 470px; border-radius: 16px; background: var(--sheet); box-shadow: var(--shadow-window), 0 0 0 0.5px oklch(0 0 0 / 0.15); overflow: hidden; position: relative; }
+.cfg-head { display: flex; align-items: center; gap: 11px; padding: 16px 18px 12px; }
+.cfg-head h2 { font-size: 15px; font-weight: 700; }
+.cfg-head .meta { font-size: 12px; color: var(--secondary); }
+.sheet-body { padding: 4px 18px 6px; display: flex; flex-direction: column; gap: 12px; }
+.grp { background: var(--group); border-radius: 12px; box-shadow: 0 0 0 0.5px var(--hairline); }
+.grp > .f { display: flex; align-items: center; gap: 10px; padding: 8px 12px; min-height: 36px; border-top: 0.5px solid var(--hairline); font-size: 12.5px; }
+.grp > .f:first-child { border-top: 0; }
+.f label, .f .lab { width: 150px; color: var(--secondary); flex: none; }
+.f .val { flex: 1; color: var(--text); }
+.f .val.ph { color: var(--tertiary); }
+.f.col { flex-direction: column; align-items: stretch; gap: 6px; }
+.legend { font-size: 11.5px; font-weight: 700; color: var(--secondary); margin: 0 2px -6px; text-transform: none; }
+.hint { font-size: 11.5px; color: var(--tertiary); line-height: 1.4; }
+.segmented { display: flex; background: oklch(0.3 0.02 255 / 0.07); border-radius: 8px; padding: 2px; gap: 2px; }
+.segmented span { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 4px 6px; border-radius: 6px; font-size: 11.5px; color: var(--secondary); }
+.segmented span.on { background: white; color: var(--text); box-shadow: var(--shadow-control); font-weight: 600; }
+.sw { margin-left: auto; width: 30px; height: 18px; border-radius: 9px; background: var(--accent); position: relative; flex: none; }
+.sw::after { content: ""; position: absolute; right: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: white; }
+.sw.off { background: oklch(0.5 0.01 260 / 0.25); } .sw.off::after { right: auto; left: 2px; }
+.select { margin-left: auto; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: white; box-shadow: var(--shadow-control); }
+.select::after { content: " ⌄"; color: var(--tertiary); }
+code.fp { font: 11px var(--mono); color: var(--secondary); word-break: break-all; }
+.btn { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 6px; background: white; box-shadow: var(--shadow-control), 0 0 0 0.5px var(--hairline); white-space: nowrap; }
+.btn.primary { background: var(--accent); color: white; }
+.btn.danger { color: var(--danger); }
+.sheet-foot { display: flex; align-items: center; gap: 8px; padding: 12px 18px 16px; }
+.sheet-foot .note { font-size: 11.5px; color: var(--tertiary); flex: 1; }
+.bad { background: color-mix(in oklab, var(--danger) 9%, transparent); border-radius: 6px; outline: 1.5px dashed color-mix(in oklab, var(--danger) 55%, transparent); outline-offset: 1px; }
+
+/* ---- session title bar -------------------------------------------------------------------- */
+.titlebar { height: 38px; display: flex; align-items: center; justify-content: center; position: relative; gap: 8px; }
+.ident { display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px 3px 5px; border-radius: 9px; background: oklch(1 0 0 / 0.55); box-shadow: 0 0 0 0.5px var(--hairline); font-size: 12px; }
+.ident .name { font-weight: 700; } .ident .host { color: var(--secondary); }
+.titlebar .right { position: absolute; right: 10px; display: flex; gap: 2px; }
+.quality { font-size: 10.5px; font-weight: 700; color: var(--secondary); padding: 1px 6px; border-radius: 5px; background: oklch(0.3 0.02 255 / 0.07); }
+.banner { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; padding: 9px 14px; border-radius: 12px; background: oklch(0.98 0 0 / 0.9); box-shadow: var(--shadow-window); font-size: 12px; white-space: nowrap; }
+.banner strong { display: block; }
+.banner span { color: var(--secondary); }
+
+/* ---- iPad --------------------------------------------------------------------------------- */
+.ipad { width: 880px; height: 640px; border-radius: 38px; background: oklch(0.18 0 0); padding: 14px; box-shadow: var(--shadow-window); position: relative; }
+.ipad .screen { width: 100%; height: 100%; border-radius: 26px; overflow: hidden; position: relative; background: oklch(0.96 0.005 250); }
+.status-bar { height: 24px; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; font-size: 11px; font-weight: 700; }
+.ipad-menubar { height: 26px; display: flex; align-items: center; gap: 16px; padding: 0 18px; font-size: 12px; font-weight: 600; background: oklch(0.97 0 0 / 0.86); border-bottom: 0.5px solid var(--hairline); backdrop-filter: blur(20px); }
+.ipad-menubar b { font-weight: 800; }
+.ipad-menubar .remote { color: var(--accent); }
+.ipad-split { display: flex; height: calc(100% - 24px); }
+.ipad-side { width: 210px; padding: 8px 10px; border-right: 0.5px solid var(--hairline); background: oklch(0.94 0.006 250); }
+.ipad-side h3 { font-size: 22px; font-weight: 700; padding: 6px 8px 12px; }
+.side-item { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 9px; font-size: 13.5px; font-weight: 600; }
+.side-item .c { margin-left: auto; color: var(--tertiary); font-weight: 600; font-size: 12px; }
+.side-item.on { background: var(--accent); color: white; } .side-item.on .c { color: oklch(1 0 0 / 0.8); }
+.side-sec { font-size: 11px; font-weight: 700; color: var(--tertiary); text-transform: uppercase; letter-spacing: 0.05em; padding: 14px 8px 4px; }
+.ipad-main { flex: 1; overflow: hidden; }
+.ipad-nav { display: flex; align-items: center; gap: 10px; padding: 8px 20px 4px; }
+.ipad-nav h1 { font-size: 26px; font-weight: 700; }
+.switcher { position: absolute; left: 14px; top: 34px; z-index: 3; width: 34px; height: 34px; border-radius: 17px; display: grid; place-items: center; background: oklch(0.2 0.01 260 / 0.55); color: white; backdrop-filter: blur(10px); }
+
+/* ---- iPhone ------------------------------------------------------------------------------- */
+.iphone { width: 300px; height: 630px; border-radius: 48px; background: oklch(0.18 0 0); padding: 11px; box-shadow: var(--shadow-window); position: relative; }
+.iphone .screen { width: 100%; height: 100%; border-radius: 38px; overflow: hidden; position: relative; background: oklch(0.12 0.005 260); display: flex; flex-direction: column; }
+.island { position: absolute; top: 9px; left: 50%; transform: translateX(-50%); width: 84px; height: 24px; border-radius: 12px; background: black; z-index: 4; }
+.iphone .status-bar { color: white; height: 44px; padding: 0 26px; }
+.phone-pic { position: relative; aspect-ratio: 16 / 10; width: 100%; }
+.trackpad { flex: 1; margin: 10px; border-radius: 16px; background: oklch(0.2 0.006 260); display: grid; place-items: center; color: oklch(1 0 0 / 0.3); font-size: 12px; font-weight: 600; text-align: center; }
+.key-row { display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 10px 26px; justify-content: center; }
+.key { min-width: 32px; height: 34px; padding: 0 7px; border-radius: 8px; background: oklch(0.32 0.006 260); color: white; display: grid; place-items: center; font: 600 12.5px var(--font); }
+.key.mod { background: oklch(0.26 0.006 260); color: oklch(0.85 0 0); }
+.key.on { background: var(--accent); color: white; }
+.key.wide { min-width: 60px; }
+.phone-cap { position: absolute; left: 50%; transform: translateX(-50%); top: 48px; z-index: 3; display: inline-flex; gap: 6px; align-items: center; padding: 3px 9px 3px 4px; border-radius: 10px; background: oklch(0.2 0.01 260 / 0.6); color: white; font-size: 11px; font-weight: 600; backdrop-filter: blur(10px); white-space: nowrap; }
+
+/* ---- comparison table --------------------------------------------------------------------- */
+table.cmp { margin-top: 22px; border-collapse: separate; border-spacing: 0; width: 100%; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 0 0 0.5px var(--hairline); font-size: 13px; }
+.cmp th, .cmp td { text-align: left; padding: 10px 14px; border-top: 0.5px solid var(--hairline); vertical-align: top; }
+.cmp thead th { border-top: 0; background: oklch(0.97 0.004 250); font-size: 12px; color: var(--secondary); }
+.cmp td:first-child { font-weight: 700; width: 150px; }
+.cmp td.today { color: var(--secondary); }
+.chooser { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.choice { border-radius: 14px; padding: 16px; background: var(--group); box-shadow: 0 0 0 0.5px var(--hairline), var(--shadow-control); display: flex; flex-direction: column; gap: 8px; }
+.choice h3 { font-size: 14px; font-weight: 700; }
+.choice p { font-size: 12px; color: var(--secondary); }
+.choice .btn { align-self: flex-start; margin-top: 4px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6 9.5 4.25 4.25 0 0 0 7 18z"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+    <symbol id="i-login" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-display" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M9 20h6M12 16v4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 16a8 8 0 1 1 16 0"/><path d="m12 16 4-5"/></symbol>
+    <symbol id="i-stack" viewBox="0 0 24 24"><rect x="4" y="7" width="13" height="11" rx="2"/><path d="M8 4h10a2 2 0 0 1 2 2v9"/></symbol>
+    <!-- target kinds -->
+    <symbol id="k-mac" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8.5 20h7M12 16v4"/><circle cx="12" cy="10" r="0.6" fill="currentColor"/></symbol>
+    <symbol id="k-gnome" viewBox="0 0 24 24" fill="currentColor" stroke="none"><ellipse cx="13" cy="15.5" rx="5" ry="6"/><circle cx="6.2" cy="9.6" r="1.6"/><circle cx="7.4" cy="5.6" r="1.7"/><circle cx="11" cy="3.4" r="1.8"/><circle cx="15.4" cy="3.6" r="2"/></symbol>
+  </defs>
+</svg>
+
+<div class="page">
+  <header>
+    <h1>Drift on macOS, iPad and iPhone — Mac vs GNOME targets</h1>
+    <p>Part 1 is the app as built on <code>main</code> (26.10). Part 2 is a proposal. Red markers show where a Mac running Drift Host gets GNOME behaviour today. Blue markers show the proposed changes. Part 2 needs no schema change to start: the kind is just <code>profile.paired_host.is_some()</code>.</p>
+  </header>
+
+  <!-- ================================================================================== -->
+  <section class="part">
+    <h2><span class="tag today">Today</span> One kind of connection, three GNOME modes</h2>
+    <p class="lede">The gallery, title bar and edit sheet only know the connection mode (Headless / Desktop Sharing / Remote Login). Pairing a Mac saves a <b>Headless session</b> profile (<code>drift-core/src/pairing.rs</code>), so a Mac card and a GNOME card look the same, and the Mac's edit sheet shows GNOME wording.</p>
+
+    <div class="stage">
+      <!-- macOS Connections -->
+      <div class="col">
+        <div class="device-label">macOS · Connections window</div>
+        <div class="mac-win glass" style="width:1120px">
+          <div class="toolbar">
+            <div class="lights"><i></i><i></i><i></i></div>
+            <h1>Connections</h1><span class="count">5</span>
+            <span class="spacer"></span>
+            <span class="seg"><span class="on">All</span><span>Open</span></span>
+            <span class="search"><svg class="i"><use href="#i-search"/></svg>Search</span>
+            <span class="tb-btn" style="position:relative"><svg class="i"><use href="#i-display"/></svg><span class="n pin" style="right:-8px;top:-8px">3</span></span>
+            <span class="tb-btn"><svg class="i"><use href="#i-plus"/></svg></span>
+          </div>
+          <div class="gallery-scroll">
+            <div class="gallery-head"><h2>Open</h2><span>2 windows</span></div>
+            <div class="gallery">
+              <article class="card">
+                <div class="thumb"><div class="desk desk-gnome"><div class="bar"><span class="acts"><i></i><i></i><i></i></span><span>Sat 14:02</span><span>◐ ⏻</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i></div></div>
+                  <div class="pills"><span class="pill"><span class="dot"></span>Live</span><span class="pill">2 h 14 m</span></div></div>
+                <div class="card-info"><span class="glyph g-headless"><svg class="i"><use href="#i-cloud"/></svg></span><span class="item-text"><span class="item-name">Studio Workstation</span><span class="item-detail">studio.lan · Headless session</span></span><span class="more">⋯</span></div>
+              </article>
+              <article class="card ring">
+                <span class="n pin" style="right:8px;top:8px">1</span>
+                <div class="thumb"><div class="desk desk-mac"><div class="bar"><span class="apple"></span><b>Finder</b><span>File</span><span>Edit</span><span>View</span><span class="r">Sat 14:02</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i><i></i></div></div>
+                  <div class="pills"><span class="pill"><span class="dot"></span>Live</span><span class="pill">12 m</span></div></div>
+                <div class="card-info"><span class="glyph g-headless"><svg class="i"><use href="#i-cloud"/></svg></span><span class="item-text"><span class="item-name">MacBook Pro</span><span class="item-detail bad">macbook-pro.local · Headless session</span></span><span class="more">⋯</span></div>
+              </article>
+            </div>
+            <div class="gallery-head"><h2>Saved</h2><span>3 connections</span></div>
+            <div class="gallery">
+              <article class="card ring">
+                <span class="n pin" style="right:8px;top:8px">2</span>
+                <div class="thumb thumb-headless"><svg class="i big"><use href="#i-cloud"/></svg></div>
+                <div class="card-info"><span class="glyph g-headless"><svg class="i"><use href="#i-cloud"/></svg></span><span class="item-text"><span class="item-name">Mac mini</span><span class="item-detail">mac-mini.local · Headless session</span></span><span class="more">⋯</span></div>
+              </article>
+              <article class="card">
+                <div class="thumb thumb-headless"><svg class="i big"><use href="#i-cloud"/></svg></div>
+                <div class="card-info"><span class="glyph g-headless"><svg class="i"><use href="#i-cloud"/></svg></span><span class="item-text"><span class="item-name">Fedora Server</span><span class="item-detail">fedora.lan · Headless session</span></span><span class="more">⋯</span></div>
+              </article>
+              <article class="card">
+                <div class="thumb thumb-login"><svg class="i big"><use href="#i-login"/></svg></div>
+                <div class="card-info"><span class="glyph g-login"><svg class="i"><use href="#i-login"/></svg></span><span class="item-text"><span class="item-name">Office Desktop</span><span class="item-detail">10.0.4.21 · Remote Login</span></span><span class="more">⋯</span></div>
+              </article>
+              <div class="card add"><span class="plus"><svg class="i"><use href="#i-plus"/></svg></span><span>New Connection</span><kbd>⌘N</kbd></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- macOS edit sheet for a paired Mac -->
+      <div class="col">
+        <div class="device-label">macOS · Edit "Mac mini" (a paired Mac)</div>
+        <div class="sheet">
+          <div class="cfg-head"><span class="glyph g-headless"><svg class="i"><use href="#i-cloud"/></svg></span><div><h2>Mac mini</h2><p class="meta">mac-mini.local · Headless session</p></div></div>
+          <div class="sheet-body">
+            <div class="grp">
+              <div class="f"><label>Name</label><span class="val">Mac mini</span></div>
+              <div class="f"><label>Host</label><span class="val">mac-mini.local</span><span class="lab" style="width:auto">Port</span><span class="val" style="flex:none">3389</span></div>
+              <div class="f col" style="position:relative"><span class="n pin" style="right:-6px;top:-6px">4</span>
+                <span class="lab">Connection type</span>
+                <div class="segmented bad"><span class="on"><span class="glyph small g-headless"><svg class="i"><use href="#i-cloud"/></svg></span>Headless</span><span><span class="glyph small g-sharing"><svg class="i"><use href="#i-share"/></svg></span>Desktop Sharing</span><span><span class="glyph small g-login"><svg class="i"><use href="#i-login"/></svg></span>Remote Login</span></div>
+                <p class="hint bad">A GNOME session that keeps running on the host without a screen. Reconnects go straight back into it.</p>
+              </div>
+            </div>
+            <p class="legend">RDP credentials</p>
+            <div class="grp" style="position:relative"><span class="n pin" style="right:-6px;top:-6px">5</span>
+              <div class="f col"><p class="hint bad">The credentials set for that user on the host with “grdctl --headless rdp set-credentials”.</p></div>
+              <div class="f"><label>RDP user</label><span class="val">hutson</span></div>
+              <div class="f"><label>RDP password</label><span class="val ph">Saved — leave blank to keep</span></div>
+            </div>
+            <p class="legend">Security</p>
+            <div class="grp"><div class="f col"><span class="lab">Trusted certificate (SHA-256)</span><code class="fp">7A:1C:93:E0:5B:44:2F:D8:0C:61:AA:9E:13:77:C2:5D:…</code><span class="btn" style="align-self:flex-start">Forget Certificate</span></div></div>
+            <p class="legend">Keyboard, display and clipboard</p>
+            <div class="grp" style="position:relative"><span class="n pin" style="right:-6px;top:-6px">6</span>
+              <div class="f"><label>Command key sends</label><span class="select bad">Super (Windows key)</span></div>
+              <div class="f"><label>Type using Mac layout</label><span class="sw off"></span></div>
+              <div class="f"><label>Resize to fit window</label><span class="sw"></span></div>
+              <div class="f col"><div style="display:flex"><span class="lab">Use Retina resolution</span><span class="sw"></span></div><p class="hint bad">Renders GNOME at 2× on Retina displays for sharp text.</p></div>
+              <div class="f"><label>Clipboard</label><span class="select">Text and images</span></div>
+              <div class="f"><label>Touch on iPhone and iPad</label><span class="select">Automatic</span></div>
+            </div>
+          </div>
+          <div class="sheet-foot"><span class="note">Applies on next connect</span><span class="btn">Cancel</span><span class="btn primary">Save</span></div>
+        </div>
+      </div>
+
+      <!-- macOS session window -->
+      <div class="col">
+        <div class="device-label">macOS · Session windows (title bar identity capsule)</div>
+        <div style="display:flex;gap:24px">
+          <div class="mac-win" style="width:440px;background:oklch(0.96 0 0 / 0.9)">
+            <div class="titlebar glass"><div class="lights"><i></i><i></i><i></i></div>
+              <span class="ident"><span class="glyph small g-headless"><svg class="i"><use href="#i-cloud"/></svg></span><span class="name">Studio Workstation</span><span class="host">studio.lan</span><span class="dot"></span></span>
+              <span class="right"><span class="tb-btn"><svg class="i"><use href="#i-grid"/></svg></span><span class="tb-btn"><svg class="i"><use href="#i-gauge"/></svg></span></span></div>
+            <div style="position:relative;height:250px"><div class="desk desk-gnome" style="font-size:14px"><div class="bar"><span class="acts"><i></i><i></i><i></i></span><span>Sat 14:02</span><span>◐ ⏻</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i></div></div></div>
+          </div>
+          <div class="mac-win" style="width:440px;background:oklch(0.96 0 0 / 0.9)">
+            <div class="titlebar glass"><div class="lights"><i></i><i></i><i></i></div>
+              <span class="ident" style="position:relative"><span class="n pin" style="left:-26px;top:1px">7</span><span class="glyph small g-headless"><svg class="i"><use href="#i-cloud"/></svg></span><span class="name">MacBook Pro</span><span class="host">macbook-pro.local</span><span class="dot"></span></span>
+              <span class="right"><span class="tb-btn"><svg class="i"><use href="#i-grid"/></svg></span><span class="tb-btn"><svg class="i"><use href="#i-gauge"/></svg></span></span></div>
+            <div style="position:relative;height:250px"><div class="desk desk-mac" style="font-size:14px"><div class="bar"><span class="apple"></span><b>Finder</b><span>File</span><span>Edit</span><span>View</span><span class="r">Sat 14:02</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i><i></i></div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- iPad -->
+      <div class="col">
+        <div class="device-label">iPad · Connections (same page as the Mac, full screen)</div>
+        <div class="ipad"><div class="screen">
+          <div class="status-bar"><span>14:02 Sat 18 Oct</span><span>Wi-Fi ▮▮▮ 82%</span></div>
+          <div class="ipad-nav"><h1>Connections</h1><span class="spacer"></span><span class="seg"><span class="on">All</span><span>Open</span></span><span class="search">Search</span><span class="tb-btn"><svg class="i"><use href="#i-display"/></svg></span><span class="tb-btn"><svg class="i"><use href="#i-plus"/></svg></span></div>
+          <div class="gallery-scroll" style="--cols:3">
+            <div class="gallery-head"><h2>Open</h2><span>1 window</span></div>
+            <div class="gallery">
+              <article class="card"><div class="thumb"><div class="desk desk-mac"><div class="bar"><span class="apple"></span><b>Xcode</b><span>File</span><span>Edit</span><span class="r">14:02</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i><i></i></div></div><div class="pills"><span class="pill"><span class="dot"></span>Live</span></div></div>
+                <div class="card-info"><span class="glyph g-headless"><svg class="i"><use href="#i-cloud"/></svg></span><span class="item-text"><span class="item-name">MacBook Pro</span><span class="item-detail">macbook-pro.local · Headless session</span></span><span class="more">⋯</span></div></article>
+            </div>
+            <div class="gallery-head"><h2>Saved</h2><span>4 connections</span></div>
+            <div class="gallery">
+              <article class="card"><div class="thumb thumb-headless"><svg class="i big"><use href="#i-cloud"/></svg></div><div class="card-info"><span class="glyph g-headless"><svg class="i"><use href="#i-cloud"/></svg></span><span class="item-text"><span class="item-name">Studio Workstation</span><span class="item-detail">studio.lan · Headless session</span></span><span class="more">⋯</span></div></article>
+              <article class="card"><div class="thumb thumb-headless"><svg class="i big"><use href="#i-cloud"/></svg></div><div class="card-info"><span class="glyph g-headless"><svg class="i"><use href="#i-cloud"/></svg></span><span class="item-text"><span class="item-name">Mac mini</span><span class="item-detail">mac-mini.local · Headless session</span></span><span class="more">⋯</span></div></article>
+              <article class="card"><div class="thumb thumb-login"><svg class="i big"><use href="#i-login"/></svg></div><div class="card-info"><span class="glyph g-login"><svg class="i"><use href="#i-login"/></svg></span><span class="item-text"><span class="item-name">Office Desktop</span><span class="item-detail">10.0.4.21 · Remote Login</span></span><span class="more">⋯</span></div></article>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- iPad session -->
+      <div class="col">
+        <div class="device-label">iPad · Session (switcher button; EXT-3 mirrors the Mac's menus)</div>
+        <div class="ipad" style="width:600px;height:440px"><div class="screen">
+          <div class="ipad-menubar"><b>Drift</b><span class="remote">File</span><span class="remote">Edit</span><span class="remote">View</span><span class="remote">Window</span><span class="spacer"></span><span style="color:var(--tertiary);font-weight:500">menus from the remote Mac</span></div>
+          <div class="switcher"><svg class="i"><use href="#i-stack"/></svg></div>
+          <div style="position:relative;height:calc(100% - 26px)"><div class="desk desk-mac" style="font-size:13px"><div class="bar"><span class="apple"></span><b>Xcode</b><span>File</span><span>Edit</span><span>View</span><span class="r">14:02</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i><i></i></div></div>
+            <span class="n pin" style="left:60px;top:10px">8</span></div>
+        </div></div>
+      </div>
+
+      <!-- iPhone -->
+      <div class="col">
+        <div class="device-label">iPhone · Session, portrait (IOS-8)</div>
+        <div style="display:flex;gap:24px">
+          <div class="iphone"><div class="screen"><div class="island"></div>
+            <div class="status-bar"><span>14:02</span><span>▮▮▮</span></div>
+            <div class="phone-pic"><div class="desk desk-gnome" style="font-size:7px"><div class="bar"><span class="acts"><i></i><i></i><i></i></span><span>14:02</span><span>⏻</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i></div></div></div>
+            <div class="trackpad">Trackpad<br>tap · two-finger scroll</div>
+            <div class="key-row"><span class="key mod">ctrl</span><span class="key mod">alt</span><span class="key mod">⌘</span><span class="key">esc</span><span class="key">⇥</span><span class="key">←</span><span class="key">↑</span><span class="key">↓</span><span class="key">→</span><span class="key">⌨</span><span class="key">▭</span></div>
+          </div></div>
+          <div class="iphone" style="position:relative"><div class="screen"><div class="island"></div>
+            <div class="status-bar"><span>14:02</span><span>▮▮▮</span></div>
+            <div class="phone-pic"><div class="desk desk-mac" style="font-size:7px"><div class="bar"><span class="apple"></span><b>Finder</b><span>File</span><span class="r">14:02</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i><i></i></div></div></div>
+            <div class="trackpad">Trackpad<br>tap · two-finger scroll</div>
+            <div class="key-row" style="position:relative"><span class="n pin" style="left:4px;top:-8px">9</span><span class="key mod">ctrl</span><span class="key mod">alt</span><span class="key mod">⌘</span><span class="key">esc</span><span class="key">⇥</span><span class="key">←</span><span class="key">↑</span><span class="key">↓</span><span class="key">→</span><span class="key">⌨</span><span class="key">▭</span></div>
+          </div></div>
+        </div>
+        <p class="hint" style="margin-top:8px;max-width:620px">Left: GNOME. Right: Mac. Same key row, same chrome.</p>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div><span class="n">1</span><span><b>Cards look the same.</b> A Mac shows the Headless glyph and says "Headless session". Only the live thumbnail shows it's a Mac.</span></div>
+      <div><span class="n">2</span><span><b>Idle Mac cards can't be told apart.</b> Thumbnails are kept in memory only, so a saved Mac gets the same blue Headless gradient as Fedora Server.</span></div>
+      <div><span class="n">3</span><span><b>There are two ways to add a connection.</b> The toolbar has a display icon ("Pair a Mac") and a "+" (GNOME only, though nothing says so). The welcome text only says "Add a GNOME computer".</span></div>
+      <div><span class="n">4</span><span><b>The mode picker shows on a Mac.</b> Desktop Sharing and Remote Login are GNOME modes, and the hint text describes GNOME.</span></div>
+      <div><span class="n">5</span><span><b>The credential hints are for GNOME.</b> They tell you to run <code>grdctl</code>, but a Mac uses the account you paired with.</span></div>
+      <div><span class="n">6</span><span><b>Keyboard and display are worded for GNOME.</b> "⌘ sends Super" and "Mac layout" don't apply to a Mac, and Retina says "Renders GNOME at 2×". The Mac-only features (virtual display, quality ladder, HDR) have no settings here.</span></div>
+      <div><span class="n">7</span><span><b>The title bar is the same for both.</b> The capsule shows the mode glyph. It doesn't say Mac or GNOME, Drift Host or RDP.</span></div>
+      <div><span class="n">8</span><span><b>Mac-only features are hidden.</b> Menu mirroring (EXT-3) only works for a Mac and quality hints (EXT-4) only show in the stats HUD. Nothing in the UI shows they're there.</span></div>
+      <div><span class="n">9</span><span><b>The iPhone key row is the same for both.</b> It uses PC-style "ctrl alt ⌘". A Mac needs ⌃ ⌥ ⇧ ⌘ and shortcuts like ⌘Space and ⌘Tab. GNOME needs Super / Activities.</span></div>
+    </div>
+  </section>
+
+  <!-- ================================================================================== -->
+  <section class="part">
+    <h2><span class="tag next">Proposed</span> Two target kinds: <span class="chip mac"><svg class="i" style="width:11px;height:11px"><use href="#k-mac"/></svg>Mac</span> and <span class="chip gnome"><svg class="i" style="width:11px;height:11px"><use href="#k-gnome"/></svg>GNOME</span></h2>
+    <p class="lede">The kind is chosen first and drives the chrome: glyph, detail line, which settings the sheet shows, key row, add flow. The GNOME mode stays a property of GNOME targets only. Kind = <code>paired_host.is_some()</code> today. Make it an explicit <code>HostKind</code> later if a third kind (e.g. a Windows RDP host) shows up.</p>
+
+    <div class="stage">
+      <!-- macOS Connections, proposed -->
+      <div class="col">
+        <div class="device-label">macOS · Connections window</div>
+        <div class="mac-win glass" style="width:1120px">
+          <div class="toolbar">
+            <div class="lights"><i></i><i></i><i></i></div>
+            <h1>Connections</h1><span class="count">5</span>
+            <span class="spacer"></span>
+            <span class="seg" style="position:relative"><span class="n go pin" style="left:-26px;top:3px">A</span><span class="on">All</span><span>Macs</span><span>GNOME</span><span>Open</span></span>
+            <span class="search"><svg class="i"><use href="#i-search"/></svg>Search</span>
+            <span class="tb-btn" style="position:relative;width:auto;padding:0 6px;gap:2px;display:flex"><svg class="i"><use href="#i-plus"/></svg><span style="font-size:9px">▾</span><span class="n go pin" style="right:-10px;top:-10px">B</span></span>
+          </div>
+          <div class="gallery-scroll">
+            <div class="gallery-head"><h2>Open</h2><span>2 windows</span></div>
+            <div class="gallery">
+              <article class="card">
+                <div class="thumb"><div class="desk desk-gnome"><div class="bar"><span class="acts"><i></i><i></i><i></i></span><span>Sat 14:02</span><span>◐ ⏻</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i></div></div>
+                  <div class="pills"><span class="pill"><span class="dot"></span>Live</span><span class="pill">2 h 14 m</span></div><span class="kind gnome"><svg class="i"><use href="#k-gnome"/></svg>GNOME</span></div>
+                <div class="card-info"><span class="glyph g-gnome"><svg class="i"><use href="#k-gnome"/></svg></span><span class="item-text"><span class="item-name">Studio Workstation</span><span class="item-detail">studio.lan · Headless session</span></span><span class="more">⋯</span></div>
+              </article>
+              <article class="card" style="position:relative">
+                <span class="n go pin" style="right:8px;top:8px">C</span>
+                <div class="thumb"><div class="desk desk-mac"><div class="bar"><span class="apple"></span><b>Finder</b><span>File</span><span>Edit</span><span>View</span><span class="r">Sat 14:02</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i><i></i></div></div>
+                  <div class="pills"><span class="pill"><span class="dot"></span>Live</span><span class="pill">12 m</span></div><span class="kind mac"><svg class="i"><use href="#k-mac"/></svg>Mac</span></div>
+                <div class="card-info"><span class="glyph g-mac"><svg class="i"><use href="#k-mac"/></svg></span><span class="item-text"><span class="item-name">MacBook Pro</span><span class="item-detail">Drift Host · Wi-Fi · Sharp</span></span><span class="more">⋯</span></div>
+              </article>
+            </div>
+            <div class="gallery-head"><h2>Saved</h2><span>3 connections</span></div>
+            <div class="gallery">
+              <article class="card" style="position:relative">
+                <span class="n go pin" style="right:8px;top:8px">D</span>
+                <div class="thumb"><div class="desk desk-mac" style="filter:saturate(0.55) brightness(0.92)"><div class="dock"><i></i><i></i><i></i><i></i><i></i></div></div><span class="kind mac"><svg class="i"><use href="#k-mac"/></svg>Mac</span></div>
+                <div class="card-info"><span class="glyph g-mac"><svg class="i"><use href="#k-mac"/></svg></span><span class="item-text"><span class="item-name">Mac mini</span><span class="item-detail">Drift Host · paired 3 Oct</span></span><span class="more">⋯</span></div>
+              </article>
+              <article class="card">
+                <div class="thumb thumb-headless"><svg class="i big"><use href="#i-cloud"/></svg><span class="kind gnome"><svg class="i"><use href="#k-gnome"/></svg>GNOME</span></div>
+                <div class="card-info"><span class="glyph g-gnome"><svg class="i"><use href="#k-gnome"/></svg></span><span class="item-text"><span class="item-name">Fedora Server</span><span class="item-detail">fedora.lan · Headless session</span></span><span class="more">⋯</span></div>
+              </article>
+              <article class="card">
+                <div class="thumb thumb-login"><svg class="i big"><use href="#i-login"/></svg><span class="kind gnome"><svg class="i"><use href="#k-gnome"/></svg>GNOME</span></div>
+                <div class="card-info"><span class="glyph g-gnome"><svg class="i"><use href="#k-gnome"/></svg></span><span class="item-text"><span class="item-name">Office Desktop</span><span class="item-detail">10.0.4.21 · Remote Login</span></span><span class="more">⋯</span></div>
+              </article>
+              <div class="card add"><span class="plus"><svg class="i"><use href="#i-plus"/></svg></span><span>Add a Mac or GNOME computer</span><kbd>⌘N</kbd></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add chooser -->
+      <div class="col">
+        <div class="device-label">macOS · ⌘N / "+" — choose the kind first</div>
+        <div class="sheet" style="width:520px">
+          <div class="cfg-head"><div><h2>Add a Connection</h2><p class="meta">What are you connecting to?</p></div></div>
+          <div class="sheet-body" style="padding-bottom:18px">
+            <div class="chooser">
+              <div class="choice"><span class="glyph g-mac"><svg class="i"><use href="#k-mac"/></svg></span><h3>A Mac running Drift Host</h3><p>Pair once with the code shown on the Mac. Drift pins its key; no RDP passwords.</p><p class="hint">2 Macs found on this network</p><span class="btn primary">Pair a Mac…</span></div>
+              <div class="choice"><span class="glyph g-gnome"><svg class="i"><use href="#k-gnome"/></svg></span><h3>A GNOME computer</h3><p>GNOME Remote Desktop 50 or later. Headless, Desktop Sharing or Remote Login.</p><p class="hint">Uses the RDP credentials set on the host</p><span class="btn">Add GNOME Computer…</span></div>
+            </div>
+          </div>
+        </div>
+        <p class="hint" style="margin-top:10px;max-width:520px">This also replaces the empty-state text "Add a GNOME computer". The ⌄ next to "+" offers the same two items as a menu.</p>
+      </div>
+
+      <!-- Mac edit sheet, proposed -->
+      <div class="col">
+        <div class="device-label">macOS · Edit a Mac</div>
+        <div class="sheet" style="position:relative">
+          <span class="n go pin" style="right:10px;top:10px">E</span>
+          <div class="cfg-head"><span class="glyph g-mac"><svg class="i"><use href="#k-mac"/></svg></span><div><h2>Mac mini</h2><p class="meta"><span class="chip mac">Mac</span> Drift Host 26.10 · mac-mini.local</p></div></div>
+          <div class="sheet-body">
+            <div class="grp"><div class="f"><label>Name</label><span class="val">Mac mini</span></div></div>
+            <p class="legend">Pairing</p>
+            <div class="grp">
+              <div class="f"><label>Paired</label><span class="val">3 Oct 2026 as “hutson”</span><span class="btn danger">Unpair…</span></div>
+              <div class="f col"><span class="lab">Host key (SHA-256)</span><code class="fp">7A:1C:93:E0:5B:44:2F:D8:0C:61:AA:9E:13:77:C2:5D:…</code></div>
+              <div class="f"><label>Reach it over</label><span class="select">Automatic (LAN, USB, Wi-Fi Direct)</span></div>
+            </div>
+            <p class="legend">Display</p>
+            <div class="grp">
+              <div class="f"><label>Screen</label><span class="select">New virtual display that fits this window</span></div>
+              <div class="f"><label>Quality</label><span class="select">Automatic (follows the Mac)</span></div>
+              <div class="f"><label>HDR when available</label><span class="sw"></span></div>
+            </div>
+            <p class="legend">Keyboard and pointer</p>
+            <div class="grp">
+              <div class="f col"><p class="hint">⌘ ⌥ ⌃ ⇧ and the keyboard layout go to the Mac unchanged. ⌘Tab and ⌘Space go to the Mac while its window is in front.</p></div>
+              <div class="f"><label>Show the Mac’s menus on iPad</label><span class="sw"></span></div>
+              <div class="f"><label>Clipboard</label><span class="select">Text and images</span></div>
+              <div class="f"><label>Touch on iPhone and iPad</label><span class="select">Automatic</span></div>
+            </div>
+          </div>
+          <div class="sheet-foot"><span class="note">The Mac’s key was pinned when you paired</span><span class="btn">Cancel</span><span class="btn primary">Save</span></div>
+        </div>
+      </div>
+
+      <!-- GNOME edit sheet, proposed (diff only) -->
+      <div class="col">
+        <div class="device-label">macOS · Edit a GNOME computer (mostly as today)</div>
+        <div class="sheet">
+          <div class="cfg-head"><span class="glyph g-gnome"><svg class="i"><use href="#k-gnome"/></svg></span><div><h2>Studio Workstation</h2><p class="meta"><span class="chip gnome">GNOME</span> studio.lan:3389 · Headless session</p></div></div>
+          <div class="sheet-body">
+            <div class="grp">
+              <div class="f"><label>Name</label><span class="val">Studio Workstation</span></div>
+              <div class="f"><label>Host</label><span class="val">studio.lan</span><span class="lab" style="width:auto">Port</span><span class="val" style="flex:none">3389</span></div>
+              <div class="f col"><span class="lab">GNOME session</span>
+                <div class="segmented"><span class="on"><span class="glyph small g-headless"><svg class="i"><use href="#i-cloud"/></svg></span>Headless</span><span><span class="glyph small g-sharing"><svg class="i"><use href="#i-share"/></svg></span>Desktop Sharing</span><span><span class="glyph small g-login"><svg class="i"><use href="#i-login"/></svg></span>Remote Login</span></div>
+                <p class="hint">A GNOME session that keeps running on the host without a screen. Reconnects go straight back into it.</p></div>
+            </div>
+            <p class="legend">RDP credentials</p>
+            <div class="grp"><div class="f"><label>RDP user</label><span class="val">hutson</span></div><div class="f"><label>RDP password</label><span class="val ph">Saved — leave blank to keep</span></div></div>
+            <p class="legend">Keyboard and display</p>
+            <div class="grp">
+              <div class="f"><label>⌘ sends</label><span class="select">Super</span></div>
+              <div class="f"><label>Type using Mac layout</label><span class="sw off"></span></div>
+              <div class="f"><label>Resize to fit window</label><span class="sw"></span></div>
+              <div class="f"><label>Render at 2× (Retina)</label><span class="sw"></span></div>
+            </div>
+          </div>
+          <div class="sheet-foot"><span class="note">“Connection type” is renamed “GNOME session”</span><span class="btn">Cancel</span><span class="btn primary">Save</span></div>
+        </div>
+      </div>
+
+      <!-- session title bars, proposed -->
+      <div class="col">
+        <div class="device-label">macOS · Session title bars</div>
+        <div style="display:flex;gap:24px">
+          <div class="mac-win" style="width:440px;background:oklch(0.96 0 0 / 0.9)">
+            <div class="titlebar glass"><div class="lights"><i></i><i></i><i></i></div>
+              <span class="ident"><span class="glyph small g-gnome"><svg class="i"><use href="#k-gnome"/></svg></span><span class="name">Studio Workstation</span><span class="host">Headless</span><span class="dot"></span></span>
+              <span class="right"><span class="tb-btn"><svg class="i"><use href="#i-grid"/></svg></span><span class="tb-btn"><svg class="i"><use href="#i-gauge"/></svg></span></span></div>
+            <div style="position:relative;height:250px"><div class="desk desk-gnome" style="font-size:14px"><div class="bar"><span class="acts"><i></i><i></i><i></i></span><span>Sat 14:02</span><span>◐ ⏻</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i></div></div></div>
+          </div>
+          <div class="mac-win" style="width:440px;background:oklch(0.96 0 0 / 0.9);position:relative">
+            <div class="titlebar glass"><div class="lights"><i></i><i></i><i></i></div>
+              <span class="ident" style="position:relative"><span class="n go pin" style="left:-26px;top:1px">F</span><span class="glyph small g-mac"><svg class="i"><use href="#k-mac"/></svg></span><span class="name">MacBook Pro</span><span class="quality">Sharp · HDR</span><span class="dot"></span></span>
+              <span class="right"><span class="tb-btn"><svg class="i"><use href="#i-grid"/></svg></span><span class="tb-btn"><svg class="i"><use href="#i-gauge"/></svg></span></span></div>
+            <div style="position:relative;height:250px"><div class="desk desk-mac" style="font-size:14px"><div class="bar"><span class="apple"></span><b>Finder</b><span>File</span><span>Edit</span><span>View</span><span class="r">Sat 14:02</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i><i></i></div></div></div>
+          </div>
+        </div>
+        <div class="mac-win" style="width:440px;margin-top:24px;background:oklch(0.96 0 0 / 0.9)">
+          <div class="titlebar glass"><div class="lights"><i></i><i></i><i></i></div>
+            <span class="ident"><span class="glyph small g-gnome"><svg class="i"><use href="#k-gnome"/></svg></span><span class="name">Office Desktop</span><span class="host">Remote Login</span><span class="dot warn"></span></span></div>
+          <div style="position:relative;height:200px"><div class="greeter-desk"><i></i></div>
+            <div class="banner"><span>👤</span><div><strong>Log in to start your session</strong><span>Log in as “hutson” on the GNOME login screen.</span></div></div></div>
+        </div>
+        <p class="hint" style="margin-top:8px;max-width:900px">GNOME capsule: kind glyph + GNOME session mode. Mac capsule: kind glyph + the EXT-4 quality step (Sharp / Balanced / Smooth, plus HDR) in place of the host name, so you can see what the host chose without opening Statistics.</p>
+      </div>
+
+      <!-- iPad proposed -->
+      <div class="col">
+        <div class="device-label">iPad · Connections with a sidebar</div>
+        <div class="ipad" style="position:relative"><span class="n go pin" style="left:30px;top:70px">G</span><div class="screen">
+          <div class="status-bar"><span>14:02 Sat 18 Oct</span><span>Wi-Fi ▮▮▮ 82%</span></div>
+          <div class="ipad-split">
+            <div class="ipad-side">
+              <h3>Drift</h3>
+              <div class="side-item on"><svg class="i"><use href="#i-grid"/></svg>All<span class="c">5</span></div>
+              <div class="side-item"><svg class="i"><use href="#i-stack"/></svg>Open<span class="c">1</span></div>
+              <div class="side-sec">Macs</div>
+              <div class="side-item"><svg class="i"><use href="#k-mac"/></svg>MacBook Pro<span class="c" style="color:var(--good)">●</span></div>
+              <div class="side-item"><svg class="i"><use href="#k-mac"/></svg>Mac mini</div>
+              <div class="side-item" style="color:var(--accent)"><svg class="i"><use href="#i-plus"/></svg>Pair a Mac…</div>
+              <div class="side-sec">GNOME</div>
+              <div class="side-item"><svg class="i" style="color:var(--gnome)"><use href="#k-gnome"/></svg>Studio Workstation</div>
+              <div class="side-item"><svg class="i" style="color:var(--gnome)"><use href="#k-gnome"/></svg>Fedora Server</div>
+              <div class="side-item"><svg class="i" style="color:var(--gnome)"><use href="#k-gnome"/></svg>Office Desktop</div>
+              <div class="side-item" style="color:var(--accent)"><svg class="i"><use href="#i-plus"/></svg>Add GNOME Computer…</div>
+            </div>
+            <div class="ipad-main">
+              <div class="ipad-nav"><h1>All</h1><span class="spacer"></span><span class="search">Search</span></div>
+              <div class="gallery-scroll" style="--cols:2">
+                <div class="gallery-head"><h2>Macs</h2><span>2</span></div>
+                <div class="gallery">
+                  <article class="card"><div class="thumb"><div class="desk desk-mac"><div class="bar"><span class="apple"></span><b>Xcode</b><span>File</span><span>Edit</span><span class="r">14:02</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i><i></i></div></div><div class="pills"><span class="pill"><span class="dot"></span>Live</span></div><span class="kind mac"><svg class="i"><use href="#k-mac"/></svg>Mac</span></div>
+                    <div class="card-info"><span class="glyph g-mac"><svg class="i"><use href="#k-mac"/></svg></span><span class="item-text"><span class="item-name">MacBook Pro</span><span class="item-detail">Drift Host · USB · Sharp</span></span><span class="more">⋯</span></div></article>
+                  <article class="card"><div class="thumb"><div class="desk desk-mac" style="filter:saturate(0.55) brightness(0.92)"><div class="dock"><i></i><i></i><i></i><i></i><i></i></div></div><span class="kind mac"><svg class="i"><use href="#k-mac"/></svg>Mac</span></div>
+                    <div class="card-info"><span class="glyph g-mac"><svg class="i"><use href="#k-mac"/></svg></span><span class="item-text"><span class="item-name">Mac mini</span><span class="item-detail">Drift Host · paired 3 Oct</span></span><span class="more">⋯</span></div></article>
+                </div>
+                <div class="gallery-head"><h2>GNOME</h2><span>3</span></div>
+                <div class="gallery">
+                  <article class="card"><div class="thumb thumb-headless"><svg class="i big"><use href="#i-cloud"/></svg><span class="kind gnome"><svg class="i"><use href="#k-gnome"/></svg>GNOME</span></div><div class="card-info"><span class="glyph g-gnome"><svg class="i"><use href="#k-gnome"/></svg></span><span class="item-text"><span class="item-name">Studio Workstation</span><span class="item-detail">studio.lan · Headless</span></span><span class="more">⋯</span></div></article>
+                  <article class="card"><div class="thumb thumb-login"><svg class="i big"><use href="#i-login"/></svg><span class="kind gnome"><svg class="i"><use href="#k-gnome"/></svg>GNOME</span></div><div class="card-info"><span class="glyph g-gnome"><svg class="i"><use href="#k-gnome"/></svg></span><span class="item-text"><span class="item-name">Office Desktop</span><span class="item-detail">10.0.4.21 · Remote Login</span></span><span class="more">⋯</span></div></article>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- iPad sessions proposed -->
+      <div class="col">
+        <div class="device-label">iPad · Session menu bar by kind</div>
+        <div style="display:flex;gap:24px">
+          <div class="ipad" style="width:560px;height:410px"><div class="screen">
+            <div class="ipad-menubar"><b>Drift</b><span class="remote">File</span><span class="remote">Edit</span><span class="remote">View</span><span class="remote">Window</span><span class="spacer"></span><span class="chip mac">Mac · Xcode</span></div>
+            <div class="switcher"><svg class="i"><use href="#i-stack"/></svg></div>
+            <div style="position:relative;height:calc(100% - 26px)"><div class="desk desk-mac" style="font-size:12px"><div class="bar"><span class="apple"></span><b>Xcode</b><span>File</span><span>Edit</span><span class="r">14:02</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i><i></i></div></div></div>
+          </div></div>
+          <div class="ipad" style="width:560px;height:410px;position:relative"><span class="n go pin" style="left:24px;top:-10px">H</span><div class="screen">
+            <div class="ipad-menubar"><b>Drift</b><span>Session</span><span>Keys</span><span class="remote">Activities</span><span class="remote">Show Apps</span><span class="spacer"></span><span class="chip gnome">GNOME · Headless</span></div>
+            <div class="switcher"><svg class="i"><use href="#i-stack"/></svg></div>
+            <div style="position:relative;height:calc(100% - 26px)"><div class="desk desk-gnome" style="font-size:12px"><div class="bar"><span class="acts"><i></i><i></i><i></i></span><span>14:02</span><span>⏻</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i></div></div></div>
+          </div></div>
+        </div>
+      </div>
+
+      <!-- iPhone proposed -->
+      <div class="col">
+        <div class="device-label">iPhone · Session, portrait</div>
+        <div style="display:flex;gap:24px">
+          <div class="iphone"><div class="screen"><div class="island"></div>
+            <div class="status-bar"><span>14:02</span><span>▮▮▮</span></div>
+            <div class="phone-pic"><div class="desk desk-gnome" style="font-size:7px"><div class="bar"><span class="acts"><i></i><i></i><i></i></span><span>14:02</span><span>⏻</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i></div></div>
+              <span class="phone-cap" style="top:auto;bottom:6px"><span class="glyph small g-gnome"><svg class="i"><use href="#k-gnome"/></svg></span>Studio · Headless</span></div>
+            <div class="trackpad">Trackpad<br>tap · two-finger scroll</div>
+            <div class="key-row"><span class="key mod">Ctrl</span><span class="key mod">Alt</span><span class="key mod">⇧</span><span class="key mod">Super</span><span class="key wide">Activities</span><span class="key">esc</span><span class="key">⇥</span><span class="key">←</span><span class="key">↑</span><span class="key">↓</span><span class="key">→</span><span class="key">⌨</span><span class="key">▭</span></div>
+          </div></div>
+          <div class="iphone" style="position:relative"><span class="n go pin" style="right:-8px;top:470px">I</span><div class="screen"><div class="island"></div>
+            <div class="status-bar"><span>14:02</span><span>▮▮▮</span></div>
+            <div class="phone-pic"><div class="desk desk-mac" style="font-size:7px"><div class="bar"><span class="apple"></span><b>Finder</b><span>File</span><span class="r">14:02</span></div><div class="winbox"></div><div class="dock"><i></i><i></i><i></i><i></i><i></i></div></div>
+              <span class="phone-cap" style="top:auto;bottom:6px"><span class="glyph small g-mac"><svg class="i"><use href="#k-mac"/></svg></span>MacBook Pro · Sharp</span></div>
+            <div class="trackpad">Trackpad<br>tap · two-finger scroll · three-finger swipe → Spaces</div>
+            <div class="key-row"><span class="key mod">⌃</span><span class="key mod">⌥</span><span class="key mod">⇧</span><span class="key mod on">⌘</span><span class="key wide">⌘Space</span><span class="key wide">⌘Tab</span><span class="key">esc</span><span class="key">⇥</span><span class="key">←</span><span class="key">↑</span><span class="key">↓</span><span class="key">→</span><span class="key">⌨</span><span class="key">▭</span></div>
+          </div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div><span class="n go">A</span><span><b>Filter by kind.</b> The filter becomes All / Macs / GNOME / Open. It stays one gallery; when there are both kinds, Saved could also split into "Macs" and "GNOME".</span></div>
+      <div><span class="n go">B</span><span><b>One add button.</b> "+" asks which kind first and replaces the separate "Pair a Mac" icon. The empty state shows the same two choices.</span></div>
+      <div><span class="n go">C</span><span><b>Glyph, badge and detail line show the kind.</b> A Mac card says "Drift Host · link · quality". A GNOME card keeps "host · GNOME mode".</span></div>
+      <div><span class="n go">D</span><span><b>Idle art matches the kind.</b> A saved Mac gets a muted macOS-style tile and GNOME keeps the mode gradients. Thumbnails stay in memory only.</span></div>
+      <div><span class="n go">E</span><span><b>Each kind gets its own sheet.</b> A Mac drops the mode picker, RDP credentials, <code>grdctl</code> hints, "⌘ sends" and Mac layout. It shows pairing, link path (HOST-14), virtual display (HOST-10), quality (EXT-4), HDR (EXT-5) and menu mirroring (EXT-3).</span></div>
+      <div><span class="n go">F</span><span><b>The title bar says what's on the other end.</b> It shows the kind glyph, plus the GNOME mode, or the Mac's live quality step.</span></div>
+      <div><span class="n go">G</span><span><b>iPad gets a sidebar</b> grouped by kind, with an add item in each group. iPhone keeps the single-column gallery with a kind segment at the top.</span></div>
+      <div><span class="n go">H</span><span><b>The iPad menu bar fits the kind.</b> A Mac mirrors its menus (as now). GNOME gets Drift's own Session / Keys menus plus Activities and Show Apps, so the bar isn't empty.</span></div>
+      <div><span class="n go">I</span><span><b>Each kind gets its own key row.</b> Mac: ⌃ ⌥ ⇧ ⌘ with ⌘Space and ⌘Tab. GNOME: Ctrl Alt ⇧ Super and an Activities key. Pick from the kind in <code>renderKeyRow</code>.</span></div>
+    </div>
+
+    <table class="cmp">
+      <thead><tr><th>Surface</th><th>Today (both kinds)</th><th>GNOME computer</th><th>Mac running Drift Host</th></tr></thead>
+      <tbody>
+        <tr><td>Glyph / badge</td><td class="today">Mode glyph (Headless cloud for paired Macs)</td><td>GNOME foot; mode glyph inside the sheet only</td><td>Mac display glyph, dark tile</td></tr>
+        <tr><td>Card detail</td><td class="today"><code>host · Headless session</code></td><td><code>host · Headless / Desktop Sharing / Remote Login</code></td><td><code>Drift Host · Wi-Fi/USB · Sharp</code> or <code>paired 3 Oct</code></td></tr>
+        <tr><td>Add flow</td><td class="today">"+" (GNOME) and a display icon (Pair a Mac)</td><td colspan="2">"+" → choose a kind → GNOME form or pairing sheet</td></tr>
+        <tr><td>Sheet: connection</td><td class="today">Mode picker + RDP credentials + grdctl hints</td><td>Same, labelled "GNOME session"</td><td>Pairing: account, host key, Unpair, link path</td></tr>
+        <tr><td>Sheet: display</td><td class="today">Resize to fit, Retina ("Renders GNOME at 2×")</td><td>Resize to fit, Render at 2×</td><td>Virtual display vs a real screen, quality, HDR</td></tr>
+        <tr><td>Sheet: keyboard</td><td class="today">⌘ sends Super/Control, Mac layout</td><td>⌘ sends Super/Control, Mac layout</td><td>None; keys go to the Mac unchanged (just a note)</td></tr>
+        <tr><td>Title bar</td><td class="today">Mode glyph · name · host · dot</td><td>GNOME glyph · name · mode · dot (greeter hint)</td><td>Mac glyph · name · quality step · dot</td></tr>
+        <tr><td>iPad menu bar</td><td class="today">Mac menus for Macs; empty for GNOME</td><td>Session / Keys + Activities, Show Apps</td><td>Mirrored menus of the Mac's front app</td></tr>
+        <tr><td>iPhone key row</td><td class="today">ctrl alt ⌘ esc ⇥ arrows</td><td>Ctrl Alt ⇧ Super · Activities · esc ⇥ arrows</td><td>⌃ ⌥ ⇧ ⌘ · ⌘Space · ⌘Tab · esc ⇥ arrows</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+</body>
+</html>
