@@ -18,9 +18,8 @@ const FP: CertFingerprint = CertFingerprint::from_bytes([0xcd; 32]);
 fn service() -> (tempfile::TempDir, Arc<MemoryPairingStore>, PairingService) {
     let dir = tempfile::tempdir().unwrap();
     let secrets = Arc::new(MemorySecretStore::new());
-    let profiles = Arc::new(
-        ProfileService::open(ProfileFile::in_dir(&dir.path().join("config")), secrets).unwrap(),
-    );
+    let profiles =
+        Arc::new(ProfileService::open(ProfileFile::in_dir(&dir.path().join("config")), secrets).unwrap());
     let store = Arc::new(MemoryPairingStore::new());
     let service = PairingService::new(profiles, store.clone());
     (dir, store, service)
@@ -78,7 +77,11 @@ fn a_declined_device_asks_again_next_time() {
 #[test]
 fn an_older_mac_still_needs_its_code() {
     let (_dir, _store, service) = service();
-    let r = service.pair(PairHostRequest::Approve { advert: advert(false), username: "a".into(), password: None });
+    let r = service.pair(PairHostRequest::Approve {
+        advert: advert(false),
+        username: "a".into(),
+        password: None,
+    });
     assert!(
         matches!(&r, Err(CommandError::Pairing { message }) if message.contains("code")),
         "{:?}",

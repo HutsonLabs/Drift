@@ -75,6 +75,8 @@ impl Capabilities {
     pub const PAIRING: Self = Self(1 << 4);
     /// Extension codecs: HEVC and HDR (EXT-5).
     pub const CODEC: Self = Self(1 << 5);
+    /// Pairing approved on the Mac instead of a typed code (HOST-15).
+    pub const APPROVAL: Self = Self(1 << 6);
 
     /// From raw bits (unknown bits kept).
     pub const fn from_bits(bits: u32) -> Self {

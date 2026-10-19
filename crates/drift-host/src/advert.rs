@@ -22,10 +22,13 @@ pub struct HostAnnouncement {
     pub port: u16,
     /// SHA-256 of the host certificate.
     pub fingerprint: CertFingerprint,
+    /// The account devices sign in with (HOST-15: filled in on the device).
+    pub account: String,
 }
 
 impl HostAnnouncement {
-    /// The TXT record: `v`, `id`, `name`, `host`, `port`, `fp` (64 hex digits).
+    /// The TXT record: `v`, `id`, `name`, `host`, `port`, `fp` (64 hex digits), and since
+    /// HOST-15 `user` (the account) and `approve=1` (devices may ask instead of typing a code).
     pub fn txt(&self) -> Vec<(String, String)> {
         let fp: String = self.fingerprint.as_bytes().iter().map(|b| format!("{b:02x}")).collect();
         vec![
@@ -35,6 +38,8 @@ impl HostAnnouncement {
             ("host".into(), self.host.clone()),
             ("port".into(), self.port.to_string()),
             ("fp".into(), fp),
+            ("user".into(), self.account.clone()),
+            ("approve".into(), "1".into()),
         ]
     }
 
@@ -61,6 +66,14 @@ impl HostAnnouncement {
                 .build(),
             Err(e) => format!("(no QR code: {e})"),
         }
+    }
+
+    /// The pairing link's QR code as modules, for drawing it in a window (HOST-15): the width
+    /// in modules and, row by row, whether each is dark. `None` if the link does not fit.
+    pub fn pairing_qr_modules(&self, code: &ShortCode) -> Option<(usize, Vec<bool>)> {
+        let qr = qrcode::QrCode::new(self.pairing_link(code).as_bytes()).ok()?;
+        let dark = qr.to_colors().into_iter().map(|c| c == qrcode::Color::Dark).collect();
+        Some((qr.width(), dark))
     }
 
     /// Starts advertising on the local network; stops when the returned value is dropped.

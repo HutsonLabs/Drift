@@ -440,6 +440,9 @@ export class ConnectionsApp {
         await this.reload();
         this.renderGallery();
         this.refocus();
+        // HOST-15: approval happens on the first connection, so make it now; its window says
+        // to click Allow on the Mac.
+        if (request.kind === "approve") await this.run(this.api.connect(r.data.profile.id));
         return null;
       },
       cancel: () => this.closePairing(),

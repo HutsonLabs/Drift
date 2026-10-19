@@ -91,7 +91,7 @@ describe("waiting for the Mac", () => {
   test("the connecting screen asks the user to click Allow on the Mac", () => {
     const r = document.createElement("main");
     document.body.replaceChildren(r);
-    renderConnecting(r, sessionView("connecting", { state: "connecting", leg: 1, stage: "approval" }), { cancel: () => {} });
+    renderConnecting(r, sessionView("connecting", { state: "connecting", leg: 1, stage: "approval" }, { mode: "headless" }), { cancel: () => {} });
     expect(text(r.querySelector("[role=status]"))).toBe("Click Allow on the Mac to finish pairing…");
     // Every earlier step is done.
     expect(r.querySelectorAll(".stage.done").length).toBe(stepsFor("headless").length);

@@ -116,6 +116,7 @@ pub(crate) fn spawn(
         secrets,
         status,
         options,
+        approval_hold: None,
     };
     tokio::spawn(actor.run());
     (SessionHandle::from_sender(cmd_tx), ev_rx)
@@ -252,6 +253,9 @@ struct Actor {
     menus: drift_ext::menus::MenuMirror,
     /// The quality preference sent to a Drift Host and its status (EXT-4); kept across legs.
     status: drift_ext::status::StatusClient,
+    /// The state the activated leg enters once the Mac's user approved this device; meanwhile
+    /// the session shows "click Allow on the Mac" (HOST-15).
+    approval_hold: Option<SessionState>,
 }
 
 impl Actor {
@@ -444,7 +448,7 @@ impl Actor {
             let size = leg.result.desktop_size;
             let desktop = DesktopSize { width: u32::from(size.width), height: u32::from(size.height) };
             if let Some(state) = redirects.on_activated(desktop, self.scale) {
-                self.io.set_state(state);
+                self.enter_activated(state);
             }
             match self.run_leg(leg, &disp_caps).await {
                 LegEnd::Closed => return DisconnectReason::UserClosed,
@@ -696,9 +700,34 @@ impl Actor {
         None
     }
 
+    /// Enters the state of a freshly activated leg, unless a Drift Host's user is still to
+    /// approve this device: then the session says so and holds `state` back (HOST-15).
+    fn enter_activated(&mut self, state: SessionState) {
+        self.approval_hold = None;
+        let asks =
+            self.options.pairing.as_ref().is_some_and(drift_ext::pairing::ClientPairing::asks_approval);
+        if asks && matches!(state, SessionState::Connected { .. }) {
+            self.io.set_state(SessionState::Connecting { leg: self.io.leg, stage: ConnectStage::Approval });
+            self.approval_hold = Some(state);
+        } else {
+            self.io.set_state(state);
+        }
+    }
+
+    /// Releases the held state once the Mac accepted this device.
+    fn release_approval_hold(&mut self) {
+        let accepted = self.options.pairing.as_ref().is_some_and(|p| !p.asks_approval());
+        if accepted && let Some(state) = self.approval_hold.take() {
+            self.io.set_state(state);
+        }
+    }
+
     /// The remote desktop size changed (`ResetGraphics` after a layout, plan §1.4).
     fn on_output_size(&mut self, leg: &mut Leg, size: Size<u32>) {
         leg.desktop = DesktopSize { width: size.width, height: size.height };
+        if let Some(SessionState::Connected { desktop, .. }) = &mut self.approval_hold {
+            *desktop = leg.desktop;
+        }
         if matches!(self.io.state, SessionState::Connected { .. }) {
             self.io.set_state(SessionState::Connected { desktop: leg.desktop, scale: self.scale });
         }
@@ -707,6 +736,7 @@ impl Actor {
     /// Timers: resize debounce, greeter typing, clipboard timeouts, statistics.
     async fn on_tick(&mut self, leg: &mut Leg) -> Option<LegEnd> {
         let now = self.clock.now();
+        self.release_approval_hold();
         if let Some(layout) = self.resize.poll(now) {
             self.scale = layout.desktop_scale_factor;
             match leg.stage.encode_resize(

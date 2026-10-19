@@ -1678,6 +1678,7 @@ dependencies = [
  "objc2-foundation",
  "tracing",
  "tracing-subscriber",
+ "zeroize",
 ]
 
 [[package]]

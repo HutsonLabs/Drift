@@ -646,6 +646,27 @@ Needs the signed `Drift Host.app` (STORE-4) and an administrator. Never done on 
 - [ ] **No VPN, away:** connecting to the Mac's LAN address from cellular fails with the usual
       unreachable error (there is no NAT traversal).
 
+### HOST-15 — Guided setup (ADR `HOST-15-guided-setup`)
+
+On a Mac with no Drift Host password stored (`security delete-generic-password -s
+com.hutsonlabs.drift.host` first, if one is):
+
+- [ ] Open Drift Host with Screen Recording and Accessibility granted: "Enter the Password for
+      <account>" opens by itself; the menu says "Set up: enter your Mac's password".
+- [ ] A wrong password is refused with "That password is not right."; the right one is saved and
+      "Set Up a Device" opens by itself with the Mac's name, `<name>.local:3389`, the account, a
+      code and a QR code. Copy Pairing Link puts a `drift-pair:` link on the clipboard; New Code
+      changes the code.
+- [ ] Revoke Accessibility, relaunch: the first-run alert comes first, and the password prompt or
+      the device window only after it is granted again.
+- [ ] On an iPad: Pair a Mac… lists the Mac, choosing it fills in the account and says "No code
+      needed"; Pair connects and shows "Click Allow on the Mac to finish pairing…". On the Mac,
+      "Allow “<iPad>” to use this Mac?" appears with Don't Allow as the default. Allow: the
+      desktop appears, the device window closes, Paired Devices lists the iPad.
+- [ ] Don't Allow: the iPad shows "The Mac declined this device." Ignoring the prompt for two
+      minutes: "Nobody clicked Allow on the Mac in time."
+- [ ] Update Mac Password… asks again and restarts the host; a paired iPad reconnects.
+
 ### EXT-2 — Precise scroll and gestures (ADR `EXT-2-scroll-gestures`)
 
 Needs Drift Host on a Mac with Accessibility granted, and Drift for Mac or iPad paired with it:

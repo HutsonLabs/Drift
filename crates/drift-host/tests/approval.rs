@@ -39,7 +39,8 @@ impl Exchange {
         let sink = Arc::clone(&pushed);
         let reply: ReplySender = Arc::new(move |m: Message| sink.lock().unwrap().push(m));
         let host = pairing.responder(HOST_FP, auth.clone(), reply);
-        let device = ClientPairing::new(Arc::new(DeviceKey::generate().unwrap()), HOST_FP, name).asking_approval();
+        let device =
+            ClientPairing::new(Arc::new(DeviceKey::generate().unwrap()), HOST_FP, name).asking_approval();
         Self { auth, pushed, host, device }
     }
 
@@ -58,7 +59,12 @@ impl Exchange {
     }
 
     fn pushed(&self) -> Vec<PairingMessage> {
-        self.pushed.lock().unwrap().iter().map(|m| PairingMessage::from_message(m).unwrap().unwrap()).collect()
+        self.pushed
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|m| PairingMessage::from_message(m).unwrap().unwrap())
+            .collect()
     }
 }
 

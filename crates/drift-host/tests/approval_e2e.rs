@@ -8,7 +8,8 @@ use std::time::Duration;
 
 use drift_apple::pairing::DeviceKey;
 use drift_core::{
-    CertFingerprint, ConnectMode, ConnectStage, ConnectionProfile, DisconnectReason, SessionState, Size, SystemClock,
+    CertFingerprint, ConnectMode, ConnectStage, ConnectionProfile, DisconnectReason, SessionState, Size,
+    SystemClock,
 };
 use drift_ext::pairing::{ClientPairing, PairStatus, PairingOutcome};
 use drift_host::frames::TestPattern;
@@ -115,7 +116,9 @@ async fn a_device_the_mac_allows_pairs_and_others_are_refused() {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
     loop {
         match tokio::time::timeout_at(deadline, client.events.recv()).await {
-            Ok(Some(SessionEvent::State(SessionState::Connecting { stage: ConnectStage::Approval, .. }))) => break,
+            Ok(Some(SessionEvent::State(SessionState::Connecting {
+                stage: ConnectStage::Approval, ..
+            }))) => break,
             Ok(Some(SessionEvent::State(s @ SessionState::Connected { .. }))) => panic!("{s:?} before Allow"),
             Ok(Some(_)) => {}
             other => panic!("no approval stage: {other:?}"),
@@ -155,7 +158,10 @@ async fn a_device_the_mac_allows_pairs_and_others_are_refused() {
     wait_until("the stranger's request", Duration::from_secs(15), || !pairing.approvals().is_empty()).await;
     assert!(pairing.decline(pairing.approvals()[0].id));
     let reason = failed(&mut client, "Don't Allow").await;
-    assert!(matches!(&reason, DisconnectReason::PairingRefused(why) if why.contains("declined")), "{reason:?}");
+    assert!(
+        matches!(&reason, DisconnectReason::PairingRefused(why) if why.contains("declined")),
+        "{reason:?}"
+    );
     assert_eq!(stranger.outcome(), Some(PairingOutcome::PairRefused(PairStatus::Declined)));
     assert!(!has_picture(&client.frames));
     close(client).await;
@@ -165,7 +171,10 @@ async fn a_device_the_mac_allows_pairs_and_others_are_refused() {
         .asking_approval();
     let mut client = connect(port, pin, ignored.clone());
     let reason = failed(&mut client, "no answer").await;
-    assert!(matches!(&reason, DisconnectReason::PairingRefused(why) if why.contains("in time")), "{reason:?}");
+    assert!(
+        matches!(&reason, DisconnectReason::PairingRefused(why) if why.contains("in time")),
+        "{reason:?}"
+    );
     assert_eq!(ignored.outcome(), Some(PairingOutcome::PairRefused(PairStatus::NoAnswer)));
     close(client).await;
 

@@ -268,7 +268,7 @@ impl PairingPayload {
 // ---- Bonjour ----------------------------------------------------------------------------------
 
 /// A Drift Host found with Bonjour, from its TXT record
-/// (`v`, `id`, `host`, `fp`, optional `name` and `port`).
+/// (`v`, `id`, `host`, `fp`, optional `name`, `port`, `user` and `approve`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct HostAdvert {
@@ -284,6 +284,12 @@ pub struct HostAdvert {
     pub port: u16,
     /// SHA-256 of the host's TLS certificate.
     pub fingerprint: CertFingerprint,
+    /// The account devices sign in with (`user`, HOST-15); `None` from older hosts.
+    #[serde(default)]
+    pub account: Option<String>,
+    /// The host can approve a device without a code (`approve=1`, HOST-15).
+    #[serde(default)]
+    pub approval: bool,
 }
 
 impl HostAdvert {
@@ -307,6 +313,8 @@ impl HostAdvert {
             host: need("host")?.to_owned(),
             port: get("port").map_or(Ok(DEFAULT_PORT), parse_port)?,
             fingerprint: parse_hex_fingerprint(need("fp")?)?,
+            account: get("user").map(str::trim).filter(|u| !u.is_empty()).map(str::to_owned),
+            approval: get("approve") == Some("1"),
         })
     }
 

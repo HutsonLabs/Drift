@@ -41,6 +41,13 @@ pub const AUTH_TIMEOUT: Duration = Duration::from_secs(15);
 /// File name of the device list in the host's config directory.
 pub const DEVICES_FILE: &str = "devices.toml";
 
+/// How long a device that asked to be approved waits for the Mac's user (HOST-15).
+pub const APPROVAL_TIMEOUT: Duration = Duration::from_secs(2 * 60);
+
+/// Sends a channel message to the connection's device outside a reply: the answer to an
+/// approval request, once the Mac's user decided (HOST-15).
+pub type ReplySender = Arc<dyn Fn(Message) + Send + Sync>;
+
 fn lock<T: ?Sized>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
@@ -203,19 +210,71 @@ struct Window {
     opened: Instant,
 }
 
+/// A device waiting for the Mac's user to approve it (HOST-15).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingApproval {
+    /// Answers it ([`Pairing::approve`], [`Pairing::decline`]).
+    pub id: u64,
+    /// The name the device gave.
+    pub device_name: String,
+}
+
+struct Asked {
+    id: u64,
+    device_name: String,
+    key: Vec<u8>,
+    asked: Instant,
+    auth: ConnectionAuth,
+    reply: ReplySender,
+}
+
+impl std::fmt::Debug for Asked {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Asked").field("id", &self.id).field("device_name", &self.device_name).finish()
+    }
+}
+
 #[derive(Debug)]
 struct State {
     store: DeviceStore,
     window: Option<Window>,
     wrong_in_a_row: u32,
     locked_until: Option<Instant>,
+    asked: Vec<Asked>,
+}
+
+impl State {
+    /// Whether pairing is locked at `now`; an ended lockout closes the window and starts over.
+    fn locked(&mut self, now: Instant) -> bool {
+        if let Some(until) = self.locked_until {
+            if now < until {
+                return true;
+            }
+            self.locked_until = None;
+            self.window = None;
+            self.wrong_in_a_row = 0;
+        }
+        false
+    }
+
+    /// Counts a wrong code or a Don't Allow; too many in a row lock pairing. `true` if locked.
+    fn count_wrong(&mut self, now: Instant) -> bool {
+        self.wrong_in_a_row += 1;
+        if self.wrong_in_a_row >= MAX_WRONG_CODES {
+            self.locked_until = Some(now + LOCKOUT);
+            return true;
+        }
+        false
+    }
 }
 
 struct Shared {
     state: Mutex<State>,
     clock: Arc<dyn Clock>,
     wrong_codes: AtomicU64,
+    next_request: AtomicU64,
     auth_timeout: Duration,
+    approval_timeout: Duration,
 }
 
 /// The host's pairing state: the code on screen and the paired devices. Clones share it.
@@ -235,10 +294,18 @@ impl Pairing {
     /// Pairing over `store`, timed by `clock`.
     pub fn new(store: DeviceStore, clock: Arc<dyn Clock>) -> Self {
         Self(Arc::new(Shared {
-            state: Mutex::new(State { store, window: None, wrong_in_a_row: 0, locked_until: None }),
+            state: Mutex::new(State {
+                store,
+                window: None,
+                wrong_in_a_row: 0,
+                locked_until: None,
+                asked: Vec::new(),
+            }),
             clock,
             wrong_codes: AtomicU64::new(0),
+            next_request: AtomicU64::new(1),
             auth_timeout: AUTH_TIMEOUT,
+            approval_timeout: APPROVAL_TIMEOUT,
         }))
     }
 
@@ -252,9 +319,109 @@ impl Pairing {
         self
     }
 
+    /// The same pairing with a different wait for the Mac's user (tests).
+    #[must_use]
+    pub fn with_approval_timeout(mut self, timeout: Duration) -> Self {
+        if let Some(shared) = Arc::get_mut(&mut self.0) {
+            shared.approval_timeout = timeout;
+        }
+        self
+    }
+
     /// How long a connection may take to authenticate.
     pub fn auth_timeout(&self) -> Duration {
         self.0.auth_timeout
+    }
+
+    /// How long a device waits for the Mac's user to approve it.
+    pub fn approval_timeout(&self) -> Duration {
+        self.0.approval_timeout
+    }
+
+    // ---- approval on the Mac (HOST-15) ----
+
+    /// Asks the Mac's user to approve `key` as `name` for the connection `auth`; `reply` gets the
+    /// answer later. `Err` with the status to answer now when pairing is locked.
+    fn ask(
+        &self,
+        name: &str,
+        key: &[u8],
+        auth: &ConnectionAuth,
+        reply: ReplySender,
+    ) -> Result<u64, PairStatus> {
+        let now = self.0.clock.now();
+        let mut state = lock(&self.0.state);
+        if state.locked(now) {
+            return Err(PairStatus::TooManyAttempts);
+        }
+        let id = self.0.next_request.fetch_add(1, Ordering::Relaxed);
+        state.asked.push(Asked {
+            id,
+            device_name: name.to_owned(),
+            key: key.to_vec(),
+            asked: now,
+            auth: auth.clone(),
+            reply,
+        });
+        tracing::info!(device = %name, id, "device asks to be approved");
+        Ok(id)
+    }
+
+    /// The devices waiting for the Mac's user, oldest first (a request older than
+    /// [`Pairing::approval_timeout`] is no longer offered).
+    pub fn approvals(&self) -> Vec<PendingApproval> {
+        let now = self.0.clock.now();
+        lock(&self.0.state)
+            .asked
+            .iter()
+            .filter(|a| now.duration_since(a.asked) <= self.0.approval_timeout)
+            .map(|a| PendingApproval { id: a.id, device_name: a.device_name.clone() })
+            .collect()
+    }
+
+    /// Takes request `id` out of the queue; with `fresh`, only while it is still offered.
+    fn take_asked(&self, id: u64, fresh: bool) -> Option<Asked> {
+        let now = self.0.clock.now();
+        let mut state = lock(&self.0.state);
+        let i = state
+            .asked
+            .iter()
+            .position(|a| a.id == id && (!fresh || now.duration_since(a.asked) <= self.0.approval_timeout))?;
+        Some(state.asked.remove(i))
+    }
+
+    /// The Mac's user chose Allow: pairs the device and lets its connection in. `false` if the
+    /// request is gone or too old.
+    pub fn approve(&self, id: u64) -> bool {
+        let Some(asked) = self.take_asked(id, true) else { return false };
+        let device = {
+            let mut state = lock(&self.0.state);
+            state.wrong_in_a_row = 0;
+            state.store.add(&asked.device_name, &asked.key)
+        };
+        tracing::info!(device = %device.name, id = %device.id, "device approved and paired");
+        (asked.reply)(PairingMessage::PairReply(PairStatus::Accepted).to_message());
+        asked.auth.authorize(device);
+        true
+    }
+
+    /// The Mac's user chose Don't Allow; repeated refusals lock pairing like wrong codes.
+    pub fn decline(&self, id: u64) -> bool {
+        let Some(asked) = self.take_asked(id, false) else { return false };
+        lock(&self.0.state).count_wrong(self.0.clock.now());
+        tracing::info!(device = %asked.device_name, "device declined");
+        (asked.reply)(PairingMessage::PairReply(PairStatus::Declined).to_message());
+        asked.auth.refuse();
+        true
+    }
+
+    /// Nobody answered in time: tells the device and refuses it.
+    pub fn give_up(&self, id: u64) -> bool {
+        let Some(asked) = self.take_asked(id, false) else { return false };
+        tracing::info!(device = %asked.device_name, "nobody approved the device in time");
+        (asked.reply)(PairingMessage::PairReply(PairStatus::NoAnswer).to_message());
+        asked.auth.refuse();
+        true
     }
 
     /// Shows a new random code (replacing any code on screen).
@@ -297,13 +464,8 @@ impl Pairing {
     pub fn try_pair(&self, code: &str, name: &str, key: &[u8]) -> PairStatus {
         let now = self.0.clock.now();
         let mut state = lock(&self.0.state);
-        if let Some(until) = state.locked_until {
-            if now < until {
-                return PairStatus::TooManyAttempts;
-            }
-            state.locked_until = None;
-            state.window = None;
-            state.wrong_in_a_row = 0;
+        if state.locked(now) {
+            return PairStatus::TooManyAttempts;
         }
         let Some(window) = &state.window else { return PairStatus::NotPairing };
         if now.duration_since(window.opened) > CODE_LIFETIME {
@@ -312,12 +474,7 @@ impl Pairing {
         }
         if !constant_time_eq(window.code.as_str().as_bytes(), code.as_bytes()) {
             self.0.wrong_codes.fetch_add(1, Ordering::Relaxed);
-            state.wrong_in_a_row += 1;
-            if state.wrong_in_a_row >= MAX_WRONG_CODES {
-                state.locked_until = Some(now + LOCKOUT);
-                return PairStatus::TooManyAttempts;
-            }
-            return PairStatus::WrongCode;
+            return if state.count_wrong(now) { PairStatus::TooManyAttempts } else { PairStatus::WrongCode };
         }
         state.window = None;
         state.wrong_in_a_row = 0;
@@ -347,14 +504,20 @@ impl Pairing {
     }
 
     /// The responder of one connection, proving the device to `auth`. `host_fingerprint` is the
-    /// SHA-256 of the host's certificate (what the device signs).
-    pub fn responder(&self, host_fingerprint: [u8; 32], auth: ConnectionAuth) -> Box<dyn Responder> {
+    /// SHA-256 of the host's certificate (what the device signs); `reply` sends the answer to
+    /// an approval request once the Mac's user decided (HOST-15).
+    pub fn responder(
+        &self,
+        host_fingerprint: [u8; 32],
+        auth: ConnectionAuth,
+        reply: ReplySender,
+    ) -> Box<dyn Responder> {
         let mut nonce = [0_u8; NONCE_LEN];
         if ring::rand::SecureRandom::fill(&ring::rand::SystemRandom::new(), &mut nonce).is_err() {
             // Without randomness no challenge is safe: refuse rather than reuse a nonce.
             auth.refuse();
         }
-        Box::new(HostResponder { pairing: self.clone(), nonce, host_fingerprint, auth })
+        Box::new(HostResponder { pairing: self.clone(), nonce, host_fingerprint, auth, reply })
     }
 }
 
@@ -369,6 +532,8 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 pub enum AuthPhase {
     /// Not yet authenticated: nothing is shown, input is ignored.
     Pending,
+    /// The device asked to be approved (request id); the Mac's user decides (HOST-15).
+    AwaitingApproval(u64),
     /// The device paired or proved its key.
     Authorized(PairedDevice),
     /// Refused; the host drops the connection.
@@ -433,18 +598,29 @@ impl ConnectionAuth {
         self.set(AuthPhase::Refused);
     }
 
+    /// The device waits for the Mac's user (request `id`).
+    fn await_approval(&self, id: u64) {
+        self.set(AuthPhase::AwaitingApproval(id));
+    }
+
     /// Waits for the next change of phase.
     pub async fn changed(&self) {
         self.0.changed.notified().await;
     }
 }
 
-#[derive(Debug)]
 struct HostResponder {
     pairing: Pairing,
     nonce: [u8; NONCE_LEN],
     host_fingerprint: [u8; 32],
     auth: ConnectionAuth,
+    reply: ReplySender,
+}
+
+impl std::fmt::Debug for HostResponder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HostResponder").field("auth", &self.auth).finish_non_exhaustive()
+    }
 }
 
 impl HostResponder {
@@ -468,6 +644,27 @@ impl HostResponder {
             _ => self.auth.refuse(),
         }
         status
+    }
+
+    /// Asks the Mac's user; `None` while they decide (the reply is sent later), or the
+    /// status to answer now.
+    fn ask(&self, version: u32, name: &str, key: &[u8], signature: &[u8]) -> Option<PairStatus> {
+        if version != PAIRING_VERSION || !self.verified(Purpose::Approve, key, signature) {
+            // A request that does not prove its key never reaches the Mac's user.
+            self.auth.refuse();
+            return Some(PairStatus::Declined);
+        }
+        let name = if name.trim().is_empty() { "Unnamed device" } else { name.trim() };
+        match self.pairing.ask(name, key, &self.auth, Arc::clone(&self.reply)) {
+            Ok(id) => {
+                self.auth.await_approval(id);
+                None
+            }
+            Err(status) => {
+                self.auth.refuse();
+                Some(status)
+            }
+        }
     }
 
     fn authenticate(&self, key: &[u8], signature: &[u8]) -> AuthStatus {
@@ -510,6 +707,14 @@ impl Responder for HostResponder {
                 if self.auth.phase() == AuthPhase::Pending =>
             {
                 PairingMessage::AuthReply(self.authenticate(&device_key, &signature))
+            }
+            Ok(PairingMessage::ApprovalRequest { version, device_name, device_key, signature })
+                if self.auth.phase() == AuthPhase::Pending =>
+            {
+                match self.ask(version, &device_name, &device_key, &signature) {
+                    Some(status) => PairingMessage::PairReply(status),
+                    None => return Some(Vec::new()),
+                }
             }
             Ok(_) => return Some(Vec::new()),
             Err(e) => {

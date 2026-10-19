@@ -4,12 +4,17 @@
 #![allow(missing_docs, clippy::unwrap_used)]
 
 use drift_host_app::model::{
-    DeviceSetupInfo, Grant, HostStatus, MenuAction, MenuEntry, MenuInput, PairedDevice, Permission, Permissions,
-    SetupStep, approval_prompt, auto_show, device_setup, menu, password_prompt, setup_step, status_line,
+    DeviceSetupInfo, Grant, HostStatus, MenuAction, MenuEntry, MenuInput, PairedDevice, Permission,
+    Permissions, SetupStep, approval_prompt, auto_show, device_setup, menu, password_prompt, setup_step,
+    status_line,
 };
 
 fn granted() -> Permissions {
-    Permissions { screen_recording: Grant::Granted, accessibility: Grant::Granted, local_network: Grant::Unknown }
+    Permissions {
+        screen_recording: Grant::Granted,
+        accessibility: Grant::Granted,
+        local_network: Grant::Unknown,
+    }
 }
 
 fn listening() -> HostStatus {

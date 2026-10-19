@@ -23,4 +23,10 @@ fn the_advert_carries_the_account_and_approval() {
     let advert = HostAdvert::from_txt("Studio", &txt).unwrap();
     assert_eq!(advert.account.as_deref(), Some("andrew"));
     assert!(advert.approval);
+
+    // The window draws the same QR code the terminal prints.
+    let code = drift_core::pairing::ShortCode::from_body(3_141_592).unwrap();
+    let (width, dark) = a.pairing_qr_modules(&code).unwrap();
+    assert_eq!(dark.len(), width * width);
+    assert!(width >= 21 && dark.iter().any(|d| *d) && dark.iter().any(|d| !*d));
 }

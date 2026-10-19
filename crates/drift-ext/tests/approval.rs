@@ -5,8 +5,8 @@
 use std::sync::{Arc, Mutex};
 
 use drift_ext::pairing::{
-    ClientPairing, DeviceSigner, NONCE_LEN, PairStatus, PairingMessage, PairingOutcome, Purpose, signed_bytes,
-    types,
+    ClientPairing, DeviceSigner, NONCE_LEN, PairStatus, PairingMessage, PairingOutcome, Purpose,
+    signed_bytes, types,
 };
 use drift_ext::wire::{self, Capabilities, Message};
 use drift_ext::{Negotiated, negotiate};

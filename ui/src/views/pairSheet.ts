@@ -1,8 +1,10 @@
 // "Pair a Mac" (IOS-9, ADR IOS-9-pairing): a sheet on the Connections window. While it is open
 // the controller browses for Drift Hosts and pushes them in (`update`). The user picks a host
 // and types the code its screen shows, or scans (or pastes) its QR code, which names the host by
-// itself; then gives the account on the Mac. Rust recognises the code (`read_pairing_code`) and
-// pairs (`pair_host`); this view only collects input and shows state.
+// itself; then gives the account on the Mac. A Mac whose Drift Host approves devices (HOST-15)
+// needs no code: the account comes from its advert and its user clicks Allow when Drift first
+// connects. Rust recognises the code (`read_pairing_code`) and pairs (`pair_host`); this view
+// only collects input and shows state.
 import type { HostAdvert, PairHostRequest, PairingInput } from "../bindings";
 import { h, mount } from "../dom";
 import { icon } from "../icons";
@@ -35,6 +37,8 @@ export function renderPairSheet(root: HTMLElement, on: PairIntents): PairSheetHa
   let error: string | null = null;
   let busy = false;
   let sequence = 0;
+  // The user typed an account: the chosen Mac's advert no longer fills it in.
+  let accountTyped = false;
 
   const list = h("div", { class: "pair-hosts", role: "group", "aria-label": "Macs on this network" });
   const code = h("input", { id: "pair-code", type: "text", autocomplete: "off", spellcheck: "false", inputmode: "text", placeholder: "1234 5678" });
@@ -44,10 +48,18 @@ export function renderPairSheet(root: HTMLElement, on: PairIntents): PairSheetHa
   const status = h("p", { class: "pair-error", role: "alert" });
   const pairButton = h("button", { type: "submit", class: "primary" }, "Pair");
 
+  const chosenHost = () => hosts.find((x) => x.host_id === chosen);
+  // HOST-15: a chosen Mac that approves devices, with no code typed.
+  const approves = () => input === null && codeError === null && code.value.trim() === "" && chosenHost()?.approval === true;
   const ready = () =>
     !busy &&
     account.value.trim() !== "" &&
-    (input?.kind === "qr" || (input?.kind === "code" && chosen !== null && hosts.some((x) => x.host_id === chosen)));
+    (input?.kind === "qr" || (input?.kind === "code" && chosenHost() !== undefined) || approves());
+
+  const choose = (x: HostAdvert) => {
+    chosen = x.host_id;
+    if (!accountTyped && x.account) account.value = x.account;
+  };
 
   const render = () => {
     mount(
@@ -63,7 +75,7 @@ export function renderPairSheet(root: HTMLElement, on: PairIntents): PairSheetHa
                 "aria-label": `${x.name} ${x.host}`,
                 "aria-pressed": String(x.host_id === chosen),
                 onclick: () => {
-                  chosen = x.host_id;
+                  choose(x);
                   render();
                 },
               },
@@ -76,6 +88,7 @@ export function renderPairSheet(root: HTMLElement, on: PairIntents): PairSheetHa
     if (codeError) codeNote.textContent = codeError;
     else if (input?.kind === "qr") codeNote.textContent = `Pairs with ${input.name} (${input.host}:${input.port}).`;
     else if (input?.kind === "code") codeNote.textContent = chosen ? "" : "Choose the Mac above.";
+    else if (approves()) codeNote.textContent = `No code needed. Click Allow on ${chosenHost()?.name} when Drift Host asks.`;
     else codeNote.textContent = "Shown on the Mac by Drift Host. You can also paste its pairing link.";
     status.textContent = error ?? "";
     pairButton.disabled = !ready();
@@ -103,7 +116,10 @@ export function renderPairSheet(root: HTMLElement, on: PairIntents): PairSheetHa
     render();
   };
   code.addEventListener("input", () => void read());
-  account.addEventListener("input", () => render());
+  account.addEventListener("input", () => {
+    accountTyped = true;
+    render();
+  });
 
   const scan = async () => {
     const r = await on.scan();
@@ -118,14 +134,16 @@ export function renderPairSheet(root: HTMLElement, on: PairIntents): PairSheetHa
   };
 
   const submit = async () => {
-    if (!ready() || !input) return;
+    if (!ready() || (!input && !approves())) return;
     const user = account.value.trim();
     const pw = password.value === "" ? null : password.value;
-    const advert = hosts.find((x) => x.host_id === chosen);
+    const advert = chosenHost();
     const request: PairHostRequest =
-      input.kind === "qr"
-        ? { kind: "qr", uri: input.uri, username: user, password: pw }
-        : { kind: "advert", advert: advert as HostAdvert, code: input.code, username: user, password: pw };
+      input === null
+        ? { kind: "approve", advert: advert as HostAdvert, username: user, password: pw }
+        : input.kind === "qr"
+          ? { kind: "qr", uri: input.uri, username: user, password: pw }
+          : { kind: "advert", advert: advert as HostAdvert, code: input.code, username: user, password: pw };
     busy = true;
     error = null;
     render();
@@ -178,7 +196,8 @@ export function renderPairSheet(root: HTMLElement, on: PairIntents): PairSheetHa
     update(next) {
       hosts = next;
       if (chosen && !hosts.some((x) => x.host_id === chosen)) chosen = null;
-      if (!chosen && hosts.length === 1) chosen = hosts[0]?.host_id ?? null;
+      const only = hosts.length === 1 ? hosts[0] : undefined;
+      if (!chosen && only) choose(only);
       render();
     },
     setCode(text) {
