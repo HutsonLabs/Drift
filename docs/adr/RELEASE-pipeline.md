@@ -27,6 +27,16 @@ a new N. When App Store Connect is already out of step (today iOS 2, macOS 3), o
 exists on one platform only, a new release still uses the highest + 1 on both, which puts
 them back in step; the build-number step says so.
 
+**Drift and Drift Host ship together** (RELEASE-lockstep, 2026-10-19). Every release builds and
+publishes all four artifacts — the iOS `.ipa`, the Mac App Store `.pkg`, Drift's DMG and Drift
+Host's DMG — with the same version and build N, **whether or not either app changed** since
+the last release. There is no "skip the unchanged one" rule and no judgement call about what
+counts as a material change: an unchanged app is simply rebuilt with the new number. This keeps
+a paired Drift and Drift Host on matching numbers, so "which Host goes with this Drift" never
+needs answering. Every option set includes both DMG steps, and `sync-check` refuses a release
+that is missing any of the four (`xtask/tests/release.rs`,
+`drift_and_drift_host_always_ship_together`).
+
 1. **One command**, `cargo xtask release`, with named steps in a fixed order: preflight, gate,
    build number, clean, iOS, Mac App Store, Drift DMG, Drift Host DMG, notarize, checksums,
    sync check, then the publish steps TestFlight (both platforms), What to Test, GitHub. The
