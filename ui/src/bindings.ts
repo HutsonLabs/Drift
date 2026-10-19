@@ -225,7 +225,9 @@ export type ConnectStage =
 /**  RDSTLS with one-time redirect credentials (Remote Login legs ≥ 2). */
 "rdstls" | 
 /**  MCS / capability exchange / finalization. */
-"activation";
+"activation" | 
+/**  Connected; a Drift Host's user is asked to approve this device (HOST-15). */
+"approval";
 
 /**  A saved connection (plan §3). Contains no secrets. */
 export type ConnectionProfile = ConnectionProfile_Serialize | ConnectionProfile_Deserialize;
@@ -405,7 +407,7 @@ export type ErrorExplanation = {
 
 /**
  *  A Drift Host found with Bonjour, from its TXT record
- *  (`v`, `id`, `host`, `fp`, optional `name` and `port`).
+ *  (`v`, `id`, `host`, `fp`, optional `name`, `port`, `user` and `approve`).
  */
 export type HostAdvert = {
 	/**  The Bonjour service instance name. */
@@ -420,6 +422,10 @@ export type HostAdvert = {
 	port: number,
 	/**  SHA-256 of the host's TLS certificate. */
 	fingerprint: CertFingerprint,
+	/**  The account devices sign in with (`user`, HOST-15); `None` from older hosts. */
+	account?: string | null,
+	/**  The host can approve a device without a code (`approve=1`, HOST-15). */
+	approval?: boolean,
 };
 
 /**
@@ -495,6 +501,17 @@ password: string | null } |
 advert: HostAdvert; 
 /**  The typed code. */
 code: string; 
+/**  The account on the Mac. */
+username: string; 
+/**  Its password (optional). */
+password: string | null } | 
+/**
+ *  A host found with Bonjour that approves devices itself: no code; its user clicks Allow
+ *  when the device first connects (HOST-15).
+ */
+{ kind: "approve"; 
+/**  The host. */
+advert: HostAdvert; 
 /**  The account on the Mac. */
 username: string; 
 /**  Its password (optional). */

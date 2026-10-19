@@ -56,6 +56,8 @@ fn advert() -> HostAdvert {
         host: t.host,
         port: t.port,
         fingerprint: t.fingerprint,
+        account: None,
+        approval: false,
     }
 }
 

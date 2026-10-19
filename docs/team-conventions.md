@@ -10,9 +10,12 @@ Read `plan.md` §0–§5 first; it is the source of truth. This page summarises 
      `test(<ID>): …`;
   2. implement until green, commit `feat(<ID>): …`;
   3. refactor, commit `refactor(<ID>): …`; `cargo xtask ci` must pass.
-- **Nothing is pushed.** The GitHub remote is public: no `git push`, no GitHub PRs, no forks, no
-  upstream IronRDP PRs. A "PR" is a local branch that the integrator merges with `--no-ff`; the
-  merge commit message records the Red tests and their failing output.
+- **Push only to `origin` on spaces.hutson.cloud**
+  (`ssh://git@spaces.hutson.cloud:2222/HutsonLabs/drift.git`): push each task branch with
+  `git push -u origin task/<ID>-<slug>` before finishing. **Never push to GitHub** (it is public):
+  no GitHub PRs, no forks, no upstream IronRDP PRs. Check `git remote -v` first; if `origin` is
+  anything else, leave the branch local. A "PR" is a task branch that the integrator merges into
+  `main` with `--no-ff`; the merge commit message records the Red tests and their failing output.
 - Do not tick `plan.md` checkboxes; the integrator does that.
 
 ## ADRs
@@ -69,6 +72,7 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `HOST-10-virtual-display` | private `CGVirtualDisplay` isolated in `cg_virtual` with a launch self-test, pure `ModePlan` (640×480…5K, HiDPI from 150 %), `DisplayManager` seam, physical fallback |
 | `HOST-13-login-window` | root daemon only brokers (accept, route, `SCM_RIGHTS` hand-off, store writes); Aqua and LoginWindow agents serve; `getpeereid` admission; shared store group `admin`; no public login-window capture |
 | `HOST-14-extra-paths` | AWDL via Bonjour P2P flags and `SO_RECV_ANYIF`; VPN = any `utun`, no NAT traversal; `NetworkPath` + `is_away` for EXT-4; no USB link (usbmuxd is private) |
+| `HOST-15-guided-setup` | approve on the Mac instead of a code (`ApprovalRequest`, `APPROVAL` capability, 2 min wait, Don't Allow default and counted like a wrong code); TXT `user`/`approve`; `Connecting { Approval }`; password prompt checked with OpenDirectory; auto-opened "Set Up a Device" window with code and QR |
 | `EXT-2-scroll-gestures` | precise scroll carries its wheel fallback; gestures only with `GESTURES`; swipes → Mission Control/Spaces shortcuts, pinch → Command-=/-, several responders per channel end |
 | `EXT-4-quality-hints` | host steps a 4-level ladder from its backlog (down fast, up after 10 s clear), client caps it; away (non-private address or public name) defaults to Medium; status in the HUD |
 | `STORE-1-mac-app-store` | `tauri.mas.conf.json` + `entitlements.mas.plist`, universal build, `cargo xtask mas-package`, what the account still lacks, export compliance |

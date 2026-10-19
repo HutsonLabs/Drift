@@ -47,6 +47,12 @@ pub fn keychain() -> drift_apple::Keychain {
     drift_apple::Keychain::with_service(KEYCHAIN_SERVICE)
 }
 
+/// Whether the account's password is in the Keychain (checked without reading it, so no prompt;
+/// the menu-bar app asks for it when not, HOST-15).
+pub fn has_password() -> bool {
+    keychain().contains(ACCOUNT_ID, SecretRole::RdpUser).unwrap_or(false)
+}
+
 /// Stores the account's password in the Keychain and writes `host.toml`.
 pub fn set_password(dir: &Path, password: &str) -> Result<(), String> {
     if password.is_empty() {
@@ -144,6 +150,7 @@ pub fn start_daemon(
         host: host_name,
         port: daemon.addr().port(),
         fingerprint: identity.fingerprint(),
+        account: config.username.clone(),
     };
     let advert = config.pairing.then(|| announcement.advertise()).flatten();
     Ok((daemon, advert))
@@ -184,7 +191,7 @@ fn start_with(
     let password = keychain()
         .get(ACCOUNT_ID, SecretRole::RdpUser)
         .map_err(|e| e.to_string())?
-        .ok_or("no password stored: run `drift-host set-password` first")?;
+        .ok_or("no password stored: choose Enter Your Mac’s Password in Drift Host’s menu, or run `drift-host set-password`")?;
     let identity = HostIdentity::load_or_create(dir).map_err(|e| e.to_string())?;
     // The screen when Screen Recording is granted, else the test pattern (HOST-pipeline); input
     // is injected when Accessibility allows it or the config says so (HOST-6).
@@ -231,6 +238,7 @@ fn start_with(
         host: host_name,
         port: host.port(),
         fingerprint: identity.fingerprint(),
+        account: config.username.clone(),
     };
     // Discovery only makes sense where devices may connect: with pairing.
     let advert = pairing.as_ref().filter(|_| advertise).and_then(|_| announcement.advertise());

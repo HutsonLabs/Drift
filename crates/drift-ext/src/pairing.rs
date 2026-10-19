@@ -10,6 +10,10 @@
 //! host   → PairReply { status } | AuthReply { status }
 //! ```
 //!
+//! With [`Capabilities::APPROVAL`] (HOST-15) a device picked from the Bonjour list may send an
+//! `ApprovalRequest { name, key, signature }` instead of a code. The host asks the Mac's user and
+//! sends its `PairReply` when they decided (Allow, Don't Allow) or nobody did in time.
+//!
 //! The signature is ECDSA P-256 / SHA-256 over [`signed_bytes`]: a purpose label, the nonce and
 //! the SHA-256 fingerprint of the host certificate the client pinned. The client has already
 //! checked that certificate against its pin during TLS, so a signature made for one host and one
@@ -20,6 +24,7 @@
 //! paired devices.
 
 use std::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use crate::Negotiated;
@@ -55,6 +60,8 @@ pub mod types {
     pub const PAIR_REPLY: MessageType = MessageType(0x0404);
     /// Host → client: the authentication's result.
     pub const AUTH_REPLY: MessageType = MessageType(0x0405);
+    /// Client → host: pair once the Mac's user approves (HOST-15).
+    pub const APPROVAL_REQUEST: MessageType = MessageType(0x0406);
 }
 
 /// The host's answer to a pairing request.
@@ -70,6 +77,10 @@ pub enum PairStatus {
     TooManyAttempts,
     /// The Mac is not showing a code.
     NotPairing,
+    /// The Mac's user chose Don't Allow (HOST-15).
+    Declined,
+    /// Nobody answered on the Mac in time (HOST-15).
+    NoAnswer,
 }
 
 /// The host's answer to an authentication request.
@@ -90,6 +101,8 @@ pub enum Purpose {
     Pair,
     /// An authentication request.
     Authenticate,
+    /// A request for the Mac's user to approve the device (HOST-15).
+    Approve,
 }
 
 /// The bytes a device signs: a purpose label, the host's nonce and the pinned certificate's
@@ -98,6 +111,7 @@ pub fn signed_bytes(purpose: Purpose, nonce: &[u8; NONCE_LEN], host_fingerprint:
     let label: &[u8] = match purpose {
         Purpose::Pair => b"drift-pair-v1\0",
         Purpose::Authenticate => b"drift-auth-v1\0",
+        Purpose::Approve => b"drift-approve-v1\0",
     };
     [label, nonce.as_slice(), host_fingerprint.as_slice()].concat()
 }
@@ -130,6 +144,17 @@ pub enum PairingMessage {
         /// The signature of [`signed_bytes`] with [`Purpose::Authenticate`].
         signature: Vec<u8>,
     },
+    /// [`types::APPROVAL_REQUEST`].
+    ApprovalRequest {
+        /// [`PAIRING_VERSION`].
+        version: u32,
+        /// The device's name, shown in the Mac's prompt and list of paired devices.
+        device_name: String,
+        /// The device's public key (uncompressed P-256 point).
+        device_key: Vec<u8>,
+        /// The signature of [`signed_bytes`] with [`Purpose::Approve`].
+        signature: Vec<u8>,
+    },
     /// [`types::PAIR_REPLY`].
     PairReply(PairStatus),
     /// [`types::AUTH_REPLY`].
@@ -154,6 +179,13 @@ impl PairingMessage {
                 put(&mut p, device_key, 2);
                 put(&mut p, signature, 2);
                 (types::AUTH_REQUEST, p)
+            }
+            Self::ApprovalRequest { version, device_name, device_key, signature } => {
+                let mut p = version.to_le_bytes().to_vec();
+                put(&mut p, device_name.as_bytes(), 2);
+                put(&mut p, device_key, 2);
+                put(&mut p, signature, 2);
+                (types::APPROVAL_REQUEST, p)
             }
             Self::PairReply(status) => (types::PAIR_REPLY, vec![pair_status_byte(*status)]),
             Self::AuthReply(status) => (types::AUTH_REPLY, vec![auth_status_byte(*status)]),
@@ -247,12 +279,22 @@ fn decode(kind: MessageType, payload: &[u8]) -> Result<PairingMessage, WireError
             let signature = r.field(2, MAX_SIGNATURE)?.to_vec();
             PairingMessage::AuthRequest { device_key, signature }
         }
+        types::APPROVAL_REQUEST => {
+            let v = r.take(4)?;
+            let version = u32::from_le_bytes([v[0], v[1], v[2], v[3]]);
+            let device_name = utf8(r.field(2, MAX_NAME)?)?;
+            let device_key = r.field(2, MAX_KEY)?.to_vec();
+            let signature = r.field(2, MAX_SIGNATURE)?.to_vec();
+            PairingMessage::ApprovalRequest { version, device_name, device_key, signature }
+        }
         types::PAIR_REPLY => PairingMessage::PairReply(match r.take(1)?[0] {
             0 => PairStatus::Accepted,
             1 => PairStatus::WrongCode,
             2 => PairStatus::Expired,
             3 => PairStatus::TooManyAttempts,
             4 => PairStatus::NotPairing,
+            5 => PairStatus::Declined,
+            6 => PairStatus::NoAnswer,
             _ => return Err(WireError::Malformed("unknown pairing status")),
         }),
         types::AUTH_REPLY => PairingMessage::AuthReply(match r.take(1)?[0] {
@@ -274,6 +316,8 @@ const fn pair_status_byte(status: PairStatus) -> u8 {
         PairStatus::Expired => 2,
         PairStatus::TooManyAttempts => 3,
         PairStatus::NotPairing => 4,
+        PairStatus::Declined => 5,
+        PairStatus::NoAnswer => 6,
     }
 }
 
@@ -306,6 +350,8 @@ pub enum PairingOutcome {
     PairRefused(PairStatus),
     /// The Mac refused the device.
     AuthRefused(AuthStatus),
+    /// The device asked for approval, but the Mac's Drift Host cannot approve (HOST-15).
+    ApprovalUnsupported,
 }
 
 impl PairingOutcome {
@@ -323,6 +369,13 @@ impl PairingOutcome {
             Self::PairRefused(PairStatus::NotPairing) => {
                 "The Mac is not showing a pairing code. Start pairing in Drift Host first."
             }
+            Self::PairRefused(PairStatus::Declined) => "The Mac declined this device.",
+            Self::PairRefused(PairStatus::NoAnswer) => {
+                "Nobody clicked Allow on the Mac in time. Connect again and click Allow in Drift Host."
+            }
+            Self::ApprovalUnsupported => {
+                "This Mac's Drift Host is older and cannot approve devices. Pair with the code it shows."
+            }
             Self::PairRefused(PairStatus::Accepted) | Self::AuthRefused(AuthStatus::Ok) => return None,
             Self::AuthRefused(AuthStatus::UnknownDevice) => {
                 "This device is not paired with this Mac. Pair it again from Drift Host."
@@ -339,6 +392,10 @@ struct ClientInner {
     host_fingerprint: [u8; 32],
     device_name: String,
     code: Option<String>,
+    /// Asks the Mac's user instead of sending a code (HOST-15).
+    approval: bool,
+    /// An approval request was sent and the Mac has not answered yet.
+    awaiting: AtomicBool,
     outcome: Mutex<Option<PairingOutcome>>,
 }
 
@@ -353,6 +410,7 @@ impl fmt::Debug for ClientPairing {
         f.debug_struct("ClientPairing")
             .field("device_name", &self.0.device_name)
             .field("has_code", &self.0.code.is_some())
+            .field("approval", &self.0.approval)
             .field("outcome", &self.outcome())
             .finish_non_exhaustive()
     }
@@ -379,26 +437,54 @@ impl ClientPairing {
             host_fingerprint,
             device_name: device_name.into(),
             code: None,
+            approval: false,
+            awaiting: AtomicBool::new(false),
             outcome: Mutex::new(None),
         }))
     }
 
-    /// Pairs with `code` (the digits on the Mac's screen) instead of authenticating.
-    #[must_use]
-    pub fn with_code(self, code: impl Into<String>) -> Self {
+    fn rebuilt(&self, code: Option<String>, approval: bool) -> Self {
         let inner = &self.0;
         Self(Arc::new(ClientInner {
             signer: Arc::clone(&inner.signer),
             host_fingerprint: inner.host_fingerprint,
             device_name: inner.device_name.clone(),
-            code: Some(code.into()),
+            code,
+            approval,
+            awaiting: AtomicBool::new(false),
             outcome: Mutex::new(*inner.outcome.lock().unwrap_or_else(PoisonError::into_inner)),
         }))
+    }
+
+    /// Pairs with `code` (the digits on the Mac's screen) instead of authenticating. A code
+    /// replaces asking for approval.
+    #[must_use]
+    pub fn with_code(self, code: impl Into<String>) -> Self {
+        self.rebuilt(Some(code.into()), false)
+    }
+
+    /// Pairs by asking the Mac's user to approve this device (HOST-15) instead of
+    /// authenticating.
+    #[must_use]
+    pub fn asking_approval(self) -> Self {
+        self.rebuilt(None, true)
     }
 
     /// The code this pairing sends, if it still pairs.
     pub fn code(&self) -> Option<&str> {
         self.0.code.as_deref()
+    }
+
+    /// Whether this pairing asks the Mac's user (until the Mac accepted once).
+    pub fn asks_approval(&self) -> bool {
+        self.0.approval
+            && !matches!(self.outcome(), Some(PairingOutcome::Paired | PairingOutcome::Authenticated))
+    }
+
+    /// Whether the Mac's user has been asked and has not answered yet: the device should tell
+    /// its user to click Allow on the Mac.
+    pub fn awaiting_approval(&self) -> bool {
+        self.0.awaiting.load(Ordering::Relaxed)
     }
 
     /// The pinned host certificate's fingerprint the signatures name.
@@ -418,7 +504,7 @@ impl ClientPairing {
 
     /// The capabilities a client with this pairing offers.
     pub const fn capabilities() -> Capabilities {
-        Capabilities::PAIRING
+        Capabilities::from_bits(Capabilities::PAIRING.bits() | Capabilities::APPROVAL.bits())
     }
 
     /// The channel responder for one connection leg. A refusal from an earlier leg is forgotten,
@@ -430,10 +516,12 @@ impl ClientPairing {
             *outcome = None;
         }
         drop(outcome);
-        Box::new(ClientResponder(self.clone()))
+        self.0.awaiting.store(false, Ordering::Relaxed);
+        Box::new(ClientResponder { pairing: self.clone(), host_approves: false })
     }
 
     fn set_outcome(&self, outcome: PairingOutcome) {
+        self.0.awaiting.store(false, Ordering::Relaxed);
         *self.0.outcome.lock().unwrap_or_else(PoisonError::into_inner) = Some(outcome);
     }
 
@@ -446,7 +534,17 @@ impl ClientPairing {
     fn answer(&self, nonce: &[u8; NONCE_LEN]) -> Option<PairingMessage> {
         let inner = &self.0;
         let device_key = inner.signer.public_key();
-        if self.pairs() {
+        if self.asks_approval() {
+            let signature =
+                inner.signer.sign(&signed_bytes(Purpose::Approve, nonce, &inner.host_fingerprint))?;
+            inner.awaiting.store(true, Ordering::Relaxed);
+            Some(PairingMessage::ApprovalRequest {
+                version: PAIRING_VERSION,
+                device_name: inner.device_name.chars().take(64).collect(),
+                device_key,
+                signature,
+            })
+        } else if self.pairs() {
             let signature =
                 inner.signer.sign(&signed_bytes(Purpose::Pair, nonce, &inner.host_fingerprint))?;
             Some(PairingMessage::PairRequest {
@@ -465,10 +563,15 @@ impl ClientPairing {
 }
 
 #[derive(Debug)]
-struct ClientResponder(ClientPairing);
+struct ClientResponder {
+    pairing: ClientPairing,
+    /// The host agreed on [`Capabilities::APPROVAL`].
+    host_approves: bool,
+}
 
 impl Responder for ClientResponder {
-    fn on_negotiated(&mut self, _negotiated: &Negotiated) -> Vec<Message> {
+    fn on_negotiated(&mut self, negotiated: &Negotiated) -> Vec<Message> {
+        self.host_approves = negotiated.capabilities.contains(Capabilities::APPROVAL);
         // The host speaks first: its challenge carries the nonce to sign.
         Vec::new()
     }
@@ -480,7 +583,12 @@ impl Responder for ClientResponder {
             return Some(Vec::new());
         };
         match parsed {
-            PairingMessage::Challenge { nonce } => match self.0.answer(&nonce) {
+            PairingMessage::Challenge { .. } if self.pairing.asks_approval() && !self.host_approves => {
+                // An older host would take the request for nothing; say why instead.
+                self.pairing.set_outcome(PairingOutcome::ApprovalUnsupported);
+                Some(Vec::new())
+            }
+            PairingMessage::Challenge { nonce } => match self.pairing.answer(&nonce) {
                 Some(answer) => Some(vec![answer.to_message()]),
                 None => {
                     tracing::warn!("the device key could not sign the host's challenge");
@@ -488,21 +596,23 @@ impl Responder for ClientResponder {
                 }
             },
             PairingMessage::PairReply(status) => {
-                self.0.set_outcome(match status {
+                self.pairing.set_outcome(match status {
                     PairStatus::Accepted => PairingOutcome::Paired,
                     other => PairingOutcome::PairRefused(other),
                 });
                 Some(Vec::new())
             }
             PairingMessage::AuthReply(status) => {
-                self.0.set_outcome(match status {
+                self.pairing.set_outcome(match status {
                     AuthStatus::Ok => PairingOutcome::Authenticated,
                     other => PairingOutcome::AuthRefused(other),
                 });
                 Some(Vec::new())
             }
             // Requests are the host's to answer.
-            PairingMessage::PairRequest { .. } | PairingMessage::AuthRequest { .. } => Some(Vec::new()),
+            PairingMessage::PairRequest { .. }
+            | PairingMessage::AuthRequest { .. }
+            | PairingMessage::ApprovalRequest { .. } => Some(Vec::new()),
         }
     }
 }

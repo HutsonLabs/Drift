@@ -177,6 +177,16 @@ pub enum PairHostRequest {
         /// Its password (optional).
         password: Option<String>,
     },
+    /// A host found with Bonjour that approves devices itself: no code; its user clicks Allow
+    /// when the device first connects (HOST-15).
+    Approve {
+        /// The host.
+        advert: HostAdvert,
+        /// The account on the Mac.
+        username: String,
+        /// Its password (optional).
+        password: Option<String>,
+    },
 }
 
 impl std::fmt::Debug for PairHostRequest {
@@ -190,16 +200,56 @@ impl std::fmt::Debug for PairHostRequest {
                 .field("host", &advert.host)
                 .field("username", username)
                 .finish_non_exhaustive(),
+            Self::Approve { advert, username, .. } => f
+                .debug_struct("Approve")
+                .field("host", &advert.host)
+                .field("username", username)
+                .finish_non_exhaustive(),
         }
     }
 }
 
-/// What the next connections to one paired host do: send the code the user saw (until the Mac
+/// How a device introduces itself to a Mac the first time.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Introduction {
+    /// The code the user saw on the Mac.
+    Code(ShortCode),
+    /// Ask the Mac's user to click Allow (HOST-15).
+    Approval,
+}
+
+/// What the next connections to one paired host do: introduce the device (until the Mac
 /// accepts it), then authenticate with the device key.
 #[derive(Debug, Default)]
 struct HostHandshake {
-    code: Option<ShortCode>,
+    introduction: Option<Introduction>,
     current: Option<ClientPairing>,
+}
+
+/// Whether `pairing` still introduces the device (a code or a request for approval).
+fn introduces(pairing: &ClientPairing) -> bool {
+    pairing.code().is_some() || pairing.asks_approval()
+}
+
+/// The host a pairing is for.
+struct PairedMac {
+    host_id: Uuid,
+    name: String,
+    host: String,
+    port: u16,
+    fingerprint: CertFingerprint,
+}
+
+impl From<PairingTarget> for PairedMac {
+    fn from(t: PairingTarget) -> Self {
+        Self { host_id: t.host_id, name: t.name, host: t.host, port: t.port, fingerprint: t.fingerprint }
+    }
+}
+
+impl From<HostAdvert> for PairedMac {
+    fn from(a: HostAdvert) -> Self {
+        Self { host_id: a.host_id, name: a.name, host: a.host, port: a.port, fingerprint: a.fingerprint }
+    }
 }
 
 /// Pairs Mac hosts and guards paired profiles. Clones share their state.
@@ -241,12 +291,25 @@ impl PairingService {
     /// Pairs: saves (or updates) the host's profile, records its pin and makes sure the device
     /// key exists.
     pub fn pair(&self, request: PairHostRequest) -> Result<ProfileEntry, CommandError> {
-        let (target, username, password) = match request {
+        let (target, introduction, username, password): (PairedMac, _, _, _) = match request {
             PairHostRequest::Qr { uri, username, password } => {
-                (PairingPayload::parse(&uri).map_err(pairing)?.target(), username, password)
+                let target = PairingPayload::parse(&uri).map_err(pairing)?.target();
+                let code = target.code.clone();
+                (target.into(), Introduction::Code(code), username, password)
             }
             PairHostRequest::Advert { advert, code, username, password } => {
-                (advert.target(ShortCode::parse(&code).map_err(pairing)?), username, password)
+                let target = advert.target(ShortCode::parse(&code).map_err(pairing)?);
+                let code = target.code.clone();
+                (target.into(), Introduction::Code(code), username, password)
+            }
+            PairHostRequest::Approve { advert, username, password } => {
+                if !advert.approval {
+                    return Err(CommandError::Pairing {
+                        message: "This Mac's Drift Host cannot approve devices. Enter the code it shows."
+                            .into(),
+                    });
+                }
+                (advert.into(), Introduction::Approval, username, password)
             }
         };
         let profile = self.paired_profile(&target, username.trim())?;
@@ -258,11 +321,11 @@ impl PairingService {
         };
         let entry = self.profiles.save(profile, update)?;
         self.store.pin_host(target.host_id, target.fingerprint)?;
-        // The next connection sends the code to the Mac (HOST-8).
+        // The next connection sends the code to the Mac (HOST-8) or asks its user (HOST-15).
         self.handshakes
             .lock()
             .map_err(storage)?
-            .insert(target.host_id, HostHandshake { code: Some(target.code), current: None });
+            .insert(target.host_id, HostHandshake { introduction: Some(introduction), current: None });
         Ok(entry)
     }
 
@@ -282,8 +345,9 @@ impl PairingService {
         let entry = handshakes.entry(host).or_default();
         if let Some(current) = &entry.current {
             if matches!(current.outcome(), Some(PairingOutcome::Paired | PairingOutcome::Authenticated)) {
-                entry.code = None;
-            } else if current.code().is_some() == entry.code.is_some() {
+                entry.introduction = None;
+            } else if current.outcome().is_none() && introduces(current) == entry.introduction.is_some() {
+                // Still in progress (a reconnect within the session): keep the same exchange.
                 return Ok(Some(current.clone()));
             }
         }
@@ -292,8 +356,9 @@ impl PairingService {
             *pin.as_bytes(),
             drift_rdp::connect::local_client_name(),
         );
-        let pairing = match &entry.code {
-            Some(code) => base.with_code(code.as_str()),
+        let pairing = match &entry.introduction {
+            Some(Introduction::Code(code)) => base.with_code(code.as_str()),
+            Some(Introduction::Approval) => base.asking_approval(),
             None => base,
         };
         entry.current = Some(pairing.clone());
@@ -303,11 +368,17 @@ impl PairingService {
     /// The new profile, or the existing one for this host (same id and preferences) updated.
     fn paired_profile(
         &self,
-        target: &PairingTarget,
+        target: &PairedMac,
         username: &str,
     ) -> Result<drift_core::ConnectionProfile, CommandError> {
         let existing = self.profiles.profiles()?.into_iter().find(|p| p.paired_host == Some(target.host_id));
-        let mut profile = existing.unwrap_or_else(|| target.profile());
+        let mut profile = existing.unwrap_or_else(|| {
+            drift_core::ConnectionProfile::new(
+                target.name.clone(),
+                target.host.clone(),
+                drift_core::ConnectMode::Headless,
+            )
+        });
         profile.host.clone_from(&target.host);
         profile.port = target.port;
         profile.cert_pin = Some(target.fingerprint);

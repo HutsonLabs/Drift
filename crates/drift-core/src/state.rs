@@ -33,6 +33,8 @@ pub enum ConnectStage {
     Rdstls,
     /// MCS / capability exchange / finalization.
     Activation,
+    /// Connected; a Drift Host's user is asked to approve this device (HOST-15).
+    Approval,
 }
 
 /// Why a session stopped (plan §3).

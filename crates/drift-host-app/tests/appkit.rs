@@ -8,7 +8,8 @@ mod harness;
 
 use std::process::ExitCode;
 
-use drift_host_app::model::{MenuAction, MenuEntry};
+use drift_host_app::model::{DeviceSetupInfo, MenuAction, MenuEntry, device_setup};
+use drift_host_app::setup_window::SetupWindow;
 use drift_host_app::status_item::{StatusItem, build_menu};
 use objc2::MainThreadMarker;
 use objc2_app_kit::NSControlStateValueOn;
@@ -17,6 +18,8 @@ fn main() -> ExitCode {
     harness::run(&[
         ("ns_menu_mirrors_the_model", ns_menu_mirrors_the_model),
         ("status_item_can_be_created_and_removed", status_item_can_be_created_and_removed),
+        ("setup_window_shows_the_code_and_qr", setup_window_shows_the_code_and_qr),
+        ("an_unknown_account_cannot_be_checked", an_unknown_account_cannot_be_checked),
     ])
 }
 
@@ -60,4 +63,28 @@ fn status_item_can_be_created_and_removed() {
     item.set_attention(true);
     assert!(item.has_button());
     drop(item);
+}
+
+// HOST-15: the device window opens with the code and QR, and closes.
+fn setup_window_shows_the_code_and_qr() {
+    let mtm = MainThreadMarker::new().unwrap();
+    let setup = device_setup(&DeviceSetupInfo {
+        mac_name: "Studio".into(),
+        host: "studio.local".into(),
+        port: 3389,
+        account: "andrew".into(),
+        code: Some("1234 5678".into()),
+        minutes_left: Some(5),
+    });
+    let width = 25;
+    let dark: Vec<bool> = (0..width * width).map(|i| i % 3 == 0).collect();
+    let window = SetupWindow::show(mtm, &setup, Some("1234 5678"), Some(&(width, dark)), |_| {});
+    assert!(window.is_visible());
+    window.close();
+    assert!(!window.is_visible());
+}
+
+// HOST-15: the password check answers without a prompt, and cannot tell for a stranger.
+fn an_unknown_account_cannot_be_checked() {
+    assert_eq!(drift_host_app::account::verify_password("no-such-user-drift-test", "fake"), None);
 }

@@ -611,9 +611,25 @@ async fn serve(
                         auth_deadline = None;
                         kick_at = Some(tokio::time::Instant::now() + REFUSAL_GRACE);
                     }
+                    // HOST-15: the device waits for the Mac's user, not for itself.
+                    AuthPhase::AwaitingApproval(_) => {
+                        auth_deadline = connections
+                            .pairing
+                            .as_ref()
+                            .map(|p| tokio::time::Instant::now() + p.approval_timeout());
+                    }
                     AuthPhase::Pending => {}
                 },
-                () = until(auth_deadline) => {
+                () = until(auth_deadline), if matches!(auth.phase(), AuthPhase::AwaitingApproval(_)) => {
+                    // Nobody answered: the device is told so and refused (kicked after the grace).
+                    if let (AuthPhase::AwaitingApproval(id), Some(pairing)) = (auth.phase(), &connections.pairing) {
+                        pairing.give_up(id);
+                    }
+                    lock(stats).auth_refused += 1;
+                    auth_deadline = None;
+                    kick_at = Some(tokio::time::Instant::now() + REFUSAL_GRACE);
+                }
+                () = until(auth_deadline), if !matches!(auth.phase(), AuthPhase::AwaitingApproval(_)) => {
                     tracing::info!(%peer, "no pairing or authentication in time; dropping the connection");
                     lock(stats).auth_timeouts += 1;
                     break;
@@ -645,6 +661,10 @@ async fn serve(
             }
         }
         on_end();
+        // A device that left while the Mac's user was asked is no longer asked about (HOST-15).
+        if let (AuthPhase::AwaitingApproval(id), Some(pairing)) = (auth.phase(), &connections.pairing) {
+            pairing.give_up(id);
+        }
         drop(ticket);
         // The virtual display goes with the session; the next client gets its own size.
         lock(&connections.displays).release();
@@ -824,13 +844,19 @@ impl GfxShared {
 
     /// Sends `status` to the client on `Drift::Mac::v1`, when it agreed on host status.
     fn send_status(&self, status: HostStatus) {
+        self.push_drift_mac(Capabilities::STATUS, status.to_message());
+    }
+
+    /// Sends `message` on `Drift::Mac::v1` outside a reply, when the client agreed on `needs`
+    /// (host status, EXT-4; an approval's answer, HOST-15).
+    fn push_drift_mac(&self, needs: Capabilities, message: drift_ext::wire::Message) {
         let Some(link) = lock(&self.drift_mac).clone() else { return };
-        let agreed = link.negotiated().is_some_and(|n| n.capabilities.contains(Capabilities::STATUS));
+        let agreed = link.negotiated().is_some_and(|n| n.capabilities.contains(needs));
         let (Some(channel), true) = (link.channel_id(), agreed) else { return };
-        let messages = match drift_ext::channel::outgoing(&[status.to_message()]) {
+        let messages = match drift_ext::channel::outgoing(&[message]) {
             Ok(messages) => messages,
             Err(e) => {
-                tracing::warn!(error = %e, "could not encode the host status");
+                tracing::warn!(error = %e, "could not encode a Drift::Mac::v1 message");
                 return;
             }
         };
@@ -1208,9 +1234,14 @@ impl DvcServerFactory for DriftMacFactory {
         let mut responders: Vec<Box<dyn drift_ext::channel::Responder>> = Vec::new();
         if let Some(pairing) = &self.pairing {
             // EXT-5: a paired client may also negotiate Drift's HEVC codec.
-            capabilities = capabilities | Capabilities::PAIRING | Capabilities::CODEC;
+            // HOST-15: and be approved on the Mac instead of typing a code.
+            capabilities =
+                capabilities | Capabilities::PAIRING | Capabilities::CODEC | Capabilities::APPROVAL;
             let auth = lock(&self.current).clone();
-            responders.push(pairing.responder(self.host_fingerprint, auth));
+            let gfx = Arc::clone(&self.gfx);
+            let reply: crate::pairing::ReplySender =
+                Arc::new(move |m| gfx.push_drift_mac(Capabilities::APPROVAL, m));
+            responders.push(pairing.responder(self.host_fingerprint, auth, reply));
             responders.push(Box::new(HostCodecResponder(Arc::clone(&self.gfx))));
         }
         responders.push(gestures);

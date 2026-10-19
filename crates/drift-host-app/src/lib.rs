@@ -7,18 +7,24 @@
 //!
 //! | Module | What |
 //! |---|---|
-//! | [`model`] | pure view model: status line, menu, icon state, permission guidance |
+//! | [`model`] | pure view model: status line, menu, icon state, permission guidance, guided setup |
 //! | `status_item` | the `NSStatusItem` and `NSMenu` (humble object) |
 //! | `permissions` | Screen Recording / Accessibility checks and prompts, Settings links |
+//! | `account` | the Mac password prompt and its check against the local directory (HOST-15) |
+//! | `setup_window` | the "Set Up a Device" window with the code and QR (HOST-15) |
 //! | `login` | Start at Login through `SMAppService` |
 //! | [`services`] | the daemon and agents for reaching the Mac after a restart (HOST-13) |
 
+#[cfg(target_os = "macos")]
+pub mod account;
 #[cfg(target_os = "macos")]
 pub mod login;
 pub mod model;
 #[cfg(target_os = "macos")]
 pub mod permissions;
 pub mod services;
+#[cfg(target_os = "macos")]
+pub mod setup_window;
 #[cfg(target_os = "macos")]
 pub mod status_item;
 

@@ -19,6 +19,7 @@ objc2-core-foundation.workspace = true
 objc2-core-graphics.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+zeroize.workspace = true
 
 [[bin]]
 name = "drift-host-app"

@@ -118,6 +118,11 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   listeners) and VPN reachability with path classification (`drift_apple::paths`, "away" for
   EXT-4) are built (ADR `HOST-14-extra-paths`). A USB cable link has no public API on either end
   and is not built.*
+- [~] **HOST-15 Guided setup.** Set up a Mac from the device: pick it from the Bonjour list,
+  sign in, click Allow on the Mac (no code). Drift Host asks for the Mac's password in the app,
+  then opens "Set Up a Device" with the address, account, code and QR (ADR
+  `HOST-15-guided-setup`). *Built and tested on loopback; clicking through the real prompts
+  and a device on the network are manual steps in `docs/acceptance.md`.*
 
 ## EXT — `Drift::Mac::v1` channel
 

@@ -14,6 +14,7 @@ fn announcement() -> HostAnnouncement {
         host: "andrews-mac-studio.local".into(),
         port: 3389,
         fingerprint: CertFingerprint::from_bytes([0x5a; 32]),
+        account: "andrew".into(),
     }
 }
 
