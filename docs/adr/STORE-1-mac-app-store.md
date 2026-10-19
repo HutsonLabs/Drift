@@ -23,13 +23,19 @@
 5. **Short description** now names both host kinds: "Remote desktop for GNOME Remote Desktop and
    Macs running Drift Host".
 
-## Not done (needs the account owner)
+## Account and TestFlight (2026-10-18)
 
-- **No App ID, profile or app record.** The developer account has no `com.hutsonlabs.drift`
-  App ID, no Mac App Store (or iOS App Store) provisioning profile for it, and no App Store
-  Connect app record (`altool --list-apps` lists Boards, Iceberg and term.hut only). Creating
-  them changes the account, so it was not done. Until then the package has no embedded profile
-  and App Store validation rejects it (STORE-2).
+- The owner created the App Store Connect record (app id 6824351800, universal bundle id
+  `com.hutsonlabs.drift`). The Mac App Store profile "Drift Mac App Store" was created through
+  the App Store Connect API for both Apple Distribution certificates; a copy lives in
+  `~/Library/MobileDevice/Provisioning Profiles/Drift_Mac_App_Store.provisionprofile`
+  (re-download it from the developer portal on another Mac).
+- `cargo xtask testflight --macos --profile <profile> [--dry-run]` builds the universal
+  package with the next build number (a `bundle.macOS.bundleVersion` config override), validates
+  it and uploads it. The Mac and iOS builds share one build-number sequence. Tauri notarizes
+  whenever App Store Connect credentials are in its environment, so the Mac App Store build step
+  runs without them (an App Store package is never notarized).
+- Build 26.10 (3) for macOS passed validation and was uploaded to TestFlight.
 - **Export compliance: `ITSAppUsesNonExemptEncryption = false`** (owner's decision,
   2026-10-18), in `src-tauri/Info.plist` and the iOS `Info.plist`. Drift encrypts the whole
   session with its own TLS (rustls with ring) and uses NTLM/CredSSP; these are standard

@@ -99,6 +99,12 @@ enum Cmd {
         /// Use this build number instead of asking App Store Connect.
         #[arg(long)]
         build_number: Option<u32>,
+        /// Upload the Mac App Store package instead of the iOS app (STORE-1).
+        #[arg(long)]
+        macos: bool,
+        /// The Mac App Store provisioning profile to embed (with `--macos`).
+        #[arg(long)]
+        profile: Option<PathBuf>,
     },
     /// Build the Mac App Store package: universal, sandboxed, Apple Distribution (STORE-1).
     MasPackage {
@@ -162,8 +168,10 @@ fn run(cmd: Cmd) -> Result<()> {
         Cmd::HostBundle { debug } => host_bundle(&root, if debug { "debug" } else { "release" }),
         Cmd::ReviewRisk { path } => review_risk(&path),
         Cmd::HostRelease { notarize } => host_release(&root, notarize),
-        Cmd::MasPackage { profile } => mas_package(&root, profile.as_deref()),
-        Cmd::Testflight { dry_run, build_number } => testflight(&root, dry_run, build_number),
+        Cmd::MasPackage { profile } => mas_package(&root, profile.as_deref()).map(|_| ()),
+        Cmd::Testflight { dry_run, build_number, macos, profile } => {
+            testflight(&root, dry_run, build_number, macos.then_some(profile.as_deref()))
+        }
         Cmd::HostSetupCheck { host, headless, report, save_report } => {
             host_setup_check(host, &headless, report.as_deref(), save_report.as_deref())
         }
@@ -277,7 +285,12 @@ fn asc_get(path: &str) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
-fn testflight(root: &Path, dry_run: bool, build_number: Option<u32>) -> Result<()> {
+fn testflight(
+    root: &Path,
+    dry_run: bool,
+    build_number: Option<u32>,
+    mac: Option<Option<&Path>>,
+) -> Result<()> {
     use xtask::testflight;
     let (key, key_id, issuer) = asc_key()?;
     let plist = std::fs::read_to_string(root.join("src-tauri/gen/apple/drift-app_iOS/Info.plist"))?;
@@ -295,16 +308,7 @@ fn testflight(root: &Path, dry_run: bool, build_number: Option<u32>) -> Result<(
             testflight::next_build_number(&testflight::build_versions(&json)?)
         }
     };
-    println!("==> Drift {version} ({build})");
-    let plan = testflight::plan(root, build);
-    let ui = root.join("ui");
-    checked(Command::new(bun()).args(["install", "--frozen-lockfile"]).current_dir(&ui), "bun install")?;
-    checked(Command::new(bun()).args(["run", "build"]).current_dir(&ui), "bun run build")?;
-    std::fs::create_dir_all(root.join("src-tauri/gen/apple/assets"))?;
-    checked(
-        Command::new(cargo()).args(&plan.build_args).current_dir(root.join("src-tauri")),
-        "cargo tauri ios build",
-    )?;
+    println!("==> Drift {version} ({build}){}", if mac.is_some() { " for macOS" } else { "" });
     let keys_dir = Path::new(&key).parent().context("the API key has no directory")?.to_owned();
     let altool = |args: &[String], what: &str| {
         checked(
@@ -315,6 +319,30 @@ fn testflight(root: &Path, dry_run: bool, build_number: Option<u32>) -> Result<(
             what,
         )
     };
+    if let Some(profile) = mac {
+        let profile = profile.context("--macos needs --profile <Mac App Store provisioning profile>")?;
+        let ui = root.join("ui");
+        checked(Command::new(bun()).args(["install", "--frozen-lockfile"]).current_dir(&ui), "bun install")?;
+        let pkg = mas_package_build(root, Some(profile), Some(build))?;
+        let (validate, upload) = testflight::mac_altool_args(&pkg);
+        altool(&validate, "altool --validate-app")?;
+        if dry_run {
+            println!("validated {} (dry run: not uploaded)", pkg.display());
+        } else {
+            altool(&upload, "altool --upload-app")?;
+            println!("uploaded Drift {version} ({build}) for macOS to TestFlight");
+        }
+        return Ok(());
+    }
+    let plan = testflight::plan(root, build);
+    let ui = root.join("ui");
+    checked(Command::new(bun()).args(["install", "--frozen-lockfile"]).current_dir(&ui), "bun install")?;
+    checked(Command::new(bun()).args(["run", "build"]).current_dir(&ui), "bun run build")?;
+    std::fs::create_dir_all(root.join("src-tauri/gen/apple/assets"))?;
+    checked(
+        Command::new(cargo()).args(&plan.build_args).current_dir(root.join("src-tauri")),
+        "cargo tauri ios build",
+    )?;
     altool(&plan.validate_args, "altool --validate-app")?;
     if dry_run {
         println!("validated {} (dry run: not uploaded)", plan.ipa.display());
@@ -366,9 +394,23 @@ fn host_release(root: &Path, notarize: bool) -> Result<()> {
     Ok(())
 }
 
-fn mas_package(root: &Path, profile: Option<&Path>) -> Result<()> {
-    let plan = xtask::store::mas_plan(root, profile);
-    let status = Command::new(cargo()).args(&plan.tauri_args).current_dir(root.join("src-tauri")).status()?;
+fn mas_package(root: &Path, profile: Option<&Path>) -> Result<PathBuf> {
+    mas_package_build(root, profile, None)
+}
+
+fn mas_package_build(root: &Path, profile: Option<&Path>, build: Option<u32>) -> Result<PathBuf> {
+    let plan = xtask::store::mas_plan(root, profile, build);
+    // Tauri notarizes whenever App Store Connect credentials are in the environment; a Mac App
+    // Store build is never notarized (App Review checks it), so it must not see them.
+    let status = Command::new(cargo())
+        .args(&plan.tauri_args)
+        .current_dir(root.join("src-tauri"))
+        .env_remove("APPLE_API_KEY")
+        .env_remove("APPLE_API_ISSUER")
+        .env_remove("APPLE_API_KEY_PATH")
+        .env_remove("APPLE_ID")
+        .env_remove("APPLE_PASSWORD")
+        .status()?;
     if !status.success() {
         bail!("cargo {} failed", plan.tauri_args.join(" "));
     }
@@ -400,7 +442,7 @@ fn mas_package(root: &Path, profile: Option<&Path>) -> Result<()> {
         bail!("productbuild failed");
     }
     println!("{}", plan.pkg.display());
-    Ok(())
+    Ok(plan.pkg)
 }
 
 fn not_yet(name: &str, task: &str) -> Result<()> {

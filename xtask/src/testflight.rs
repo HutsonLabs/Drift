@@ -135,3 +135,12 @@ pub fn token_body(key_id: &str, issuer: &str, now: u64) -> String {
         format!(r#"{{"iss":"{issuer}","iat":{now},"exp":{},"aud":"appstoreconnect-v1"}}"#, now + 900);
     format!("{}.{}", base64url(header.as_bytes()), base64url(claims.as_bytes()))
 }
+
+/// `xcrun` arguments that validate and upload the Mac installer package `pkg` (the API key
+/// arguments are appended at run time).
+pub fn mac_altool_args(pkg: &Path) -> (Vec<String>, Vec<String>) {
+    let args = |action: &str| {
+        ["altool", action, "-f", &pkg.display().to_string(), "-t", "macos"].map(str::to_owned).to_vec()
+    };
+    (args("--validate-app"), args("--upload-app"))
+}
