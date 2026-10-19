@@ -29,4 +29,5 @@ pub mod repo;
 pub mod sanitize;
 pub mod secret_scan;
 pub mod store;
+pub mod testflight;
 pub mod workflows;
