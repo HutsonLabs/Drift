@@ -71,7 +71,7 @@ targets:
         UIApplicationSupportsIndirectInputEvents: true
         # ProMotion iPhones only go above 60 Hz with this (IOS-4).
         CADisableMinimumFrameDurationOnPhone: true
-        # Marketing version yy.mm; the build number grows with every upload (`cargo xtask testflight`).
+        # Marketing version yy.mm; the build number grows with every release (`cargo xtask release`).
         CFBundleShortVersionString: "26.10"
         CFBundleVersion: "1"
         # Export compliance: only exempt encryption in Apple's terms — standard algorithms (TLS,

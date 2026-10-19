@@ -1,4 +1,4 @@
-//! STORE-3 follow-up: `cargo xtask testflight` uploads with a build number one above the highest
+//! STORE-3 follow-up (now inside `cargo xtask release`): uploads use a build number one above the highest
 //! one App Store Connect already has, and the marketing version is `yy.mm`.
 #![allow(missing_docs, clippy::unwrap_used)]
 

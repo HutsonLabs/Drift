@@ -25,6 +25,7 @@ pub mod host_bundle;
 pub mod host_check;
 pub mod icons;
 pub mod npm_ban;
+pub mod release;
 pub mod repo;
 pub mod sanitize;
 pub mod secret_scan;
