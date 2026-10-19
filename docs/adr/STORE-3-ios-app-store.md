@@ -30,11 +30,29 @@
    to the app's resources whenever the project was regenerated after a build. `Externals` is now
    a source group with no build phase.
 
-## Not done (needs the account owner)
+## TestFlight (2026-10-18)
 
-- `cargo tauri ios build --export-method app-store-connect` stops at "Signing for
-  drift-app_iOS requires a development team". With the team set, Xcode would need an iOS App
-  Store provisioning profile for `com.hutsonlabs.drift`, which does not exist; letting Xcode
-  create it (`-allowProvisioningUpdates`) registers an App ID and a profile in the account, so it
-  was not done. Without an archive and an App Store Connect record there is nothing to validate.
-- TestFlight is out of scope (validate only).
+The owner created the App Store Connect record ("Drift - Screen sharing", SKU HL005, app id
+6824351800; bundle id `com.hutsonlabs.drift`, universal) and asked for TestFlight.
+
+- `tauri.conf.json` sets `bundle.iOS.developmentTeam` (`M9Z3N2R97A`) and `bundleVersion`.
+  `CFBundleVersion` must grow with every upload: pass `--build-number <n>` (or raise
+  `bundleVersion`) for the next one.
+- Build, validate and upload, with the App Store Connect API key from `~/code/term.hut/.env`
+  (`APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_KEY_PATH`; never printed or committed):
+
+  ```text
+  (cd ui && bun run build)
+  set -a; . ~/code/term.hut/.env; set +a
+  cd src-tauri && cargo tauri ios build --export-method app-store-connect --build-number <n>
+  export API_PRIVATE_KEYS_DIR="$(dirname "$APPLE_API_KEY_PATH")"
+  xcrun altool --validate-app -f gen/apple/build/arm64/Drift.ipa -t ios --apiKey "$APPLE_KEY_ID" --apiIssuer "$APPLE_API_ISSUER"
+  xcrun altool --upload-app   -f gen/apple/build/arm64/Drift.ipa -t ios --apiKey "$APPLE_KEY_ID" --apiIssuer "$APPLE_API_ISSUER"
+  ```
+
+  With the API key in the environment, Xcode signs automatically and created the
+  "iOS Team Store Provisioning Profile: com.hutsonlabs.drift" on the first build.
+- Testers: the internal group "Drift Internal" (all builds) holds the account holder. Internal
+  testers must be App Store Connect users; external testers need Beta App Review.
+- Export compliance stays unanswered in `Info.plist` (owner's decision), so each build asks the
+  encryption question in App Store Connect before testers can install it.

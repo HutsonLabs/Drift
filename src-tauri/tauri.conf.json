@@ -66,7 +66,9 @@
       "signingIdentity": "FE9B9ADD91CB67176BFE80FF725F77539D75BD96"
     },
     "iOS": {
-      "minimumSystemVersion": "17.0"
+      "minimumSystemVersion": "17.0",
+      "developmentTeam": "M9Z3N2R97A",
+      "bundleVersion": "1"
     }
   }
 }
