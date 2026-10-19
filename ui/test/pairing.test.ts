@@ -14,6 +14,8 @@ const STUDIO: HostAdvert = {
   host: "studio.local",
   port: 3389,
   fingerprint: "ab:ab",
+  account: null,
+  approval: false,
 };
 
 async function pairSheet(fake = new FakeConnectionsApi()) {
