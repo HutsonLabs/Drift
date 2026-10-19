@@ -89,3 +89,10 @@ build metadata (and `altool`/App Store processing re-signs). So signed artifacts
 between runs even from the same commit; the manifest's lockfile hashes, commit and toolchain
 identify what they were built from, and the unsigned binaries are what the reproducibility
 check compares.
+
+## Owner's confirmations (2026-10-19)
+
+- Tags are `v<yy.mm>.<build>` (e.g. `v26.10.4`).
+- The Developer ID DMGs (Drift and Drift Host) stay arm64 only; the Mac App Store package is
+  universal, as App Store distribution requires.
+- Preflight thresholds stay: 40 GB free disk, and a Mac App Store profile valid for 14 more days.
