@@ -319,6 +319,38 @@ fn every_artifact_must_embed_the_same_version_and_build() {
     assert!(release::check_sync(&ok[..1], "26.10", 4).is_err(), "both App Store platforms are required");
 }
 
+// RELEASE-lockstep Red: Drift and Drift Host always ship together, with the same version and
+// build, whether or not either changed since the last release. Every run builds both DMGs, and
+// the sync check refuses a release that lacks any of the four artifacts.
+#[test]
+fn drift_and_drift_host_always_ship_together() {
+    for (dry_run, testflight, github) in [
+        (true, false, false),
+        (false, false, false),
+        (false, true, false),
+        (false, true, true),
+        (false, false, true),
+    ] {
+        let steps = release::steps(Options { dry_run, testflight, github }).unwrap();
+        for step in [StepId::Ios, StepId::MacAppStore, StepId::MacDmg, StepId::HostDmg, StepId::SyncCheck] {
+            assert!(steps.contains(&step), "{step:?} missing from {steps:?}");
+        }
+    }
+    let same = || Some(("26.10".to_owned(), "5".to_owned()));
+    let all = [
+        (ArtifactKind::IosIpa, same()),
+        (ArtifactKind::MacAppStorePkg, same()),
+        (ArtifactKind::MacDmg, same()),
+        (ArtifactKind::HostDmg, same()),
+    ];
+    release::check_sync(&all, "26.10", 5).unwrap();
+    for missing in [ArtifactKind::MacDmg, ArtifactKind::HostDmg] {
+        let without: Vec<_> = all.iter().filter(|(k, _)| *k != missing).cloned().collect();
+        let err = release::check_sync(&without, "26.10", 5).unwrap_err().to_string();
+        assert!(err.contains(&format!("{missing:?} is missing")), "{err}");
+    }
+}
+
 #[test]
 fn uploads_are_per_platform_and_resume_only_the_missing_one() {
     assert_eq!(release::to_upload(false, false), vec![Platform::Ios, Platform::MacOs]);
