@@ -1,6 +1,6 @@
-//! M9-4 Red: the app icon. Drift ships a hand-made drift/wave glyph, generated from a vector
-//! source with `cargo tauri icon`, and — plan §0, macOS only — no Windows, Android or iOS
-//! icon artefacts.
+//! M9-4 Red: the app icon. APP-icon: the source is the Icon Composer file
+//! `src-tauri/icons/AppIcon.icon`, bundled by the Mac and iOS apps; the flat PNGs and `icon.icns`
+//! are rendered from it, and no Windows or Android icon artefacts are committed.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use xtask::icons;
@@ -28,18 +28,36 @@ fn the_bundled_icon_set_is_complete_and_macos_only() {
     assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
 
+/// APP-icon: the Icon Composer file is the one source of the icon, and every layer it draws is
+/// committed with it.
 #[test]
-fn the_vector_source_is_committed_so_the_icons_can_be_regenerated() {
-    // `cargo tauri icon src-tauri/icons/icon.svg` must reproduce the bundled set.
-    let svg = std::fs::read_to_string(xtask::repo::root().join(icons::SOURCE)).expect("the icon source");
-    assert!(svg.contains("<svg"), "the source is an SVG");
-    assert!(svg.len() > 200, "the source is a real drawing, not a placeholder");
+fn the_icon_composer_file_is_the_source_of_the_icon() {
+    let source = xtask::repo::root().join(icons::SOURCE);
+    assert!(source.ends_with("AppIcon.icon"), "the source is {}", source.display());
+    let problems = icons::icon_composer_audit(&source);
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
 
-/// IOS-fix: the iPhone and iPad icon is Drift's waves (`icon-ios.svg`, full bleed), opaque, at
-/// every size `Contents.json` lists, and never Tauri's default logo again (TestFlight 26.10 (4)).
 #[test]
-fn the_ios_app_icon_is_drifts_opaque_waves() {
+fn an_icon_composer_file_without_its_layers_is_reported() {
+    let dir = tempfile::tempdir().unwrap();
+    let icon = dir.path().join("AppIcon.icon");
+    std::fs::create_dir_all(icon.join("Assets")).unwrap();
+    std::fs::write(
+        icon.join("icon.json"),
+        r#"{"groups":[{"layers":[{"image-name":"waves.svg","name":"waves"}]}]}"#,
+    )
+    .unwrap();
+    let problems = icons::icon_composer_audit(&icon);
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains("waves.svg"), "{problems:?}");
+    assert!(!icons::icon_composer_audit(&dir.path().join("missing.icon")).is_empty());
+}
+
+/// APP-icon: the iPhone and iPad app use the same Icon Composer file as the Mac (actool renders
+/// the flat fallbacks), and no PNG appiconset of the same name competes with it.
+#[test]
+fn the_ios_app_icon_is_the_icon_composer_file() {
     let problems = icons::ios_audit(&xtask::repo::root().join("src-tauri"));
     assert!(problems.is_empty(), "{}", problems.join("\n"));
 }

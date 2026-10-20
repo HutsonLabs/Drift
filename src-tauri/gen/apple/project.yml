@@ -30,6 +30,10 @@ targets:
     sources:
       - path: Sources
       - path: Assets.xcassets
+      # The app icon: the Icon Composer file the Mac app bundles too (APP-icon); actool also
+      # renders the flat fallback for iOS before 26.
+      - path: ../../icons/AppIcon.icon
+        buildPhase: resources
       # Rust's static library is linked (`dependencies` below), never copied into the app; a
       # plain source entry made xcodegen bundle the 900 MB `libapp.a` as a resource (STORE-3).
       - path: Externals
