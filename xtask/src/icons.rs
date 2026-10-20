@@ -1,18 +1,19 @@
-//! The app icon set (task M9-4).
+//! The app icon set (tasks M9-4, APP-icon).
 //!
-//! Drift's icon is drawn as a vector ([`SOURCE`]) and expanded with
-//! `cargo tauri icon src-tauri/icons/icon.svg`. `cargo tauri icon` also writes Windows,
-//! Android and iOS artefacts; plan §0 is macOS-only, so [`audit`] fails if any of them is
-//! committed, and checks that every file `tauri.conf.json` bundles exists with the right size.
+//! Drift's icon is an Icon Composer file ([`SOURCE`]). The Mac bundle lists it in
+//! `tauri.conf.json`, and Tauri compiles it into `Assets.car` with actool; the iOS Xcode project
+//! takes the same file as its `AppIcon`. The flat PNGs and `icon.icns` are rendered from it for
+//! places that cannot read an asset catalog. [`audit`] fails on Windows or Android artefacts,
+//! and checks that every file `tauri.conf.json` bundles exists with the right size.
 
 use std::path::Path;
 
-/// The vector source, relative to the workspace root.
-pub const SOURCE: &str = "src-tauri/icons/icon.svg";
+/// The Icon Composer source, relative to the workspace root.
+pub const SOURCE: &str = "src-tauri/icons/AppIcon.icon";
 
 /// Bundled icons, relative to `src-tauri/`, with the pixel size a PNG must have.
 pub const REQUIRED: &[(&str, Option<u32>)] = &[
-    ("icons/icon.svg", None),
+    ("icons/AppIcon.icon/icon.json", None),
     ("icons/32x32.png", Some(32)),
     ("icons/128x128.png", Some(128)),
     ("icons/128x128@2x.png", Some(256)),
@@ -50,7 +51,7 @@ pub fn audit(src_tauri: &Path) -> Vec<String> {
     for (relative, size) in REQUIRED {
         let path = src_tauri.join(relative);
         let Ok(bytes) = std::fs::read(&path) else {
-            problems.push(format!("missing {relative} (run `cargo tauri icon {SOURCE}`)"));
+            problems.push(format!("missing {relative} (render it from {SOURCE})"));
             continue;
         };
         if bytes.is_empty() {
@@ -89,9 +90,12 @@ pub fn audit(src_tauri: &Path) -> Vec<String> {
             .map(|a| a.iter().filter_map(|v| v.as_str().map(ToOwned::to_owned)).collect())
             .unwrap_or_default();
         for entry in &listed {
-            if !src_tauri.join(entry).is_file() {
+            if !src_tauri.join(entry).exists() {
                 problems.push(format!("tauri.conf.json bundles {entry}, which does not exist"));
             }
+        }
+        if !listed.iter().any(|l| l == BUNDLED_SOURCE) {
+            problems.push(format!("tauri.conf.json does not bundle {BUNDLED_SOURCE}"));
         }
         for (relative, size) in REQUIRED {
             if size.is_some() && !listed.iter().any(|l| l == relative) {
@@ -102,90 +106,76 @@ pub fn audit(src_tauri: &Path) -> Vec<String> {
     problems
 }
 
-/// Everything wrong with an Icon Composer file (empty means it is complete).
+/// [`SOURCE`] as `tauri.conf.json` lists it, relative to `src-tauri/`.
+pub const BUNDLED_SOURCE: &str = "icons/AppIcon.icon";
+
+/// Everything wrong with an Icon Composer file (empty means it is complete): `icon.json` parses
+/// and every layer image it names is in `Assets/`.
 #[must_use]
-pub fn icon_composer_audit(_icon: &Path) -> Vec<String> {
-    vec!["APP-icon: not implemented".to_owned()]
-}
-
-/// The iPhone and iPad icon set, relative to `src-tauri/` (IOS-5: tracked in the Xcode project).
-pub const IOS_SET: &str = "gen/apple/Assets.xcassets/AppIcon.appiconset";
-
-/// The full-bleed vector source of the iOS set, relative to `src-tauri/`.
-pub const IOS_SOURCE: &str = "icons/icon-ios.svg";
-
-/// SHA-256 of the 1024 px icon `cargo tauri ios init` writes: Tauri's own logo, which shipped in
-/// TestFlight 26.10 (4) instead of Drift's.
-pub const TAURI_DEFAULT_IOS_ICON_SHA256: &str =
-    "00badc78c2ecb7460bbe02aeeca1e8848724ee133391bb3025df561007187eaf";
-
-/// Whether a PNG has an alpha channel (IHDR colour type 4 or 6, or 3 with a `tRNS` chunk).
-#[must_use]
-pub fn png_has_alpha(bytes: &[u8]) -> bool {
-    match bytes.get(25) {
-        Some(4 | 6) => true,
-        Some(3) => memchr::memmem::find(bytes, b"tRNS").is_some(),
-        _ => false,
+pub fn icon_composer_audit(icon: &Path) -> Vec<String> {
+    let name = icon.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    let Some(document) = std::fs::read_to_string(icon.join("icon.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+    else {
+        return vec![format!("{name}/icon.json is missing or not JSON")];
+    };
+    let mut problems = Vec::new();
+    let layers: Vec<&str> = document
+        .get("groups")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|g| g.get("layers").and_then(serde_json::Value::as_array))
+        .flatten()
+        .filter_map(|l| l.get("image-name").and_then(serde_json::Value::as_str))
+        .collect();
+    if layers.is_empty() {
+        problems.push(format!("{name}/icon.json draws no layers"));
     }
+    for image in layers {
+        if !icon.join("Assets").join(image).is_file() {
+            problems.push(format!("{name}/Assets/{image} is missing"));
+        }
+    }
+    problems
 }
 
-/// Everything wrong with the iOS icon set under `src_tauri` (empty means it is right): every
-/// image `Contents.json` lists exists at its pixel size, is opaque (App Store Connect rejects
-/// transparency), and the set is not Tauri's default logo.
+/// The Xcode project spec, relative to `src-tauri/`; it adds [`SOURCE`] to the iOS target.
+pub const IOS_PROJECT_SPEC: &str = "gen/apple/project.yml";
+
+/// The generated Xcode project, relative to `src-tauri/` (IOS-5: tracked).
+pub const IOS_PROJECT: &str = "gen/apple/drift-app.xcodeproj/project.pbxproj";
+
+/// The PNG icon set `cargo tauri ios init` writes, relative to `src-tauri/`. It carried Tauri's
+/// logo into TestFlight 26.10 (4), and an appiconset named `AppIcon` would compete with
+/// `AppIcon.icon`, so it must not exist.
+pub const IOS_PNG_SET: &str = "gen/apple/Assets.xcassets/AppIcon.appiconset";
+
+/// Everything wrong with the iOS app icon under `src_tauri` (empty means it is right): the
+/// project spec and the generated project both take [`SOURCE`] as a resource, the target's app
+/// icon is `AppIcon`, and no PNG appiconset is left.
 #[must_use]
 pub fn ios_audit(src_tauri: &Path) -> Vec<String> {
-    use sha2::Digest as _;
     let mut problems = Vec::new();
-    if !src_tauri.join(IOS_SOURCE).is_file() {
-        problems.push(format!("missing {IOS_SOURCE}"));
+    match std::fs::read_to_string(src_tauri.join(IOS_PROJECT_SPEC)) {
+        Ok(spec) if spec.contains("path: ../../icons/AppIcon.icon") => {}
+        Ok(_) => problems.push(format!("{IOS_PROJECT_SPEC} does not add ../../icons/AppIcon.icon")),
+        Err(_) => problems.push(format!("missing {IOS_PROJECT_SPEC}")),
     }
-    let set = src_tauri.join(IOS_SET);
-    let contents: serde_json::Value = match std::fs::read_to_string(set.join("Contents.json"))
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-    {
-        Some(v) => v,
-        None => return vec![format!("{IOS_SET}/Contents.json is missing or not JSON")],
-    };
-    let images = contents.get("images").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
-    if images.is_empty() {
-        problems.push(format!("{IOS_SET}/Contents.json lists no images"));
+    match std::fs::read_to_string(src_tauri.join(IOS_PROJECT)) {
+        Ok(project) => {
+            if !project.contains("/* AppIcon.icon in Resources */,") {
+                problems.push(format!("{IOS_PROJECT} does not copy AppIcon.icon (run xcodegen)"));
+            }
+            if !project.contains("ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;") {
+                problems.push(format!("{IOS_PROJECT}: the app icon is not AppIcon"));
+            }
+        }
+        Err(_) => problems.push(format!("missing {IOS_PROJECT}")),
     }
-    for image in &images {
-        let Some(file) = image.get("filename").and_then(serde_json::Value::as_str) else { continue };
-        let points: f64 = image
-            .get("size")
-            .and_then(serde_json::Value::as_str)
-            .and_then(|s| s.split('x').next())
-            .and_then(|w| w.parse().ok())
-            .unwrap_or(0.0);
-        let scale: f64 = image
-            .get("scale")
-            .and_then(serde_json::Value::as_str)
-            .and_then(|s| s.trim_end_matches('x').parse().ok())
-            .unwrap_or(1.0);
-        #[expect(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "icon sizes are small and positive"
-        )]
-        let expected = (points * scale).round() as u32;
-        let Ok(bytes) = std::fs::read(set.join(file)) else {
-            problems.push(format!("{IOS_SET}/{file} is missing"));
-            continue;
-        };
-        match png_size(&bytes) {
-            Some((w, h)) if w == expected && h == expected => {}
-            Some((w, h)) => problems.push(format!("{file} is {w}x{h}, expected {expected} square")),
-            None => problems.push(format!("{file} is not a PNG")),
-        }
-        if png_has_alpha(&bytes) {
-            problems.push(format!("{file} has an alpha channel; App Store icons must be opaque"));
-        }
-        let hash: String = sha2::Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
-        if hash == TAURI_DEFAULT_IOS_ICON_SHA256 {
-            problems.push(format!("{file} is Tauri's default logo; regenerate from {IOS_SOURCE}"));
-        }
+    if src_tauri.join(IOS_PNG_SET).exists() {
+        problems.push(format!("{IOS_PNG_SET} competes with AppIcon.icon; delete it"));
     }
     problems
 }

@@ -12,6 +12,7 @@
 		1DC8B45BD0D7450EE8353F1D /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F774F89C35A068BBBCAB9548 /* QuartzCore.framework */; };
 		2B7C2480D1E4AFA328EECF9E /* VideoToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0042267A051254A22D53E581 /* VideoToolbox.framework */; };
 		31C1957944A2122991F0DAAE /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A4A21955153F894826BFC947 /* PrivacyInfo.xcprivacy */; };
+		3791E46F3CFA7A4F3D7059F2 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 0B3369E11ED33C6469E17FBB /* AppIcon.icon */; };
 		37A7DB61550AD3F6E4E5D5EF /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3DEDCFEA39CE47CBB7E937FB /* WebKit.framework */; };
 		54715347B5A31DB0215AFD52 /* GameController.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 88DBD0E14CF85CFA3A8D238E /* GameController.framework */; };
 		680E39603E0E02F2A52C020B /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB1ABA54F8FDDFB49DC6C9B5 /* MetalKit.framework */; };
@@ -35,6 +36,7 @@
 		0042267A051254A22D53E581 /* VideoToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = VideoToolbox.framework; path = System/Library/Frameworks/VideoToolbox.framework; sourceTree = SDKROOT; };
 		02F2E658E67F5D85AA78844F /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		0409C8C5AFF2533A4D1604FF /* secrets.rs */ = {isa = PBXFileReference; path = secrets.rs; sourceTree = "<group>"; };
+		0B3369E11ED33C6469E17FBB /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		0D6050FD188E44D79C214B58 /* IOSurface.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOSurface.framework; path = System/Library/Frameworks/IOSurface.framework; sourceTree = SDKROOT; };
 		12DDC74AFB187AB3B9ED387F /* dock.rs */ = {isa = PBXFileReference; path = dock.rs; sourceTree = "<group>"; };
 		1A109DE20B32DD6BF2DF4EF9 /* options.rs */ = {isa = PBXFileReference; path = options.rs; sourceTree = "<group>"; };
@@ -122,6 +124,7 @@
 				F38240D2C380ECC7807C0678 /* LaunchScreen.storyboard */,
 				E9483A3FF22BDDADF34C2443 /* drift-app_iOS */,
 				703D284C5D3A72061FAF416C /* Externals */,
+				8DA3034EBBADF02288299698 /* icons */,
 				DDA0ECE0E2F9C8DC546B9177 /* Sources */,
 				2F85679F6A57F5C361BA0567 /* src */,
 				324DFCFD727662195F0EA286 /* Frameworks */,
@@ -192,6 +195,15 @@
 				CA9808D65490328DB053E782 /* arm64 */,
 			);
 			path = Externals;
+			sourceTree = "<group>";
+		};
+		8DA3034EBBADF02288299698 /* icons */ = {
+			isa = PBXGroup;
+			children = (
+				0B3369E11ED33C6469E17FBB /* AppIcon.icon */,
+			);
+			name = icons;
+			path = ../../icons;
 			sourceTree = "<group>";
 		};
 		8D99127024DBA4D828E92FFE /* drift-app */ = {
@@ -318,6 +330,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3791E46F3CFA7A4F3D7059F2 /* AppIcon.icon in Resources */,
 				7204550DDF3A063ADC92FC1E /* Assets.xcassets in Resources */,
 				A0585B1B4884D37DDF4C3368 /* LaunchScreen.storyboard in Resources */,
 				31C1957944A2122991F0DAAE /* PrivacyInfo.xcprivacy in Resources */,
