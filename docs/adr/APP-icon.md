@@ -36,6 +36,14 @@ rendered from `icon.svg`, and iOS used a separate PNG appiconset rendered from
    appiconset is left. The old PNG checks (size, opacity, Tauri's logo hash) are dropped
    because there is no PNG set left to check.
 
+6. **Drift Host (HOST-icon, 2026-10-19).** Drift Host has its own Icon Composer file,
+   `crates/drift-host-app/AppIcon.icon`, next to the host's `Info.plist` and launchd plists,
+   because the host is a separate app with its own bundle. `cargo xtask host-bundle` (and so
+   `host-release` and the release pipeline's Host DMG) compiles it with actool into
+   `Contents/Resources/Assets.car` and a flat `AppIcon.icns`. The `Info.plist` names both
+   (`CFBundleIconName`, `CFBundleIconFile` = `AppIcon`). No flat renders are committed for the
+   host: actool makes the `icns` at bundle time.
+
 ## Consequences
 
 - Release builds need Xcode 26 or later. With an older actool, Tauri skips `Assets.car` and the

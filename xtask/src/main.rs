@@ -242,6 +242,11 @@ fn host_bundle(root: &Path, profile: &str) -> Result<()> {
         }
         std::fs::copy(from, to).with_context(|| format!("copying {} to {}", from.display(), to.display()))?;
     }
+    std::fs::create_dir_all(plan.app.join("Contents/Resources"))?;
+    let status = Command::new("xcrun").args(&plan.actool_args).status()?;
+    if !status.success() {
+        bail!("xcrun {} failed", plan.actool_args.join(" "));
+    }
     // Ad-hoc signature so the bundle runs locally; Developer ID signing is STORE-4.
     let status =
         Command::new("codesign").args(["--force", "--deep", "--sign", "-"]).arg(&plan.app).status()?;
