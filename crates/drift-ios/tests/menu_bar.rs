@@ -23,7 +23,7 @@ mod tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use drift_ext::menus::{KeyEquivalent, MenuItem, MenuSnapshot, Modifiers};
+    use drift_core::menus::{KeyEquivalent, MenuItem, MenuSnapshot, Modifiers};
     use drift_ios::menu_bar::{MenuBar, build_menus};
     use objc2::MainThreadMarker;
     use objc2_ui_kit::{UIAction, UIMenu, UIMenuElementAttributes, UIMenuElementState, UIMenuOptions};

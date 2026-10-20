@@ -46,7 +46,6 @@ pub const VERSION_FILES: &[VersionFile] = &[
     VersionFile { path: "src-tauri/tauri.conf.json", format: Format::JsonVersion, semver: true },
     VersionFile { path: "ui/package.json", format: Format::JsonVersion, semver: true },
     VersionFile { path: "src-tauri/Info.plist", format: Format::PlistShort, semver: false },
-    VersionFile { path: "crates/drift-host-app/Info.plist", format: Format::PlistShort, semver: false },
     VersionFile {
         path: "src-tauri/gen/apple/drift-app_iOS/Info.plist",
         format: Format::PlistShort,
@@ -187,9 +186,7 @@ pub enum StepId {
     MacAppStore,
     /// Drift for Mac, Developer ID, in a signed DMG.
     MacDmg,
-    /// Drift Host, Developer ID, in a signed DMG.
-    HostDmg,
-    /// Notarize and staple both DMGs.
+    /// Notarize and staple the DMG.
     Notarize,
     /// `SHA256SUMS` over the artifacts.
     Checksums,
@@ -200,7 +197,7 @@ pub enum StepId {
     Testflight,
     /// "What to Test" on both TestFlight builds.
     WhatsNew,
-    /// Tag, push the tag to `origin`, create the release on spaces.hutson.cloud with both DMGs
+    /// Tag, push the tag to `origin`, create the release on spaces.hutson.cloud with the DMG
     /// and `SHA256SUMS`.
     Spaces,
 }
@@ -216,7 +213,7 @@ impl StepId {
         Duration::from_secs(match self {
             Self::Notarize => 3600,
             Self::Testflight | Self::WhatsNew => 3600,
-            Self::Ios | Self::MacAppStore | Self::MacDmg | Self::HostDmg => 3 * 3600,
+            Self::Ios | Self::MacAppStore | Self::MacDmg => 3 * 3600,
             Self::Gate => 3 * 3600,
             _ => 1800,
         })
@@ -236,7 +233,6 @@ pub fn steps(options: Options) -> Result<Vec<StepId>> {
         StepId::Ios,
         StepId::MacAppStore,
         StepId::MacDmg,
-        StepId::HostDmg,
     ];
     if !options.dry_run {
         steps.push(StepId::Notarize);
@@ -276,8 +272,6 @@ pub enum ArtifactKind {
     MacAppStorePkg,
     /// Drift for Mac, Developer ID DMG.
     MacDmg,
-    /// Drift Host, Developer ID DMG.
-    HostDmg,
     /// `SHA256SUMS`.
     Checksums,
 }
@@ -569,9 +563,8 @@ pub fn asc_sync(builds: &[(Platform, u32)]) -> AscSync {
 }
 
 /// Lockstep check: every artifact's embedded `(CFBundleShortVersionString, CFBundleVersion)`
-/// equals `(version, build)`, and all four are present: both App Store platforms, and Drift's
-/// and Drift Host's DMGs. Drift and Drift Host always ship together, whether or not either
-/// changed since the last release (RELEASE-lockstep).
+/// equals `(version, build)`, and all three are present: both App Store platforms and the DMG
+/// (RELEASE-lockstep).
 pub fn check_sync(
     found: &[(ArtifactKind, Option<(String, String)>)],
     version: &str,
@@ -579,9 +572,7 @@ pub fn check_sync(
 ) -> Result<()> {
     let want = (version.to_owned(), build.to_string());
     let mut wrong = Vec::new();
-    for kind in
-        [ArtifactKind::IosIpa, ArtifactKind::MacAppStorePkg, ArtifactKind::MacDmg, ArtifactKind::HostDmg]
-    {
+    for kind in [ArtifactKind::IosIpa, ArtifactKind::MacAppStorePkg, ArtifactKind::MacDmg] {
         if !found.iter().any(|(k, _)| *k == kind) {
             wrong.push(format!("{kind:?} is missing"));
         }
@@ -597,7 +588,7 @@ pub fn check_sync(
         Ok(())
     } else {
         bail!(
-            "the release is out of step (iOS, Mac App Store, Drift and Drift Host ship together): {}",
+            "the release is out of step (iOS, Mac App Store and the DMG ship together): {}",
             wrong.join("; ")
         )
     }
@@ -646,7 +637,6 @@ pub fn artifact_name(kind: ArtifactKind, version: &str, build: u32) -> String {
         ArtifactKind::IosIpa => format!("Drift_{version}.{build}_iOS.ipa"),
         ArtifactKind::MacAppStorePkg => format!("Drift_{version}.{build}_MacAppStore.pkg"),
         ArtifactKind::MacDmg => format!("Drift_{version}.{build}_aarch64.dmg"),
-        ArtifactKind::HostDmg => format!("Drift-Host_{version}.{build}_aarch64.dmg"),
         ArtifactKind::Checksums => "SHA256SUMS".to_owned(),
     }
 }
@@ -733,13 +723,9 @@ pub fn spaces_release(version: &str, build: u32, commit: &str, notes: &str, sums
     })
 }
 
-/// The files attached to a published release: both DMGs (always together) and the checksums.
+/// The files attached to a published release: the DMG and the checksums.
 pub fn published_files(version: &str, build: u32) -> Vec<String> {
-    vec![
-        artifact_name(ArtifactKind::MacDmg, version, build),
-        artifact_name(ArtifactKind::HostDmg, version, build),
-        "SHA256SUMS".to_owned(),
-    ]
+    vec![artifact_name(ArtifactKind::MacDmg, version, build), "SHA256SUMS".to_owned()]
 }
 
 /// Whether a finished run can be published later without rebuilding (`--publish`): not a dry

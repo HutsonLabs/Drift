@@ -3,7 +3,7 @@
 // hover/focus actions, the ⋯ and context menus, and live thumbnails (memory only).
 import { describe, expect, test } from "bun:test";
 import type { OpenConnection } from "../src/bindings";
-import { addGnome, FakeConnectionsApi, startConnections } from "./fakes";
+import { newConnection, FakeConnectionsApi, startConnections } from "./fakes";
 import { button, entry, flush, hasButton, key, openConnection, profile, text, type } from "./helpers";
 
 const STUDIO = profile("headless", { name: "Studio Workstation", host: "192.168.1.20" });
@@ -64,7 +64,7 @@ describe("toolbar", () => {
 
   test("+ starts a new connection", async () => {
     const { root, fake } = await startConnections(board());
-    await addGnome(root);
+    await newConnection(root);
     expect(fake.calls).toContainEqual(["newProfile", "headless"]);
     expect(text(root.querySelector("[role=dialog] h2"))).toBe("New Connection");
   });
@@ -82,7 +82,7 @@ describe("sections", () => {
     expect(text(saved?.querySelector(".section-count"))).toBe("2 connections");
     const last = saved?.querySelector(".gallery")?.lastElementChild as HTMLElement;
     expect(last.matches("button.card.add")).toBe(true);
-    expect(last.getAttribute("aria-label")).toBe("Add a Mac or GNOME computer");
+    expect(last.getAttribute("aria-label")).toBe("Add a GNOME computer");
   });
 
   test("no Open section without windows; singular counts", async () => {
@@ -98,7 +98,7 @@ describe("sections", () => {
     const c = card(root, "Kitchen Laptop");
     expect(c.querySelector(".thumb")?.classList.contains("thumb-desktop-sharing")).toBe(true);
     expect(c.querySelector(".thumb svg")).not.toBeNull();
-    expect(c.querySelector(".card-info .glyph-gnome")).not.toBeNull();
+    expect(c.querySelector(".card-info .glyph-desktop-sharing")).not.toBeNull();
     expect(text(c.querySelector(".item-detail"))).toBe("kitchen.lan · Desktop Sharing");
     expect(text(card(root, "Build Server").querySelector(".item-detail"))).toBe("build-01.lan · Headless session");
   });
@@ -113,10 +113,11 @@ describe("sections", () => {
     expect(section(root, "Open")).toBeNull();
   });
 
-  test("first launch: an empty gallery invites you to add a computer and asks which kind", async () => {
-    const { root } = await startConnections(new FakeConnectionsApi());
-    expect(text(root)).toContain("Add a Mac or GNOME computer");
-    expect(root.querySelector("[role=dialog][aria-label='Add a Connection']")).not.toBeNull();
+  test("first launch: an empty gallery invites you to add a computer and opens the New Connection sheet", async () => {
+    const { root, fake } = await startConnections(new FakeConnectionsApi());
+    expect(text(root.querySelector(".welcome h2"))).toBe("Add a GNOME computer");
+    expect(fake.calls).toContainEqual(["newProfile", "headless"]);
+    expect(text(root.querySelector("[role=dialog] h2"))).toBe("New Connection");
   });
 });
 
@@ -445,8 +446,6 @@ describe("intents from the menu bar and other windows", () => {
   test("new and edit open the sheet", async () => {
     const { root, app, fake } = await startConnections(board());
     await app.onIntent({ kind: "new" });
-    expect(root.querySelector("[role=dialog][aria-label='Add a Connection']")).not.toBeNull();
-    await addGnome(root);
     expect(text(root.querySelector("[role=dialog] h2"))).toBe("New Connection");
     expect(fake.calls).toContainEqual(["newProfile", "headless"]);
     await app.onIntent({ kind: "edit", profile_id: KITCHEN.id });

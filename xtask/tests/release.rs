@@ -21,7 +21,6 @@ fn every_version_file_is_listed_once() {
         "src-tauri/tauri.conf.json",
         "ui/package.json",
         "src-tauri/Info.plist",
-        "crates/drift-host-app/Info.plist",
         "src-tauri/gen/apple/drift-app_iOS/Info.plist",
         "src-tauri/gen/apple/project.yml",
     ] {
@@ -113,7 +112,6 @@ fn the_default_plan_builds_everything_and_publishes_nothing() {
             StepId::Ios,
             StepId::MacAppStore,
             StepId::MacDmg,
-            StepId::HostDmg,
             StepId::Notarize,
             StepId::Checksums,
             StepId::SyncCheck,
@@ -225,7 +223,6 @@ fn artifact_names_and_the_output_directory() {
         "Drift_26.10.4_MacAppStore.pkg"
     );
     assert_eq!(release::artifact_name(ArtifactKind::MacDmg, "26.10", 4), "Drift_26.10.4_aarch64.dmg");
-    assert_eq!(release::artifact_name(ArtifactKind::HostDmg, "26.10", 4), "Drift-Host_26.10.4_aarch64.dmg");
     assert_eq!(release::tag("26.10", 4), "v26.10.4");
     assert_eq!(release::receipt_path(root, "abc"), PathBuf::from("/repo/target/ci-receipts/abc"));
 }
@@ -307,7 +304,6 @@ fn every_artifact_must_embed_the_same_version_and_build() {
         (ArtifactKind::IosIpa, same("26.10", "4")),
         (ArtifactKind::MacAppStorePkg, same("26.10", "4")),
         (ArtifactKind::MacDmg, same("26.10", "4")),
-        (ArtifactKind::HostDmg, same("26.10", "4")),
     ];
     release::check_sync(&ok, "26.10", 4).unwrap();
     let mut bad = ok.clone();
@@ -319,11 +315,11 @@ fn every_artifact_must_embed_the_same_version_and_build() {
     assert!(release::check_sync(&ok[..1], "26.10", 4).is_err(), "both App Store platforms are required");
 }
 
-// RELEASE-lockstep Red: Drift and Drift Host always ship together, with the same version and
-// build, whether or not either changed since the last release. Every run builds both DMGs, and
-// the sync check refuses a release that lacks any of the four artifacts.
+// RELEASE-lockstep: iOS, the Mac App Store package and the DMG always ship together, with the
+// same version and build; the sync check refuses a release that lacks any of the three
+// (GNOME-only: there is no Drift Host DMG any more).
 #[test]
-fn drift_and_drift_host_always_ship_together() {
+fn every_run_ships_ios_the_mac_app_store_and_the_dmg_together() {
     for (dry_run, testflight, spaces) in [
         (true, false, false),
         (false, false, false),
@@ -332,7 +328,7 @@ fn drift_and_drift_host_always_ship_together() {
         (false, false, true),
     ] {
         let steps = release::steps(Options { dry_run, testflight, spaces }).unwrap();
-        for step in [StepId::Ios, StepId::MacAppStore, StepId::MacDmg, StepId::HostDmg, StepId::SyncCheck] {
+        for step in [StepId::Ios, StepId::MacAppStore, StepId::MacDmg, StepId::SyncCheck] {
             assert!(steps.contains(&step), "{step:?} missing from {steps:?}");
         }
     }
@@ -341,10 +337,9 @@ fn drift_and_drift_host_always_ship_together() {
         (ArtifactKind::IosIpa, same()),
         (ArtifactKind::MacAppStorePkg, same()),
         (ArtifactKind::MacDmg, same()),
-        (ArtifactKind::HostDmg, same()),
     ];
     release::check_sync(&all, "26.10", 5).unwrap();
-    for missing in [ArtifactKind::MacDmg, ArtifactKind::HostDmg] {
+    for missing in [ArtifactKind::IosIpa, ArtifactKind::MacAppStorePkg, ArtifactKind::MacDmg] {
         let without: Vec<_> = all.iter().filter(|(k, _)| *k != missing).cloned().collect();
         let err = release::check_sync(&without, "26.10", 5).unwrap_err().to_string();
         assert!(err.contains(&format!("{missing:?} is missing")), "{err}");
@@ -365,10 +360,7 @@ fn releases_publish_on_spaces_hutson_cloud() {
     assert_eq!(body["prerelease"], false);
     let text = body["body"].as_str().unwrap();
     assert!(text.starts_with("# Drift 26.10") && text.contains("11  a.dmg"), "{text}");
-    assert_eq!(
-        release::published_files("26.10", 6),
-        ["Drift_26.10.6_aarch64.dmg", "Drift-Host_26.10.6_aarch64.dmg", "SHA256SUMS"]
-    );
+    assert_eq!(release::published_files("26.10", 6), ["Drift_26.10.6_aarch64.dmg", "SHA256SUMS"]);
 }
 
 #[test]

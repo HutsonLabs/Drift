@@ -100,3 +100,18 @@ rdp_username = "u"
     let s = ProfileStore::from_toml(text).unwrap();
     assert_eq!(s.profiles().len(), 1);
 }
+
+/// GNOME-only: Drift 26.10's profiles of Macs paired with Drift Host are dropped on load, and
+/// the next save leaves them out.
+#[test]
+fn drift_host_profiles_from_26_10_are_dropped() {
+    let mut s = ProfileStore::new();
+    s.upsert(profile(1, "Linux box", ConnectMode::Headless)).unwrap();
+    let gnome = s.to_toml().unwrap();
+    let mac = "\n[[profiles]]\nid = \"00000000-0000-0000-0000-000000000002\"\nname = \"Studio\"\n\
+               host = \"studio.local\"\nport = 3389\nmode = \"headless\"\nrdp_username = \"me\"\n\
+               paired_host = \"00000000-0000-0000-0000-0000000000aa\"\n";
+    let back = ProfileStore::from_toml(&format!("{gnome}{mac}")).unwrap();
+    assert_eq!(back, s);
+    assert!(!back.to_toml().unwrap().contains("paired_host"));
+}

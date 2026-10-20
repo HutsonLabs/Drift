@@ -8,7 +8,6 @@ fn expected(r: &DisconnectReason) -> bool {
         Network | TlsEof | ServerShutdown | Timeout => true,
         AuthFailed | RdstlsFailed(_) | CertMismatch => false,
         ProtocolError(_) | RedirectLoop | UserClosed | LoggedOffRemotely | LocalNetworkDenied => false,
-        PairingRefused(_) => false,
     }
 }
 
@@ -28,7 +27,6 @@ fn retryability_table() {
         (UserClosed, false),
         (LoggedOffRemotely, false),
         (LocalNetworkDenied, false),
-        (PairingRefused("The Mac did not accept the code.".into()), false),
     ];
     for (reason, retryable) in table {
         assert_eq!(reason.is_retryable(), retryable, "{reason:?}");

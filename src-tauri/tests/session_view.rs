@@ -157,7 +157,6 @@ fn stats(fps: f32) -> SessionEvent {
         frame_latency_p95_ms: 4.26,
         input_to_wire_p99_ms: 0.8,
         unacked_frames: 2,
-        host_quality: None,
     })
 }
 

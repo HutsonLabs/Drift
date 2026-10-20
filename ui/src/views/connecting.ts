@@ -10,7 +10,6 @@ const STAGES: Record<ConnectStage, string> = {
   nla: "Signing in…",
   rdstls: "Opening the GNOME login screen…",
   activation: "Starting the remote desktop…",
-  approval: "Click Allow on the Mac to finish pairing…",
 };
 
 /** The checklist steps a mode goes through, in order. */
@@ -24,8 +23,6 @@ export function stepsFor(mode: ConnectMode): ConnectStage[] {
  * leg 1 never gets past "Signing in".
  */
 export function currentStep(mode: ConnectMode, stage: ConnectStage, leg: number): number {
-  // HOST-15: a Drift Host's user approves the device after every other step.
-  if (stage === "approval") return stepsFor(mode).length;
   if (mode !== "remote-login") return Math.max(0, stepsFor(mode).indexOf(stage));
   if (leg >= 2) return stage === "activation" ? 4 : 3;
   return stage === "activation" || stage === "rdstls" ? 2 : ["tcp", "tls", "nla"].indexOf(stage);
@@ -45,7 +42,7 @@ export function renderConnecting(root: HTMLElement, view: SessionView_Serialize,
   const steps = h(
     "ol",
     { class: "stages", "aria-hidden": "true" },
-    [...stepsFor(view.mode), ...(stage === "approval" ? (["approval"] as const) : [])].map((s, i) =>
+    stepsFor(view.mode).map((s, i) =>
       h(
         "li",
         { class: i < now ? "stage done" : i === now ? "stage now" : "stage" },

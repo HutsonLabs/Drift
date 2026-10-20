@@ -10,7 +10,7 @@ use sha2::{Digest as _, Sha256};
 use xtask::release::{self, Artifact, ArtifactKind, Manifest, Options, Platform, StepId};
 use xtask::{store, testflight};
 
-use super::{asc_get, asc_key, asc_request, bun, cargo, checked, host_dmg, mas_package_build};
+use super::{asc_get, asc_key, asc_request, bun, cargo, checked, mas_package_build};
 
 /// The Mac App Store provisioning profile, where STORE-1 keeps it.
 const DEFAULT_PROFILE: &str =
@@ -361,35 +361,6 @@ pub fn set_version(root: &Path, version: &str) -> Result<()> {
     Ok(())
 }
 
-/// Builds `drift-host` twice from scratch in the same place and compares the binaries.
-pub fn verify_reproducible(root: &Path) -> Result<()> {
-    let epoch: u64 = git(root, &["log", "-1", "--format=%ct"])?.parse()?;
-    deterministic_env(root, epoch);
-    let target = root.join("target/repro");
-    let mut hashes = Vec::new();
-    for round in 1..=2 {
-        if target.exists() {
-            std::fs::remove_dir_all(&target)?;
-        }
-        log(None, &format!("==> reproducibility build {round}/2 (drift-host, release)"));
-        checked(
-            Command::new(cargo())
-                .args(["build", "--release", "--locked", "-p", "drift-host", "--bin", "drift-host"])
-                .env("CARGO_TARGET_DIR", &target)
-                .current_dir(root),
-            "cargo build",
-        )?;
-        hashes.push(sha256_file(&target.join("release/drift-host"))?.0);
-    }
-    std::fs::remove_dir_all(&target)?;
-    if hashes[0] == hashes[1] {
-        println!("reproducible: drift-host {} (two clean builds)", hashes[0]);
-        Ok(())
-    } else {
-        bail!("not reproducible: drift-host {} vs {}", hashes[0], hashes[1])
-    }
-}
-
 /// The release pipeline.
 pub fn run(root: &Path, args: &Args) -> Result<()> {
     let opts = args.options;
@@ -612,14 +583,10 @@ fn run_step(step: StepId, ctx: &Ctx<'_>, manifest: &mut Manifest) -> Result<Vec<
             Ok(vec![collect(&pkg, out, ArtifactKind::MacAppStorePkg, version, build)?])
         }
         StepId::MacDmg => Ok(vec![mac_dmg(ctx, step)?]),
-        StepId::HostDmg => {
-            let dmg = host_dmg(root, Some(build), false)?;
-            Ok(vec![collect(&dmg, out, ArtifactKind::HostDmg, version, build)?])
-        }
         StepId::Notarize => {
             let (key, key_id, issuer) = asc_key()?;
             let mut outputs = Vec::new();
-            for kind in [ArtifactKind::MacDmg, ArtifactKind::HostDmg] {
+            for kind in [ArtifactKind::MacDmg] {
                 let name = release::artifact_name(kind, version, build);
                 let dmg = out.join(&name);
                 if Command::new("xcrun").args(["stapler", "validate"]).arg(&dmg).output()?.status.success() {
@@ -660,12 +627,7 @@ fn run_step(step: StepId, ctx: &Ctx<'_>, manifest: &mut Manifest) -> Result<Vec<
         StepId::Checksums => {
             let mut files = Vec::new();
             let mut artifacts = Vec::new();
-            for kind in [
-                ArtifactKind::IosIpa,
-                ArtifactKind::MacAppStorePkg,
-                ArtifactKind::MacDmg,
-                ArtifactKind::HostDmg,
-            ] {
+            for kind in [ArtifactKind::IosIpa, ArtifactKind::MacAppStorePkg, ArtifactKind::MacDmg] {
                 let name = release::artifact_name(kind, version, build);
                 let (sha256, size) = sha256_file(&out.join(&name))?;
                 files.push((name.clone(), sha256.clone()));
@@ -682,12 +644,7 @@ fn run_step(step: StepId, ctx: &Ctx<'_>, manifest: &mut Manifest) -> Result<Vec<
         }
         StepId::SyncCheck => {
             let mut found = Vec::new();
-            for kind in [
-                ArtifactKind::IosIpa,
-                ArtifactKind::MacAppStorePkg,
-                ArtifactKind::MacDmg,
-                ArtifactKind::HostDmg,
-            ] {
+            for kind in [ArtifactKind::IosIpa, ArtifactKind::MacAppStorePkg, ArtifactKind::MacDmg] {
                 let file = out.join(release::artifact_name(kind, version, build));
                 if file.exists() {
                     found.push((kind, embedded_version(kind, &file, out)));
@@ -809,7 +766,7 @@ fn embedded_version(kind: ArtifactKind, file: &Path, out: &Path) -> Option<(Stri
                 .is_ok_and(|s| s.success());
             if ok { find_plist(&expanded, "Drift.app").and_then(|p| read(&p)) } else { None }
         }
-        ArtifactKind::MacDmg | ArtifactKind::HostDmg => {
+        ArtifactKind::MacDmg => {
             let mount = scratch.join("mnt");
             std::fs::create_dir_all(&mount).ok()?;
             let ok = Command::new("hdiutil")
@@ -819,8 +776,7 @@ fn embedded_version(kind: ArtifactKind, file: &Path, out: &Path) -> Option<(Stri
                 .stdout(std::process::Stdio::null())
                 .status()
                 .is_ok_and(|s| s.success());
-            let app = if kind == ArtifactKind::MacDmg { "Drift.app" } else { "Drift Host.app" };
-            let found = if ok { read(&mount.join(app).join("Contents/Info.plist")) } else { None };
+            let found = if ok { read(&mount.join("Drift.app").join("Contents/Info.plist")) } else { None };
             if ok {
                 let _ = Command::new("hdiutil").args(["detach", "-quiet"]).arg(&mount).status();
             }

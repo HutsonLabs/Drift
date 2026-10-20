@@ -37,9 +37,6 @@ pub enum StoreError {
     /// Two profiles share an id.
     #[error("profiles file contains the id {0} more than once")]
     DuplicateId(Uuid),
-    /// The profile is paired with a Drift Host: its pin only changes by pairing again.
-    #[error("profile {0} is a paired Mac; pair it again to trust a new certificate")]
-    PairedHost(Uuid),
     /// Serialization failed.
     #[error("could not serialize profiles: {0}")]
     Serialize(String),
@@ -52,10 +49,20 @@ pub enum StoreError {
 }
 
 #[derive(Serialize, Deserialize)]
-struct Document {
+struct Document<P> {
     version: u32,
+    #[serde(default = "Vec::new")]
+    profiles: Vec<P>,
+}
+
+/// A profile as read: Drift 26.10 also saved Macs paired with Drift Host, marked by
+/// `paired_host`. Drift Host is retired (ADR `GNOME-only`), so those are dropped on load.
+#[derive(Deserialize)]
+struct StoredProfile {
+    #[serde(flatten)]
+    profile: ConnectionProfile,
     #[serde(default)]
-    profiles: Vec<ConnectionProfile>,
+    paired_host: Option<Uuid>,
 }
 
 /// All saved connection profiles, in insertion order.
@@ -74,20 +81,23 @@ impl ProfileStore {
     ///
     /// Profiles that fail [`profile::validate`] are still loaded (the user can fix them in the
     /// form); structural problems (bad TOML, duplicate ids, newer version) are errors.
+    /// Profiles of a Mac paired with Drift Host (Drift 26.10) are skipped.
     pub fn from_toml(s: &str) -> Result<Self, StoreError> {
         if s.trim().is_empty() {
             return Ok(Self::new());
         }
-        let doc: Document = toml::from_str(s).map_err(|e| StoreError::Parse(e.to_string()))?;
+        let doc: Document<StoredProfile> = toml::from_str(s).map_err(|e| StoreError::Parse(e.to_string()))?;
         if doc.version > STORE_VERSION {
             return Err(StoreError::UnsupportedVersion { found: doc.version });
         }
-        for (i, p) in doc.profiles.iter().enumerate() {
-            if doc.profiles[..i].iter().any(|q| q.id == p.id) {
+        let profiles: Vec<ConnectionProfile> =
+            doc.profiles.into_iter().filter(|p| p.paired_host.is_none()).map(|p| p.profile).collect();
+        for (i, p) in profiles.iter().enumerate() {
+            if profiles[..i].iter().any(|q| q.id == p.id) {
                 return Err(StoreError::DuplicateId(p.id));
             }
         }
-        Ok(Self { profiles: doc.profiles })
+        Ok(Self { profiles })
     }
 
     /// Serializes to `profiles.toml` text.
@@ -136,11 +146,6 @@ impl ProfileStore {
     /// Stores (or clears) the TOFU certificate pin of profile `id`.
     pub fn set_pin(&mut self, id: Uuid, pin: Option<CertFingerprint>) -> Result<(), StoreError> {
         let p = self.profiles.iter_mut().find(|p| p.id == id).ok_or(StoreError::NotFound(id))?;
-        // A paired host's pin came from the pairing (IOS-9): no TOFU prompt or "forget" may
-        // replace it.
-        if p.paired_host.is_some() && p.cert_pin != pin {
-            return Err(StoreError::PairedHost(id));
-        }
         p.cert_pin = pin;
         Ok(())
     }

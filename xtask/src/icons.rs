@@ -106,9 +106,6 @@ pub fn audit(src_tauri: &Path) -> Vec<String> {
     problems
 }
 
-/// Drift Host's Icon Composer source, relative to the workspace root (HOST-icon).
-pub const HOST_SOURCE: &str = "crates/drift-host-app/AppIcon.icon";
-
 /// [`SOURCE`] as `tauri.conf.json` lists it, relative to `src-tauri/`.
 pub const BUNDLED_SOURCE: &str = "icons/AppIcon.icon";
 

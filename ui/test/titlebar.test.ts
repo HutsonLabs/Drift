@@ -34,21 +34,21 @@ async function start(fake = new FakeTitlebarApi()) {
 }
 
 describe("identity capsule", () => {
-  test("pulls the identity on load: kind glyph, name, GNOME mode and a live dot", async () => {
+  test("pulls the identity on load: mode glyph, name, mode and a live dot", async () => {
     const { root, fake, app } = await start();
     expect(fake.calls).toContainEqual(["windowIdentity"]);
     const capsule = root.querySelector(".ident") as HTMLElement;
-    expect(capsule.querySelector(".glyph-gnome")).not.toBeNull();
+    expect(capsule.querySelector(".glyph-remote-login")).not.toBeNull();
     expect(text(capsule.querySelector(".name"))).toBe("Homelab");
     expect(text(capsule.querySelector(".detail"))).toBe("Remote Login");
     expect(capsule.querySelector(".status.live")).not.toBeNull();
     expect(capsule.querySelector(".spin")).toBeNull();
     // VoiceOver hears the status, not a coloured dot.
-    expect(capsule.getAttribute("aria-label")).toBe("Homelab, GNOME, Remote Login, Live");
+    expect(capsule.getAttribute("aria-label")).toBe("Homelab, Remote Login, Live");
     app.dispose();
   });
 
-  test("a GNOME capsule names its mode", async () => {
+  test("the capsule names the mode", async () => {
     const { root, app } = await start();
     const names = { headless: "Headless", "desktop-sharing": "Desktop Sharing", "remote-login": "Remote Login" } as const;
     for (const mode of ["headless", "desktop-sharing", "remote-login"] as const) {
@@ -63,7 +63,7 @@ describe("identity capsule", () => {
     app.onIdentity(identity({ status: "connecting" }));
     expect(root.querySelector(".ident .spin")).not.toBeNull();
     expect(root.querySelector(".ident .status")).toBeNull();
-    expect(root.querySelector(".ident")?.getAttribute("aria-label")).toBe("Homelab, GNOME, Remote Login, Connecting");
+    expect(root.querySelector(".ident")?.getAttribute("aria-label")).toBe("Homelab, Remote Login, Connecting");
     app.onIdentity(identity({ status: "reconnecting" }));
     expect(root.querySelector(".ident .status.reconnecting")).not.toBeNull();
     app.onIdentity(identity({ status: "failed" }));

@@ -71,23 +71,10 @@ enum Cmd {
     },
     /// Build the Apple silicon .app/.dmg (task M9-5).
     Bundle,
-    /// Build `Drift Host.app` (the menu-bar host) into `target/<profile>/bundle/` (HOST-9).
-    HostBundle {
-        /// Use the debug build instead of release.
-        #[arg(long)]
-        debug: bool,
-    },
     /// List private-API strings in a built app's executables that App Review may flag (STORE-2).
     ReviewRisk {
         /// The `.app` bundle (every file in `Contents/MacOS` is scanned) or one executable.
         path: PathBuf,
-    },
-    /// Sign `Drift Host.app` with Developer ID, make the DMG and (optionally) notarize it (STORE-4).
-    HostRelease {
-        /// Submit the DMG to Apple's notary service and staple the ticket. Reads the App Store
-        /// Connect key from `APPLE_API_KEY_PATH`, `APPLE_KEY_ID` and `APPLE_API_ISSUER`.
-        #[arg(long)]
-        notarize: bool,
     },
     /// Release pipeline (ADR `RELEASE-pipeline`): preflight, gate, one build number for iOS and
     /// macOS, every artifact into `target/release-out/<yy.mm>-<build>/` with `manifest.json` and
@@ -102,7 +89,7 @@ enum Cmd {
         /// "What to Test".
         #[arg(long)]
         testflight: bool,
-        /// Tag `v<yy.mm>.<build>`, push the tag to `origin` and publish both DMGs as a release on
+        /// Tag `v<yy.mm>.<build>`, push the tag to `origin` and publish the DMG as a release on
         /// spaces.hutson.cloud (token in `FORGEJO_API_KEY`).
         #[arg(long)]
         spaces: bool,
@@ -124,9 +111,6 @@ enum Cmd {
         /// Only rewrite every version file to `yy.mm` (and `Cargo.lock`), then stop.
         #[arg(long, value_name = "YY.MM")]
         set_version: Option<String>,
-        /// Only build `drift-host` twice from scratch and compare the binaries, then stop.
-        #[arg(long)]
-        verify_reproducible: bool,
     },
     /// Build the Mac App Store package: universal, sandboxed, Apple Distribution (STORE-1).
     MasPackage {
@@ -187,27 +171,13 @@ fn run(cmd: Cmd) -> Result<()> {
             e2e(&root, &args, bench.then_some(BenchOptions { update_baseline }))
         }
         Cmd::Bundle => not_yet("bundle", "M9-5"),
-        Cmd::HostBundle { debug } => host_bundle(&root, if debug { "debug" } else { "release" }),
         Cmd::ReviewRisk { path } => review_risk(&path),
-        Cmd::HostRelease { notarize } => host_release(&root, notarize),
         Cmd::MasPackage { profile } => mas_package(&root, profile.as_deref()).map(|_| ()),
-        Cmd::Release {
-            dry_run,
-            testflight,
-            spaces,
-            publish,
-            resume,
-            build_number,
-            profile,
-            set_version,
-            verify_reproducible,
-        } => {
+        Cmd::Release { dry_run, testflight, spaces, publish, resume, build_number, profile, set_version } => {
             if let Some(dir) = publish {
                 release_cmd::publish(&root, &dir)
             } else if let Some(version) = set_version {
                 release_cmd::set_version(&root, &version)
-            } else if verify_reproducible {
-                release_cmd::verify_reproducible(&root)
             } else {
                 release_cmd::run(
                     &root,
@@ -225,36 +195,6 @@ fn run(cmd: Cmd) -> Result<()> {
         }
         Cmd::ImportFixtures { staging, secrets } => import_fixtures(&root, staging, secrets),
     }
-}
-
-fn host_bundle(root: &Path, profile: &str) -> Result<()> {
-    let plan = xtask::host_bundle::plan(root, profile);
-    let status = Command::new(cargo()).args(&plan.build_args).current_dir(root).status()?;
-    if !status.success() {
-        bail!("cargo {} failed", plan.build_args.join(" "));
-    }
-    if plan.app.exists() {
-        std::fs::remove_dir_all(&plan.app).with_context(|| format!("removing {}", plan.app.display()))?;
-    }
-    for (from, to) in &plan.copies {
-        if let Some(dir) = to.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
-        std::fs::copy(from, to).with_context(|| format!("copying {} to {}", from.display(), to.display()))?;
-    }
-    std::fs::create_dir_all(plan.app.join("Contents/Resources"))?;
-    let status = Command::new("xcrun").args(&plan.actool_args).status()?;
-    if !status.success() {
-        bail!("xcrun {} failed", plan.actool_args.join(" "));
-    }
-    // Ad-hoc signature so the bundle runs locally; Developer ID signing is STORE-4.
-    let status =
-        Command::new("codesign").args(["--force", "--deep", "--sign", "-"]).arg(&plan.app).status()?;
-    if !status.success() {
-        bail!("codesign failed");
-    }
-    println!("{}", plan.app.display());
-    Ok(())
 }
 
 fn review_risk(path: &Path) -> Result<()> {
@@ -351,61 +291,6 @@ fn asc_request(method: &str, path: &str, json: Option<&str>) -> Result<String> {
         );
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
-}
-
-fn host_release(root: &Path, notarize: bool) -> Result<()> {
-    host_dmg(root, None, notarize).map(|_| ())
-}
-
-/// Builds, signs and packs `Drift Host.app` in a DMG (STORE-4), with build number `build` in its
-/// `Info.plist` when given; notarizes and staples it with `notarize`. Returns the DMG.
-fn host_dmg(root: &Path, build: Option<u32>, notarize: bool) -> Result<PathBuf> {
-    host_bundle(root, "release")?;
-    let plan = xtask::store::host_release_plan(root, env!("CARGO_PKG_VERSION"));
-    if let Some(build) = build {
-        checked(
-            Command::new("plutil")
-                .args(["-replace", "CFBundleVersion", "-string", &build.to_string()])
-                .arg(plan.app.join("Contents/Info.plist")),
-            "plutil",
-        )?;
-    }
-    for args in &plan.sign {
-        checked(Command::new("codesign").args(args), "codesign")?;
-    }
-    checked(
-        Command::new("codesign").args(["--verify", "--deep", "--strict"]).arg(&plan.app),
-        "codesign --verify",
-    )?;
-    if plan.staging.exists() {
-        std::fs::remove_dir_all(&plan.staging)?;
-    }
-    std::fs::create_dir_all(&plan.staging)?;
-    checked(
-        Command::new("ditto").arg(&plan.app).arg(plan.staging.join(xtask::host_bundle::APP_NAME)),
-        "ditto",
-    )?;
-    std::os::unix::fs::symlink("/Applications", plan.staging.join("Applications"))?;
-    if let Some(dir) = plan.dmg.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    checked(Command::new("hdiutil").args(&plan.hdiutil), "hdiutil")?;
-    checked(Command::new("codesign").args(&plan.sign_dmg), "codesign (dmg)")?;
-    if notarize {
-        let var = |name: &str| std::env::var(name).with_context(|| format!("{name} is not set"));
-        let (key, key_id, issuer) =
-            (var("APPLE_API_KEY_PATH")?, var("APPLE_KEY_ID")?, var("APPLE_API_ISSUER")?);
-        // The key values are passed as arguments and never printed.
-        checked(
-            Command::new("xcrun")
-                .args(&plan.notarize_args)
-                .args(["--key", &key, "--key-id", &key_id, "--issuer", &issuer]),
-            "notarytool submit",
-        )?;
-        checked(Command::new("xcrun").args(&plan.staple_args), "stapler staple")?;
-    }
-    println!("{}", plan.dmg.display());
-    Ok(plan.dmg)
 }
 
 fn mas_package(root: &Path, profile: Option<&Path>) -> Result<PathBuf> {

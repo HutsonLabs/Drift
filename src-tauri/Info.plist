@@ -3,15 +3,15 @@
 <plist version="1.0">
 <dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Drift connects to remote desktops on your local network: GNOME Remote Desktop and Macs running Drift Host.</string>
+	<string>Drift connects to GNOME Remote Desktop on computers on your local network.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.hutsonlabs.drift.pair</string>
+			<string>com.hutsonlabs.drift.connect</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>drift-pair</string>
+				<string>drift-connect</string>
 			</array>
 		</dict>
 	</array>
@@ -19,9 +19,5 @@
 	<string>26.10</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_drift-host._tcp</string>
-	</array>
 </dict>
 </plist>

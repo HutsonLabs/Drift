@@ -190,9 +190,6 @@ describe("statistics HUD", () => {
   // Plan M1 "Done (manual M1)": `anim.py` shows >= 55 fps in the stats overlay.
   test("leads with the frame rate to one decimal", () => {
     expect(statsLine(stats())).toBe("58.9 fps · 1.2 Mbit/s · 4.3 ms · 2 unacked");
-    expect(statsLine(stats({ host_quality: "medium" }))).toBe(
-      "58.9 fps · 1.2 Mbit/s · 4.3 ms · 2 unacked · medium quality",
-    );
     expect(
       statsLine(stats({ fps_tenths: 600, mbit_tenths: 120, latency_p95_tenths_ms: 70, unacked_frames: 0 })),
     ).toBe("60.0 fps · 12.0 Mbit/s · 7.0 ms · 0 unacked");

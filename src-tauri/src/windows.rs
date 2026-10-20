@@ -1466,12 +1466,3 @@ pub(crate) fn set_touch_mode<R: Runtime>(_app: &AppHandle<R>, _label: &str, _mod
 pub(crate) fn phone_controls(_label: &str) -> Option<crate::phone::PhoneControls> {
     None
 }
-
-/// The host's menu bar (EXT-3). A Mac client does not mirror it: Drift's own menu bar is the
-/// Mac's, and Command shortcuts already reach the remote app (ADR `EXT-3-menu-mirroring`).
-pub(crate) fn apply_menu<R: Runtime>(
-    _app: &AppHandle<R>,
-    _label: &str,
-    _menu: Option<std::sync::Arc<drift_ext::menus::MenuSnapshot>>,
-) {
-}

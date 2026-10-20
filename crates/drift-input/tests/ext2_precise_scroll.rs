@@ -88,7 +88,7 @@ fn a_two_finger_pan_is_a_phased_precise_scroll_and_ends_on_lift() {
 }
 
 #[test]
-fn a_pinch_without_local_zoom_is_a_remote_pinch() {
+fn a_pinch_without_local_zoom_sends_nothing() {
     let mut p = pointer(false);
     let z = Zoom::default();
     let mut t = Touches::new(Mode::Direct, false);
@@ -97,13 +97,5 @@ fn a_pinch_without_local_zoom_is_a_remote_pinch() {
     t.began(&mut p, &z, 2, at(500.0, 300.0), 0.0);
     let mut out = t.moved(&mut p, &z, 2, at(600.0, 300.0), 0.05).events;
     out.extend(t.ended(&mut p, &z, 1, at(400.0, 300.0), 0.3).events);
-    let pinches: Vec<(i32, ScrollPhase)> = out
-        .iter()
-        .filter_map(|e| match e {
-            InputEvent::Pinch { magnification, phase } => Some((*magnification, *phase)),
-            _ => None,
-        })
-        .collect();
-    assert!(pinches.first().is_some_and(|(m, ph)| *m > 0 && *ph == ScrollPhase::Began), "{out:?}");
-    assert_eq!(pinches.last().map(|p| p.1), Some(ScrollPhase::Ended), "{out:?}");
+    assert!(out.is_empty(), "GNOME has no pinch: {out:?}");
 }

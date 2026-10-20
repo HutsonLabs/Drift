@@ -46,7 +46,6 @@ pub const REQUIRED: &[Required] = &[
     Required { parser: "RDSTLS", dir: "crates/drift-rdp/fuzz", target: "rdstls" },
     Required { parser: "CLIPRDR", dir: "crates/drift-rdp/fuzz", target: "cliprdr" },
     Required { parser: "pointer", dir: "crates/drift-macos/fuzz", target: "pointer" },
-    Required { parser: "Drift::Mac::v1", dir: "crates/drift-ext/fuzz", target: "drift_mac" },
 ];
 
 /// A fuzz workspace as read from disk.

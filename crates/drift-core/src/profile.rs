@@ -208,18 +208,6 @@ impl<'de> Deserialize<'de> for CertFingerprint {
     }
 }
 
-/// What is on the other end of a profile (UI-kinds): it drives the gallery, the configuration
-/// sheet, the title bar, the iPhone key row and the iPad menu bar.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "specta", derive(specta::Type))]
-#[serde(rename_all = "kebab-case")]
-pub enum HostKind {
-    /// A Mac running Drift Host, paired with this device (IOS-9).
-    Mac,
-    /// A GNOME computer (GNOME Remote Desktop); its [`ConnectMode`] says how.
-    Gnome,
-}
-
 /// A saved connection (plan §3). Contains no secrets.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
@@ -239,14 +227,10 @@ pub struct ConnectionProfile {
     /// RemoteLogin only: the Linux user, shown in the greeter hint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub linux_username: Option<String>,
-    /// TOFU-pinned certificate fingerprint of the first leg; for a paired Mac host, the pin
-    /// taken from the pairing (never trust-on-first-use).
+    /// TOFU-pinned certificate fingerprint of the first leg (or one set up front, for example by
+    /// a `drift-connect:` link from `host/drift-gnome-setup`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cert_pin: Option<CertFingerprint>,
-    /// The Drift Host this profile was paired with (IOS-9). `None` for GNOME hosts, which keep
-    /// TOFU; absent from `profiles.toml` when `None`, so older files and readers are unaffected.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub paired_host: Option<Uuid>,
     /// Keyboard preferences.
     #[serde(default)]
     pub keyboard: KeyboardPrefs,
@@ -273,17 +257,11 @@ impl ConnectionProfile {
             rdp_username: String::new(),
             linux_username: None,
             cert_pin: None,
-            paired_host: None,
             keyboard: KeyboardPrefs::default(),
             display: DisplayPrefs::default(),
             clipboard: ClipboardPrefs::default(),
             touch: TouchMode::default(),
         }
-    }
-
-    /// The profile's kind: a profile paired with a Drift Host is a Mac, any other is GNOME.
-    pub const fn kind(&self) -> HostKind {
-        if self.paired_host.is_some() { HostKind::Mac } else { HostKind::Gnome }
     }
 
     /// Serializes the profile as a TOML document.

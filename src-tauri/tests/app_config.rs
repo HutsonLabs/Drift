@@ -139,43 +139,35 @@ fn ios_project_links_the_frameworks_the_crates_need() {
         "GameController.framework",
         "Metal.framework",
         "libz.tbd",
-        "AVFoundation.framework",
     ] {
         assert!(spec.contains(framework), "project.yml does not link {framework}");
     }
 }
 
-/// IOS-9: Drift browses `_drift-host._tcp` (iOS refuses to browse a type the app did not
-/// declare) and scans pairing QR codes with the camera.
+/// GNOME-only: no Bonjour browsing or camera any more (pairing with Drift Host is gone).
 #[test]
-fn ios_declares_bonjour_and_camera_use() {
-    let plist = read("gen/apple/drift-app_iOS/Info.plist");
-    let spec = read("gen/apple/project.yml");
-    assert!(
-        plist.contains("<key>NSBonjourServices</key>") && plist.contains("<string>_drift-host._tcp</string>")
-    );
-    assert!(spec.contains("NSBonjourServices:") && spec.contains("_drift-host._tcp"));
-    assert!(
-        plist.contains("<key>NSCameraUsageDescription</key>"),
-        "Info.plist lacks NSCameraUsageDescription"
-    );
-    assert!(spec.contains("NSCameraUsageDescription:"), "project.yml lacks NSCameraUsageDescription");
-    // macOS browses too (typed-code pairing): the Mac's Info.plist declares the same type.
-    assert!(read("Info.plist").contains("_drift-host._tcp"));
+fn neither_app_declares_bonjour_or_camera_use() {
+    for file in ["Info.plist", "gen/apple/drift-app_iOS/Info.plist", "gen/apple/project.yml"] {
+        let text = read(file);
+        assert!(!text.contains("NSBonjourServices"), "{file}");
+        assert!(!text.contains("NSCameraUsageDescription"), "{file}");
+        assert!(!text.contains("Drift Host"), "{file}");
+    }
 }
 
-/// IOS-9: the Mac's QR code is a `drift-pair:` link, so the system Camera (or a click on a Mac)
-/// opens Drift straight into "Pair a Mac". Both apps register the scheme.
+/// GNOME-only: `host/drift-gnome-setup` opens a `drift-connect:` link (or the Camera app
+/// opens its QR code), so both apps register the scheme.
 #[test]
-fn both_apps_register_the_drift_pair_url_scheme() {
+fn both_apps_register_the_drift_connect_url_scheme() {
     for file in ["Info.plist", "gen/apple/drift-app_iOS/Info.plist"] {
         let plist = read(file);
         assert!(
-            plist.contains("<key>CFBundleURLSchemes</key>") && plist.contains("<string>drift-pair</string>"),
+            plist.contains("<key>CFBundleURLSchemes</key>")
+                && plist.contains("<string>drift-connect</string>"),
             "{file}"
         );
     }
-    assert!(read("gen/apple/project.yml").contains("CFBundleURLSchemes: [drift-pair]"));
+    assert!(read("gen/apple/project.yml").contains("CFBundleURLSchemes: [drift-connect]"));
 }
 
 /// The generated Xcode project links every SDK `project.yml` lists. xcodegen can fail without

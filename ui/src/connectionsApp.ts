@@ -8,8 +8,6 @@ import type {
   ConnectionProfile_Serialize,
   Connections,
   ConnectionsIntent,
-  HostAdvert,
-  PairingInput,
   OpenConnection,
   ProfileEntry_Serialize,
   Thumbnail,
@@ -18,14 +16,11 @@ import type {
 import { h, mount } from "./dom";
 import { icon } from "./icons";
 import { DEFAULT_MODE } from "./modes";
-import { kindOf } from "./kinds";
-import { renderAddSheet } from "./views/addSheet";
 import { primaryLabel, tickPills } from "./views/card";
 import { renderConfirm } from "./views/confirm";
 import { type Filter, renderGallery } from "./views/gallery";
 import { openMenu } from "./views/menu";
 import { type FormDraft, type FormModel, formModel, isDirty, toSecretsUpdate } from "./views/profileForm";
-import { type PairSheetHandle, renderPairSheet } from "./views/pairSheet";
 import { renderSheet, type SheetHandle } from "./views/sheet";
 
 /** The IPC commands the Connections page uses. */
@@ -42,12 +37,7 @@ export type ConnectionsApi = Pick<
   | "showWindow"
   | "disconnectProfile"
   | "connections"
-  | "startHostDiscovery"
-  | "stopHostDiscovery"
-  | "readPairingCode"
-  | "pairHost"
-  | "scanPairingQr"
-  | "takePairingLink"
+  | "takeConnectLink"
 >;
 
 /** The Connections page controller. */
@@ -61,10 +51,6 @@ export class ConnectionsApp {
   private query = "";
   private focusId: string | null = null;
   private sheet: { model: FormModel; handle: SheetHandle } | null = null;
-  /** The "Pair a Mac" sheet while it is open (IOS-9). */
-  private pairing: PairSheetHandle | null = null;
-  /** The "Add a Connection" chooser is open (UI-kinds B). */
-  private adding = false;
   private timer: ReturnType<typeof setInterval> | null = null;
 
   private readonly page: HTMLElement;
@@ -83,7 +69,7 @@ export class ConnectionsApp {
   ) {
     const seg = (f: Filter, label: string) =>
       h("button", { type: "button", "aria-pressed": String(f === this.filter), onclick: () => this.setFilter(f) }, label);
-    this.filterButtons = { all: seg("all", "All"), mac: seg("mac", "Macs"), gnome: seg("gnome", "GNOME"), open: seg("open", "Open") };
+    this.filterButtons = { all: seg("all", "All"), open: seg("open", "Open") };
     this.count = h("span", { class: "count" });
     const search = h("input", {
       type: "search",
@@ -105,8 +91,7 @@ export class ConnectionsApp {
       h("span", { class: "spacer", "data-tauri-drag-region": true }),
       h("div", { class: "seg", role: "group", "aria-label": "Show" }, Object.values(this.filterButtons)),
       h("div", { class: "search" }, icon("search"), search),
-      // One add button (UI-kinds B): it asks for the kind first.
-      h("button", { type: "button", class: "tb-btn", "aria-label": "New Connection", title: "Add a Mac or GNOME computer (⌘N)", onclick: () => this.openAdd() }, icon("plus")),
+      h("button", { type: "button", class: "tb-btn", "aria-label": "New Connection", title: "Add a GNOME computer (⌘N)", onclick: () => void this.openNew() }, icon("plus")),
     );
     this.noticeSlot = h("div", { class: "notice-slot" });
     this.region = h("div", { class: "gallery-scroll" });
@@ -117,14 +102,16 @@ export class ConnectionsApp {
     mount(root, this.page, this.menuLayer, this.sheetLayer, this.confirmLayer);
   }
 
-  /** Loads profiles and open connections; with no profiles yet, opens the New Connection sheet. */
+  /**
+   * Loads profiles and open connections; with no profiles yet, opens the New Connection sheet. A
+   * `drift-connect:` link that launched the app opens it prefilled instead (GNOME-only).
+   */
   async start(): Promise<void> {
     await Promise.all([this.reload(), this.loadConnections()]);
     this.renderGallery();
-    // A drift-pair: link that launched the app opens "Pair a Mac" instead (IOS-9).
-    const link = (await this.api.takePairingLink()) as string | null;
-    if (link) await this.openPairing(link);
-    else if (this.entries.length === 0 && this.sheet === null) this.openAdd();
+    const link = await this.api.takeConnectLink();
+    if (link) this.openPrefilled(link);
+    else if (this.entries.length === 0 && this.sheet === null) await this.openNew();
   }
 
   /** Open connections changed (the `connectionsChanged` event). */
@@ -149,22 +136,21 @@ export class ConnectionsApp {
     this.renderGallery();
   }
 
-  /** Cmd+N / Cmd+E / Edit Connection… from anywhere (the `connectionsIntentRequested` event). */
+  /**
+   * Cmd+N / Cmd+E / Edit Connection… / a `drift-connect:` link from anywhere (the
+   * `connectionsIntentRequested` event).
+   */
   async onIntent(intent: ConnectionsIntent): Promise<void> {
     if (intent.kind === "new") {
-      this.openAdd();
-    } else if (intent.kind === "pair") {
-      await this.openPairing(intent.uri);
+      await this.openNew();
+    } else if (intent.kind === "prefill") {
+      // Rust sends every field; the deserialize side of the union only makes them optional.
+      this.openPrefilled(intent.profile as ConnectionProfile_Serialize);
     } else {
       await this.reload();
       this.renderGallery();
       this.openEdit(intent.profile_id);
     }
-  }
-
-  /** Drift Hosts found while the pairing sheet is open (the `hostsDiscovered` event). */
-  onHostsDiscovered(hosts: HostAdvert[]): void {
-    this.pairing?.update(hosts);
   }
 
   /** Re-reads the clock into the uptime and countdown pills. */
@@ -244,13 +230,10 @@ export class ConnectionsApp {
       mount(this.confirmLayer);
       this.updateInert();
     };
-    const mac = kindOf(e.profile) === "mac";
     renderConfirm(this.confirmLayer, {
-      title: mac ? `Unpair “${e.profile.name}”?` : `Delete “${e.profile.name}”?`,
-      message: mac
-        ? "Drift forgets this Mac and its pinned key. To connect again, pair with a new code from the Mac."
-        : "Its saved passwords are removed from your Keychain too. This can’t be undone.",
-      action: mac ? "Unpair" : "Delete",
+      title: `Delete “${e.profile.name}”?`,
+      message: "Its saved passwords are removed from your Keychain too. This can’t be undone.",
+      action: "Delete",
       cancel: () => {
         done();
         this.refocus();
@@ -306,36 +289,19 @@ export class ConnectionsApp {
 
   // ---- the sheet ------------------------------------------------------------------------
 
-  /** "Add a Connection": which kind comes next (UI-kinds B). */
-  private openAdd(): void {
-    if (this.pairing) this.closePairing();
-    if (this.sheet) this.closeSheet();
-    this.adding = true;
-    const close = () => {
-      this.adding = false;
-      mount(this.sheetLayer);
-      this.updateInert();
-    };
-    renderAddSheet(this.sheetLayer, {
-      pairMac: () => {
-        close();
-        void this.openPairing();
-      },
-      addGnome: () => {
-        close();
-        void this.openNew();
-      },
-      cancel: () => {
-        close();
-        this.refocus();
-      },
-    });
-    this.updateInert();
-  }
-
+  /** "+", ⌘N, the dashed card and first launch: an empty New Connection sheet. */
   private async openNew(): Promise<void> {
     const p = (await this.api.newProfile(DEFAULT_MODE)) as ConnectionProfile_Serialize;
     this.showSheet(formModel(p, { isNew: true, hasRdpPassword: false, hasLinuxPassword: false }));
+  }
+
+  /**
+   * The New Connection sheet filled from a `drift-connect:` link (`host/drift-gnome-setup`): an
+   * unsaved profile, possibly with its certificate already pinned. Nothing is saved until Add.
+   */
+  private openPrefilled(profile: ConnectionProfile_Serialize): void {
+    if (this.sheet) this.closeSheet();
+    this.showSheet(formModel(profile, { isNew: true, hasRdpPassword: false, hasLinuxPassword: false }));
   }
 
   private openEdit(id: string): void {
@@ -407,66 +373,21 @@ export class ConnectionsApp {
   private async forgetCertificate(): Promise<void> {
     const sheet = this.sheet;
     if (!sheet) return;
-    const id = sheet.model.profile.id;
-    const r = await this.run(this.api.forgetCertificate(id) as Promise<Result<ProfileEntry_Serialize>>);
-    if (!r) return;
-    await this.reload();
+    // A prefilled new profile's pin is not stored yet: dropping it from the draft is enough.
+    if (!sheet.model.isNew) {
+      const r = await this.run(this.api.forgetCertificate(sheet.model.profile.id) as Promise<Result<ProfileEntry_Serialize>>);
+      if (!r) return;
+      await this.reload();
+    }
     const d = sheet.handle.draft();
     this.showSheet({ ...sheet.model, ...draftFields(d), profile: { ...d.profile, cert_pin: null }, original: { ...sheet.model.original, cert_pin: null } });
-  }
-
-  // ---- pairing a Mac (IOS-9) -----------------------------------------------------------
-
-  private async openPairing(link?: string): Promise<void> {
-    if (this.pairing) {
-      if (link) this.pairing.setCode(link);
-      return;
-    }
-    if (this.sheet) this.closeSheet();
-    this.pairing = renderPairSheet(this.sheetLayer, {
-      read: async (text) => {
-        const r = (await this.api.readPairingCode(text)) as Result<PairingInput>;
-        return r.status === "ok" ? r.data : describeError(r.error);
-      },
-      scan: async () => {
-        const r = (await this.api.scanPairingQr()) as Result<string>;
-        return r.status === "ok" ? { text: r.data } : { error: describeError(r.error) };
-      },
-      pair: async (request) => {
-        const r = (await this.api.pairHost(request)) as Result<ProfileEntry_Serialize>;
-        if (r.status === "error") return describeError(r.error);
-        this.focusId = r.data.profile.id;
-        this.closePairing();
-        await this.reload();
-        this.renderGallery();
-        this.refocus();
-        // HOST-15: approval happens on the first connection, so make it now; its window says
-        // to click Allow on the Mac.
-        if (request.kind === "approve") await this.run(this.api.connect(r.data.profile.id));
-        return null;
-      },
-      cancel: () => this.closePairing(),
-    });
-    this.updateInert();
-    if (link) this.pairing.setCode(link);
-    const r = (await this.api.startHostDiscovery()) as Result<null>;
-    if (r.status === "error") this.notice(describeError(r.error));
-  }
-
-  private closePairing(): void {
-    if (!this.pairing) return;
-    this.pairing = null;
-    void this.api.stopHostDiscovery();
-    mount(this.sheetLayer);
-    this.updateInert();
-    this.refocus();
   }
 
   // ---- rendering ------------------------------------------------------------------------
 
   private updateInert(): void {
     const confirm = this.confirmLayer.childElementCount > 0;
-    const sheet = this.sheet !== null || this.pairing !== null || this.adding;
+    const sheet = this.sheet !== null;
     this.page.toggleAttribute("inert", sheet || confirm);
     this.sheetLayer.toggleAttribute("inert", confirm);
   }
@@ -488,7 +409,7 @@ export class ConnectionsApp {
       {
         primary: (id) => this.primary(id),
         menu: (id, at) => this.menu(id, at),
-        create: () => this.openAdd(),
+        create: () => void this.openNew(),
         edit: (id) => this.openEdit(id),
         duplicate: (id) => void this.duplicate(id),
         remove: (id) => this.askRemove(id),

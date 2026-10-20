@@ -939,13 +939,3 @@ pub(crate) fn write_pasteboard<R: Runtime>(app: &AppHandle<R>, label: &str, cont
         }
     });
 }
-
-/// Session window `label`'s host menu bar changed (EXT-3): the iPad shows the front session's.
-pub(crate) fn apply_menu<R: Runtime>(
-    app: &AppHandle<R>,
-    label: &str,
-    menu: Option<std::sync::Arc<drift_ext::menus::MenuSnapshot>>,
-) {
-    let (app2, label) = (app.clone(), label.to_owned());
-    let _ = on_main(app, move |mtm| menus::apply_menu(&app2, mtm, &label, menu));
-}

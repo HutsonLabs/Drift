@@ -17,7 +17,6 @@
 		54715347B5A31DB0215AFD52 /* GameController.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 88DBD0E14CF85CFA3A8D238E /* GameController.framework */; };
 		680E39603E0E02F2A52C020B /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB1ABA54F8FDDFB49DC6C9B5 /* MetalKit.framework */; };
 		6A1933DFAD11A4ADFE49CFFA /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E1F556744ABE17BE0A9F5333 /* Security.framework */; };
-		6F94F53F1611A0A47593C50B /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 78BA8AA77EA4BE0FE6FF1628 /* AVFoundation.framework */; };
 		7204550DDF3A063ADC92FC1E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B5BE6E938DA24B4F23D180C6 /* Assets.xcassets */; };
 		7CCCDCE3CE53049E593B34D7 /* Network.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A986EB7D2906EAB311BA9CD0 /* Network.framework */; };
 		88C42E1BCB8545C12E16336B /* assets in Resources */ = {isa = PBXBuildFile; fileRef = BA1F85DDAF739A722177FBBE /* assets */; };
@@ -55,7 +54,6 @@
 		6A3A66923A491B5473BBCA03 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		6D6D2B14BA3F896C21EB4F78 /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
 		77EC18A217E457CCEECF6B71 /* paste.rs */ = {isa = PBXFileReference; path = paste.rs; sourceTree = "<group>"; };
-		78BA8AA77EA4BE0FE6FF1628 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		7AE91D8822C8E253DDFF0DE3 /* switcher.rs */ = {isa = PBXFileReference; path = switcher.rs; sourceTree = "<group>"; };
 		835FDEB39F5F0D8C8CC9F3F8 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		88DBD0E14CF85CFA3A8D238E /* GameController.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GameController.framework; path = System/Library/Frameworks/GameController.framework; sourceTree = SDKROOT; };
@@ -108,7 +106,6 @@
 				7CCCDCE3CE53049E593B34D7 /* Network.framework in Frameworks */,
 				54715347B5A31DB0215AFD52 /* GameController.framework in Frameworks */,
 				92FF026F939F6C2779E7B9B3 /* libz.tbd in Frameworks */,
-				6F94F53F1611A0A47593C50B /* AVFoundation.framework in Frameworks */,
 				DBA96592D1C65FAB0656FBA0 /* AVFAudio.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -169,7 +166,6 @@
 			isa = PBXGroup;
 			children = (
 				371F801C75AA148DBBC69CF8 /* AVFAudio.framework */,
-				78BA8AA77EA4BE0FE6FF1628 /* AVFoundation.framework */,
 				02F2E658E67F5D85AA78844F /* CoreGraphics.framework */,
 				5FB0A41843F22674DC054FAB /* CoreMedia.framework */,
 				FF77B3EB19EC0452405BF1BB /* CoreVideo.framework */,

@@ -60,14 +60,12 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         # Drift connects to hosts on the local network (ADR IOS-0 decision 9).
-        NSLocalNetworkUsageDescription: "Drift connects to remote desktops on your local network: GNOME Remote Desktop and Macs running Drift Host."
-        # Pairing (IOS-9): browse Drift Hosts with Bonjour and scan their QR codes.
-        NSBonjourServices: [_drift-host._tcp]
-        # The Mac's QR code is a drift-pair: link; the Camera app opens Drift with it.
+        NSLocalNetworkUsageDescription: "Drift connects to GNOME Remote Desktop on computers on your local network."
+        # host/drift-gnome-setup's link (or its QR code through the Camera app) opens a
+        # prefilled New Connection form (ADR GNOME-only).
         CFBundleURLTypes:
-          - CFBundleURLName: com.hutsonlabs.drift.pair
-            CFBundleURLSchemes: [drift-pair]
-        NSCameraUsageDescription: "Drift uses the camera to scan the pairing code shown on your Mac."
+          - CFBundleURLName: com.hutsonlabs.drift.connect
+            CFBundleURLSchemes: [drift-connect]
         # One scene per session window on iPad (IOS-1, IOS-11); iPhone stays single-scene.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
@@ -119,8 +117,6 @@ targets:
       # drift-ios: GCKeyboard and GCMouse (IOS-6).
       - sdk: GameController.framework
       - sdk: libz.tbd
-      # drift-ios: the pairing QR scanner (IOS-9).
-      - sdk: AVFoundation.framework
       # drift-apple: the session's sound through AVAudioEngine (HOST-11).
       - sdk: AVFAudio.framework
     preBuildScripts:

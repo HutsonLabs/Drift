@@ -35,7 +35,6 @@ tauri-build = { workspace = true, features = [] }
 [dependencies]
 drift-apple.workspace = true
 drift-core = { workspace = true, features = ["specta"] }
-drift-ext.workspace = true
 drift-clipboard.workspace = true
 drift-gfx.workspace = true
 drift-input.workspace = true

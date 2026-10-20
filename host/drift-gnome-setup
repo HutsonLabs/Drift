@@ -1,0 +1,222 @@
+#!/usr/bin/env bash
+# Set up a Linux machine running GNOME for Drift, from a Mac, in one command (ADR GNOME-only).
+#
+#   host/drift-gnome-setup [options] [SSH_USER@]MACHINE
+#
+# Over SSH (you are asked for your sudo password on the machine) it runs
+# host/drift-host-setup.sh, which:
+#   - installs gnome-remote-desktop and openssl when missing (apt, dnf, zypper or pacman);
+#   - gives the account a persistent headless GNOME session on a fixed RDP port, with a TLS
+#     certificate and RDP credentials, that keeps running without anyone logged in;
+#   - turns off idle suspend and the screen lock for that session;
+#   - opens the port in ufw or firewalld when one is active.
+# Then, on this Mac, it copies the RDP password to the clipboard and opens Drift with the
+# connection filled in and the machine's certificate already pinned: paste the password and
+# click Save. With qrencode installed (brew install qrencode) it also prints the link as a QR
+# code for iPhone and iPad (scan it with the Camera app).
+#
+# Options:
+#   --user NAME       the Linux account that gets the headless session (default: the SSH user).
+#                     GNOME runs one session per account, so use an account nobody logs in to
+#                     at the machine's screen.
+#   --port N          the headless session's RDP port (default: 3390)
+#   --name NAME       the connection's name in Drift (default: the machine's name)
+#   --rdp-user NAME   the RDP user name (default: the account name)
+#   --keep-password   keep the RDP credentials already set; Drift asks for the password
+#   --remote-login    also set up Remote Login: GNOME's login screen on port 3389, for any
+#                     account (adds a second connection)
+#   --check           show what would change on the machine; change nothing
+#   --no-open         print the link instead of opening Drift
+#   --print-link      only print the drift-connect: link for the options and MACHINE (no SSH;
+#                     with --pin FINGERPRINT)
+#   -h, --help        this help
+#
+# The password never appears in a link or in this script's output: it travels to the machine
+# over SSH in a file only you and root can read, which is deleted when the setup ends.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly HERE
+readonly SETUP="$HERE/drift-host-setup.sh"
+
+USER_NAME=""
+PORT=3390
+NAME=""
+RDP_USER=""
+KEEP_PASSWORD=0
+REMOTE_LOGIN=0
+CHECK=0
+OPEN=1
+PRINT_LINK=0
+PIN=""
+TARGET=""
+
+usage() {
+  sed -n '2,/^set -euo/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//'
+}
+
+die() {
+  printf 'drift-gnome-setup: %s\n' "$*" >&2
+  exit 1
+}
+
+# Percent-encoding of everything but RFC 3986's unreserved characters.
+urlencode() {
+  # Byte by byte, so UTF-8 is encoded as UTF-8.
+  local LC_ALL=C
+  local s=$1 out="" c i
+  for ((i = 0; i < ${#s}; i++)); do
+    c=${s:i:1}
+    case $c in
+    [a-zA-Z0-9.~_-]) out+=$c ;;
+    *) out+=$(printf '%%%02X' "$(($(printf '%d' "'$c") & 255))") ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
+# connect_link NAME HOST PORT MODE USER PIN: the drift-connect: link Drift opens (no password).
+connect_link() {
+  local link
+  link="drift-connect:?name=$(urlencode "$1")&host=$(urlencode "$2")&port=$3&mode=$4"
+  [[ -n "$5" ]] && link+="&user=$(urlencode "$5")"
+  [[ -n "$6" ]] && link+="&pin=$6"
+  printf '%s\n' "$link"
+}
+
+# A random password of 24 letters and digits.
+new_password() {
+  local p=""
+  while [[ ${#p} -lt 24 ]]; do
+    p+=$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9')
+  done
+  printf '%s' "${p:0:24}"
+}
+
+# The SSH configuration's value of KEY for the target (user, hostname).
+ssh_config() {
+  ssh -G "$TARGET" 2>/dev/null | awk -v k="$1" '$1 == k { print $2; exit }'
+}
+
+# Shell-quotes "export NAME=VALUE" for the environment file.
+env_line() {
+  printf 'export %s=%q\n' "$1" "$2"
+}
+
+show_link() {
+  local label=$1 link=$2
+  printf '\n%s\n  %s\n' "$label" "$link"
+  if command -v qrencode >/dev/null; then
+    qrencode -t ansiutf8 "$link"
+  fi
+  if [[ $OPEN -eq 1 ]]; then
+    if open "$link" 2>/dev/null; then
+      printf '  Opened in Drift: check the details, paste the password and click Save.\n'
+    else
+      printf '  Drift did not open the link (is Drift installed?); open the link above by hand.\n'
+    fi
+  fi
+}
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+    --user) USER_NAME=${2:?--user needs a name}; shift ;;
+    --port) PORT=${2:?--port needs a number}; shift ;;
+    --name) NAME=${2:?--name needs a name}; shift ;;
+    --rdp-user) RDP_USER=${2:?--rdp-user needs a name}; shift ;;
+    --pin) PIN=${2:?--pin needs a fingerprint}; shift ;;
+    --keep-password) KEEP_PASSWORD=1 ;;
+    --remote-login) REMOTE_LOGIN=1 ;;
+    --check) CHECK=1 ;;
+    --no-open) OPEN=0 ;;
+    --print-link) PRINT_LINK=1 ;;
+    -h | --help) usage; exit 0 ;;
+    -*) die "unknown option $1 (see --help)" ;;
+    *)
+      [[ -z "$TARGET" ]] || die "only one machine at a time"
+      TARGET=$1
+      ;;
+    esac
+    shift
+  done
+  [[ -n "$TARGET" ]] || die "name the machine: drift-gnome-setup [user@]machine (see --help)"
+  [[ "$PORT" =~ ^[0-9]+$ && "$PORT" -gt 0 && "$PORT" -lt 65536 ]] || die "bad port $PORT"
+  [[ "$PORT" -ne 3389 || $REMOTE_LOGIN -eq 0 ]] || die "port 3389 belongs to Remote Login; pick another --port"
+
+  if [[ $PRINT_LINK -eq 1 ]]; then
+    local host=${TARGET#*@} account=$USER_NAME
+    [[ -n "$account" || "$TARGET" != *@* ]] || account=${TARGET%@*}
+    connect_link "${NAME:-$host}" "$host" "$PORT" headless "${RDP_USER:-$account}" "$PIN"
+    return
+  fi
+
+  command -v ssh >/dev/null || die "ssh is required"
+  local ssh_user host
+  ssh_user=$(ssh_config user)
+  host=$(ssh_config hostname)
+  [[ -n "$host" ]] || host=${TARGET#*@}
+  USER_NAME=${USER_NAME:-$ssh_user}
+  RDP_USER=${RDP_USER:-$USER_NAME}
+  NAME=${NAME:-${host%%.*}}
+  [[ -n "$USER_NAME" ]] || die "could not tell the account; pass --user"
+
+  local password=""
+  if [[ $KEEP_PASSWORD -eq 0 && $CHECK -eq 0 ]]; then
+    password=$(new_password)
+  fi
+
+  printf 'Setting up %s (account %s, RDP port %s) over SSH…\n' "$host" "$USER_NAME" "$PORT"
+  local dir
+  dir=$(ssh "$TARGET" 'mktemp -d /tmp/drift-setup.XXXXXX') || die "cannot reach $TARGET over SSH"
+  # shellcheck disable=SC2029 # $dir is the remote directory; expanding it here is the point.
+  ssh "$TARGET" "cat > '$dir/setup.sh'" <"$SETUP"
+  # shellcheck disable=SC2029 # as above
+  {
+    if [[ -n "$password" ]]; then
+      local suffix
+      suffix=$(printf '%s' "$USER_NAME" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_')
+      env_line "DRIFT_HEADLESS_RDP_USER_$suffix" "$RDP_USER"
+      env_line "DRIFT_HEADLESS_RDP_PASS_$suffix" "$password"
+      if [[ $REMOTE_LOGIN -eq 1 ]]; then
+        env_line DRIFT_SYSTEM_RDP_USER "$RDP_USER"
+        env_line DRIFT_SYSTEM_RDP_PASS "$password"
+      fi
+    fi
+  } | ssh "$TARGET" "umask 077; cat > '$dir/env'"
+
+  local mode=--apply args
+  [[ $CHECK -eq 1 ]] && mode=--check
+  args="$mode --install --firewall --headless $USER_NAME:$PORT:persistent"
+  [[ $REMOTE_LOGIN -eq 1 ]] && args+=" --system"
+  local log status=0
+  log=$(mktemp)
+  # -t: sudo may ask for the account's password.
+  ssh -t "$TARGET" "sudo bash -c '. $dir/env; bash $dir/setup.sh $args'; rc=\$?; rm -rf '$dir'; exit \$rc" |
+    tee "$log" || status=$?
+  if [[ $CHECK -eq 1 ]]; then
+    rm -f "$log"
+    [[ $status -eq 0 || $status -eq 2 ]] && return 0
+    return "$status"
+  fi
+  [[ $status -eq 0 ]] || { rm -f "$log"; die "the setup on $host failed (see above)"; }
+
+  local pin system_pin
+  pin=$(tr -d '\r' <"$log" | awk -v u="$USER_NAME" '$1 == "fingerprint:" && $2 == u { print $3 }' | tail -n1)
+  system_pin=$(tr -d '\r' <"$log" | awk '$1 == "fingerprint:" && $2 == "system" { print $3 }' | tail -n1)
+  rm -f "$log"
+  [[ -n "$pin" ]] || printf 'note: no certificate fingerprint was reported; Drift will ask you to trust it on first connect.\n'
+
+  if [[ -n "$password" ]]; then
+    printf '%s' "$password" | pbcopy
+    printf '\nThe RDP password for %s is on the clipboard (user %s).\n' "$host" "$RDP_USER"
+  fi
+  show_link "Headless session (${USER_NAME}'s own desktop):" \
+    "$(connect_link "$NAME" "$host" "$PORT" headless "$RDP_USER" "$pin")"
+  if [[ $REMOTE_LOGIN -eq 1 ]]; then
+    show_link "Remote Login (GNOME's login screen):" \
+      "$(connect_link "$NAME login" "$host" 3389 remote-login "$RDP_USER" "$system_pin")"
+  fi
+}
+
+main "$@"

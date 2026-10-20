@@ -363,32 +363,3 @@ fn keyboard_focus_follows_the_surface() {
     assert_eq!(focus_for(Surface::Webview), Focus::Page);
     assert_eq!(focus_for(Surface::Overlay), Focus::Page);
 }
-
-/// UI-kinds: the capsule knows what is on the other end — a Mac running Drift Host, with the
-/// host's live quality step, or a GNOME computer.
-#[test]
-fn identity_carries_the_kind_and_a_drift_hosts_quality() {
-    use drift_app::view::HostQuality;
-    use drift_core::HostKind;
-    use drift_ext::status::QualityLevel;
-    use drift_rdp::SessionStats;
-
-    let gnome = ConnectionProfile::new("Studio", "studio.lan", ConnectMode::Headless);
-    let view = SessionView::new(&gnome);
-    let id = identity(&gnome, &view);
-    assert_eq!((id.kind, id.quality), (HostKind::Gnome, None));
-
-    let mut mac = ConnectionProfile::new("MacBook Pro", "macbook-pro.local", ConnectMode::Headless);
-    mac.paired_host = Some(uuid::Uuid::from_u128(9));
-    let mut live = SessionView::new(&mac);
-    live.apply(&SessionEvent::State(SessionState::Connected {
-        desktop: DesktopSize::new(1280, 800),
-        scale: 100,
-    }));
-    assert_eq!((identity(&mac, &live).kind, identity(&mac, &live).quality), (HostKind::Mac, None));
-    live.apply(&SessionEvent::Stats(SessionStats {
-        host_quality: Some(QualityLevel::Medium),
-        ..SessionStats::default()
-    }));
-    assert_eq!(identity(&mac, &live).quality, Some(HostQuality::Medium));
-}

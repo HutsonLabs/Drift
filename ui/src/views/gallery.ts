@@ -1,21 +1,15 @@
 // The Connections gallery (UI-windows board 1, decision 16): an **Open** section (profiles with a
 // session window, in window order) and a **Saved** section (the rest, then the dashed add card),
-// filtered by All / Macs / GNOME / Open (UI-kinds A) and by a search on name and host. The cards
+// filtered by All / Open and by a search on name and host. The cards
 // are one keyboard grid: a roving tabindex, arrow keys move, Return does the primary action,
 // Space opens the ⋯ menu, ⌘E / ⌘D / ⌘⌫ edit, duplicate and delete.
 import type { OpenConnection, ProfileEntry_Serialize } from "../bindings";
 import { h, mount } from "../dom";
 import { icon } from "../icons";
-import { kindOf } from "../kinds";
 import { type CardIntents, renderCard } from "./card";
 
-/** The toolbar's filter: everything, one kind (UI-kinds A), or the connections with a window. */
-export type Filter = "all" | "mac" | "gnome" | "open";
-
-/** Whether a connection passes the kind part of `filter`. */
-export function ofKind(entry: ProfileEntry_Serialize, filter: Filter): boolean {
-  return filter !== "mac" && filter !== "gnome" ? true : kindOf(entry.profile) === filter;
-}
+/** The toolbar's filter: everything, or the connections with a window. */
+export type Filter = "all" | "open";
 
 /** Everything the gallery draws. */
 export interface GalleryModel {
@@ -45,8 +39,8 @@ export interface GalleryIntents extends CardIntents {
 /** The `data-profile-id` of the dashed New Connection card. */
 export const NEW_CARD = "new";
 
-/** The dashed card's and the welcome's words: one add flow for both kinds (UI-kinds B). */
-const ADD_LABEL = "Add a Mac or GNOME computer";
+/** The dashed card's and the welcome's words. */
+const ADD_LABEL = "Add a GNOME computer";
 
 /** Whether a connection matches the search text (name or host, case-insensitive). */
 export function matches(entry: ProfileEntry_Serialize, query: string): boolean {
@@ -78,7 +72,7 @@ export function renderGallery(region: HTMLElement, model: GalleryModel, on: Gall
   const card = (entry: ProfileEntry_Serialize, open: OpenConnection | null) =>
     renderCard({ entry, open, since: model.since, thumbnail: model.thumbnails.get(entry.profile.id) ?? null }, model.now, on);
 
-  const shown = (e: ProfileEntry_Serialize) => matches(e, model.query) && ofKind(e, model.filter);
+  const shown = (e: ProfileEntry_Serialize) => matches(e, model.query);
   const openCards = model.open.flatMap((o) => {
     const e = byId.get(o.profile_id);
     return e && shown(e) ? [card(e, o)] : [];
@@ -93,7 +87,7 @@ export function renderGallery(region: HTMLElement, model: GalleryModel, on: Gall
         "header",
         { class: "welcome" },
         h("h2", {}, ADD_LABEL),
-        h("p", {}, "Pair a Mac running Drift Host, or connect to GNOME Remote Desktop 50 or later with the RDP credentials set on it."),
+        h("p", {}, "Drift connects to GNOME Remote Desktop 50 or later. Enter the host and the RDP credentials set on it."),
       ),
     );
   }

@@ -1,11 +1,10 @@
 //! Drift's own menus for a GNOME session in the iPad's menu bar (task **UI-kinds**, mockup H).
 //!
-//! A Mac running Drift Host mirrors its front app's menus (EXT-3). A GNOME computer has nothing
-//! to mirror, so the bar shows **Session**, **Keys** and **Activities**: GNOME's shortcuts sent
-//! as key chords, and Disconnect. Pure: `windows_ios_menus` shows the [`snapshot`] and turns a
+//! The bar shows **Session**, **Keys** and **Activities**: GNOME's shortcuts sent as key
+//! chords, and Disconnect. Pure: `windows_ios_menus` shows the [`snapshot`] and turns a
 //! chosen item into an [`action`].
 
-use drift_ext::menus::{MenuItem, MenuSnapshot};
+use drift_core::menus::{MenuItem, MenuSnapshot};
 
 /// What choosing an item does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

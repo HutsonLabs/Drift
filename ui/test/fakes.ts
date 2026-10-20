@@ -27,12 +27,8 @@ export function fakeValidate(p: ConnectionProfile_Deserialize): ProfileIssue[] {
 
 export class FakeConnectionsApi {
   calls: unknown[][] = [];
-  /** What `scan_pairing_qr` returns (IOS-9); `null` = no camera. */
-  scanned: string | null = null;
-  /** A `drift-pair:` link that launched the app (`take_pairing_link`). */
-  pendingLink: string | null = null;
-  /** What `pair_host` fails with, if anything. */
-  pairError: CommandError | null = null;
+  /** The unsaved profile of a `drift-connect:` link that launched the app (`take_connect_link`). */
+  pendingLink: ConnectionProfile_Serialize | null = null;
   entries: ProfileEntry_Serialize[] = [];
   open: OpenConnection[] = [];
   saveIssues: ProfileIssue[] | null = null;
@@ -77,36 +73,11 @@ export class FakeConnectionsApi {
       showWindow: (id: string) => (log("showWindow", id), done()),
       disconnectProfile: (id: string) => (log("disconnectProfile", id), done()),
       connections: () => (log("connections"), ok({ open: [...this.open] })),
-      takePairingLink: () => {
-        log("takePairingLink");
+      takeConnectLink: () => {
+        log("takeConnectLink");
         const link = this.pendingLink;
         this.pendingLink = null;
         return Promise.resolve(link);
-      },
-      startHostDiscovery: () => (log("startHostDiscovery"), ok(null)),
-      stopHostDiscovery: () => (log("stopHostDiscovery"), ok(null)),
-      scanPairingQr: () => (
-        log("scanPairingQr"),
-        this.scanned === null
-          ? Promise.resolve({ status: "error", error: { kind: "pairing", message: "No camera." } })
-          : ok(this.scanned)
-      ),
-      readPairingCode: (text: string) => {
-        log("readPairingCode", text);
-        if (text.startsWith("drift-pair:")) {
-          return ok({ kind: "qr", uri: text, name: "Studio Mac", host: "studio.local", port: 3389 });
-        }
-        const digits = text.replace(/[\s-]/g, "");
-        // The one code with a valid check digit in these tests.
-        if (digits === "76543215") return ok({ kind: "code", code: "7654 3215" });
-        return Promise.resolve({ status: "error", error: { kind: "pairing", message: "That code has a typo." } });
-      },
-      pairHost: (request: unknown) => {
-        log("pairHost", request);
-        if (this.pairError) return Promise.resolve({ status: "error", error: this.pairError });
-        const e = entry(profile("headless", { name: "Studio Mac", host: "studio.local", cert_pin: "ab:ab", paired_host: "77" }));
-        this.entries = [...this.entries, e];
-        return ok(e);
       },
     } as unknown as ConnectionsApi;
   }
@@ -123,19 +94,9 @@ export async function startConnections(fake = new FakeConnectionsApi(), clock = 
   return { root, app, fake, clock };
 }
 
-/** "+" (or ⌘N) → "Add GNOME Computer…": the New Connection sheet for a GNOME computer. */
-export async function addGnome(root: ParentNode): Promise<void> {
+/** "+" in the toolbar: the New Connection sheet. */
+export async function newConnection(root: ParentNode): Promise<void> {
   clickNamed(root.querySelector("header.toolbar")!, "New Connection");
-  await flush();
-  clickNamed(root.querySelector("[role=dialog][aria-label='Add a Connection']")!, "Add GNOME Computer…");
-  await flush();
-}
-
-/** "+" → "Pair a Mac…": the pairing sheet. */
-export async function pairMac(root: ParentNode): Promise<void> {
-  clickNamed(root.querySelector("header.toolbar")!, "New Connection");
-  await flush();
-  clickNamed(root.querySelector("[role=dialog][aria-label='Add a Connection']")!, "Pair a Mac…");
   await flush();
 }
 

@@ -56,21 +56,6 @@ pub enum MomentumPhase {
     Ended,
 }
 
-/// Which way the fingers moved in a swipe (EXT-2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "specta", derive(specta::Type))]
-#[serde(rename_all = "kebab-case")]
-pub enum SwipeDirection {
-    /// Towards the left.
-    Left,
-    /// Towards the right.
-    Right,
-    /// Upwards.
-    Up,
-    /// Downwards.
-    Down,
-}
-
 /// One input event in remote desktop coordinates (plan §3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
@@ -127,8 +112,8 @@ pub enum InputEvent {
     },
     /// Release every key and button the remote believes is held (focus loss, reconnect).
     ReleaseAll,
-    /// A trackpad or touch scroll with its phase and momentum (EXT-2). A Drift Host gets it on
-    /// `Drift::Mac::v1`; any other server gets the wheel units it carries instead.
+    /// A trackpad or touch scroll with its phase and momentum (EXT-2); the server gets the wheel
+    /// units it carries.
     PreciseScroll {
         /// Horizontal delta in hundredths of a point; positive scrolls towards the left
         /// (AppKit's `scrollingDeltaX`, after the profile's reverse setting).
@@ -144,20 +129,4 @@ pub enum InputEvent {
         /// Horizontal wheel units plain RDP gets instead (RDP sign: positive scrolls right).
         wheel_h: i32,
     },
-    /// A multi-finger swipe (EXT-2). Only a Drift Host gets it; plain RDP has no equivalent.
-    Swipe {
-        /// Which way the fingers moved.
-        direction: SwipeDirection,
-        /// Fingers on the trackpad (3 or 4).
-        fingers: u8,
-    },
-    /// A pinch (EXT-2): change in magnification since the last event, in thousandths.
-    Pinch {
-        /// `NSEvent.magnification × 1000` (positive zooms in).
-        magnification: i32,
-        /// Gesture phase.
-        phase: ScrollPhase,
-    },
-    /// A two-finger double tap (smart zoom; EXT-2).
-    SmartZoom,
 }

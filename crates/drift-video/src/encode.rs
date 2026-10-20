@@ -1,20 +1,11 @@
-//! H.264 encoder via `VTCompressionSession` (tasks **M8-2**, **HOST-4**).
+//! H.264 encoder via `VTCompressionSession` (task **M8-2**): the recording profile
+//! ([`EncoderConfig::new`], plan M8-2): hardware encoder, High profile, real-time, no frame
+//! reordering, 8 Mbit/s average, a keyframe at least every 2 s.
 //!
-//! Two profiles share one encoder:
-//!
-//! * **Recording** ([`EncoderConfig::new`], plan M8-2): hardware encoder, High profile,
-//!   real-time, no frame reordering, 8 Mbit/s average, a keyframe at least every 2 s.
-//! * **Real-time** ([`EncoderConfig::realtime`], HOST-4, ADR `HOST-4-realtime-encoder`): what
-//!   the Mac host streams with. Adds VideoToolbox's low-latency rate control (Constrained High,
-//!   one frame in flight) up to [`LOW_LATENCY_MAX_PIXELS`], a bit rate scaled to the picture
-//!   ([`realtime_bitrate`]), and a keyframe at least every 4 s or on request
-//!   ([`VtEncoder::request_keyframe`]).
-//!
-//! Both use a variable frame rate: each frame's presentation time comes from a
+//! It uses a variable frame rate: each frame's presentation time comes from a
 //! [`drift_core::Clock`] instant, relative to the first frame. A frame whose size differs from
 //! the session's rebuilds the session, and the first frame of every session is a keyframe. Every
-//! picture records when VideoToolbox finished it ([`EncodedFrame::completed_at`]) for the host's
-//! latency statistics.
+//! picture records when VideoToolbox finished it ([`EncodedFrame::completed_at`]).
 
 use std::ffi::c_void;
 use std::ptr::NonNull;
@@ -39,9 +30,8 @@ use objc2_video_toolbox::{
     kVTCompressionPropertyKey_ProfileLevel, kVTCompressionPropertyKey_RealTime,
     kVTCompressionPropertyKey_TransferFunction,
     kVTCompressionPropertyKey_UsingHardwareAcceleratedVideoEncoder, kVTCompressionPropertyKey_YCbCrMatrix,
-    kVTEncodeFrameOptionKey_ForceKeyFrame, kVTProfileLevel_H264_ConstrainedHigh_AutoLevel,
-    kVTProfileLevel_H264_High_AutoLevel, kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder,
-    kVTVideoEncoderSpecification_EnableLowLatencyRateControl,
+    kVTEncodeFrameOptionKey_ForceKeyFrame, kVTProfileLevel_H264_High_AutoLevel,
+    kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder,
 };
 
 use crate::annexb::{avcc_nals, avcc_to_annex_b, nal_type, nal_unit_type};
@@ -75,8 +65,7 @@ pub enum EncodeError {
     BadSample(String),
 }
 
-/// Encoder settings. [`EncoderConfig::new`] gives the recording profile, [`EncoderConfig::realtime`]
-/// the host's.
+/// Encoder settings. [`EncoderConfig::new`] gives the recording profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EncoderConfig {
     /// Frame size in pixels.
@@ -87,33 +76,6 @@ pub struct EncoderConfig {
     pub max_keyframe_interval: Duration,
     /// Expected frame rate, a hint for rate control (60).
     pub expected_fps: u32,
-    /// VideoToolbox's low-latency rate control (real-time profile).
-    pub low_latency: bool,
-}
-
-/// The largest picture (in pixels) the real-time profile encodes with low-latency rate control.
-///
-/// Measured on an M4 Pro (ADR `HOST-4-realtime-encoder`): with low-latency rate control
-/// `VTCompressionSessionEncodeFrame` returns only when the frame is done, 0.1 ms at 1080p and
-/// 8.8 ms at 2560×1600 but 18.6 ms at 4K, which caps 4K near 54 fps. The normal rate control
-/// (still real-time, no reordering) holds 60 fps at 4K with a p50 latency of 23 ms.
-pub const LOW_LATENCY_MAX_PIXELS: u64 = 2560 * 1600;
-
-/// Whether the real-time profile uses low-latency rate control for `size`.
-pub fn low_latency_for(size: Size<u32>) -> bool {
-    u64::from(size.width) * u64::from(size.height) <= LOW_LATENCY_MAX_PIXELS
-}
-
-/// Lowest and highest bit rate [`realtime_bitrate`] picks.
-pub const REALTIME_BITRATE_RANGE: (u32, u32) = (2_000_000, 80_000_000);
-
-/// The real-time profile's average bit rate: 1/20 bit per pixel per frame, so 4K at 60 fps gets
-/// about 25 Mbit/s and 1080p60 about 6 Mbit/s, clamped to [`REALTIME_BITRATE_RANGE`]. A starting
-/// point; quality hints (EXT-4) adjust it.
-pub fn realtime_bitrate(size: Size<u32>, fps: u32) -> u32 {
-    let bits = u64::from(size.width) * u64::from(size.height) * u64::from(fps) / 20;
-    let (lo, hi) = REALTIME_BITRATE_RANGE;
-    u32::try_from(bits).unwrap_or(u32::MAX).clamp(lo, hi)
 }
 
 impl EncoderConfig {
@@ -124,18 +86,6 @@ impl EncoderConfig {
             average_bitrate: 8_000_000,
             max_keyframe_interval: Duration::from_secs(2),
             expected_fps: 60,
-            low_latency: false,
-        }
-    }
-
-    /// The Mac host's real-time profile for `size` at `fps`.
-    pub fn realtime(size: Size<u32>, fps: u32) -> Self {
-        Self {
-            size,
-            average_bitrate: realtime_bitrate(size, fps),
-            max_keyframe_interval: Duration::from_secs(4),
-            expected_fps: fps.max(1),
-            low_latency: low_latency_for(size),
         }
     }
 
@@ -281,7 +231,6 @@ pub(crate) type Outputs = Mutex<Vec<Result<(SharedSample, Instant), i32>>>;
 pub(crate) struct Session {
     pub(crate) session: CFRetained<VTCompressionSession>,
     pub(crate) size: Size<u32>,
-    pub(crate) low_latency: bool,
 }
 
 impl Session {
@@ -366,34 +315,6 @@ impl VtEncoder {
         // SAFETY: Copy rule: we own the returned reference.
         let value: CFRetained<CFType> = unsafe { CFRetained::from_raw(value) };
         status == 0 && value.downcast_ref::<CFBoolean>().is_some_and(CFBoolean::as_bool)
-    }
-
-    /// Makes the next encoded frame a keyframe (a new client, a lost frame, a decoder reset).
-    pub fn request_keyframe(&mut self) {
-        self.force_keyframe = true;
-    }
-
-    /// Changes the average bit rate, on the running session and any later one (EXT-4's quality
-    /// steps).
-    pub fn set_average_bitrate(&mut self, bitrate: u32) -> Result<(), EncodeError> {
-        self.config.average_bitrate = bitrate;
-        let Some(session) = &self.session else { return Ok(()) };
-        let value = CFNumber::new_i32(i32::try_from(bitrate).unwrap_or(i32::MAX));
-        // SAFETY: a valid session, a constant key and a CFNumber value.
-        let status = unsafe {
-            VTSessionSetProperty(
-                &session.session,
-                kVTCompressionPropertyKey_AverageBitRate,
-                Some(value.as_ref()),
-            )
-        };
-        os("VTSessionSetProperty", status)
-    }
-
-    /// Whether the current session runs VideoToolbox's low-latency rate control (the
-    /// real-time profile asks for it; a VideoToolbox without it falls back to the normal one).
-    pub fn is_low_latency(&self) -> bool {
-        self.session.as_ref().is_some_and(|s| s.low_latency)
     }
 
     /// Encodes one frame captured at `at`. Returns the pictures that completed so far.
@@ -532,40 +453,14 @@ pub(crate) unsafe extern "C-unwind" fn output_callback(
 }
 
 fn create_session(config: &EncoderConfig, outputs: &Outputs) -> Result<Session, EncodeError> {
-    if config.low_latency {
-        match create_session_with(config, outputs, true) {
-            Ok(session) => return Ok(session),
-            Err(e) => {
-                tracing::warn!(error = %e, "low-latency rate control unavailable; using the normal one")
-            }
-        }
-    }
-    create_session_with(config, outputs, false)
-}
-
-fn create_session_with(
-    config: &EncoderConfig,
-    outputs: &Outputs,
-    low_latency: bool,
-) -> Result<Session, EncodeError> {
     let width = i32::try_from(config.size.width).map_err(|_| EncodeError::InvalidFrame("width".into()))?;
     let height = i32::try_from(config.size.height).map_err(|_| EncodeError::InvalidFrame("height".into()))?;
     let yes = CFBoolean::new(true);
-    // SAFETY: framework constant keys.
-    let (hw_key, ll_key) = unsafe {
-        (
-            kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder,
-            kVTVideoEncoderSpecification_EnableLowLatencyRateControl,
-        )
-    };
+    // SAFETY: framework constant key.
+    let hw_key = unsafe { kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder };
     let on: &CFType = yes.as_ref();
-    let spec = if low_latency {
-        let keys: [&CFString; 2] = [hw_key, ll_key];
-        CFDictionary::from_slices(&keys, &[on, on])
-    } else {
-        let keys: [&CFString; 1] = [hw_key];
-        CFDictionary::from_slices(&keys, &[on])
-    };
+    let keys: [&CFString; 1] = [hw_key];
+    let spec = CFDictionary::from_slices(&keys, &[on]);
     let mut out: *mut VTCompressionSession = std::ptr::null_mut();
     // SAFETY: valid dimensions, codec and dictionaries; the refcon outlives the session (see
     // `VtEncoder`); `out` is a valid out-pointer.
@@ -586,7 +481,7 @@ fn create_session_with(
     os("VTCompressionSessionCreate", status)?;
     let out = NonNull::new(out).ok_or(EncodeError::Os { call: "VTCompressionSessionCreate", status: -1 })?;
     // SAFETY: Create rule: +1 retained session.
-    let session = Session { session: unsafe { CFRetained::from_raw(out) }, size: config.size, low_latency };
+    let session = Session { session: unsafe { CFRetained::from_raw(out) }, size: config.size };
 
     let bitrate = CFNumber::new_i32(i32::try_from(config.average_bitrate).unwrap_or(i32::MAX));
     let gop_seconds = CFNumber::new_f64(config.max_keyframe_interval.as_secs_f64());
@@ -594,15 +489,8 @@ fn create_session_with(
         CFNumber::new_i32(i32::try_from(config.max_keyframe_interval_frames()).unwrap_or(i32::MAX));
     let fps = CFNumber::new_i32(i32::try_from(config.expected_fps).unwrap_or(60));
     let no = CFBoolean::new(false);
-    // Low-latency rate control supports Constrained Baseline and Constrained High only.
-    // SAFETY: framework constant profile names.
-    let profile = unsafe {
-        if low_latency {
-            kVTProfileLevel_H264_ConstrainedHigh_AutoLevel
-        } else {
-            kVTProfileLevel_H264_High_AutoLevel
-        }
-    };
+    // SAFETY: framework constant profile name.
+    let profile = unsafe { kVTProfileLevel_H264_High_AutoLevel };
     // SAFETY: framework constant keys and values.
     let properties: [(&CFString, &CFType); 10] = unsafe {
         [
@@ -697,18 +585,6 @@ mod tests {
         assert_eq!(c.expected_fps, 60);
         assert_eq!(c.size, Size::new(1280, 800));
         assert_eq!(c.max_keyframe_interval_frames(), 120);
-        assert!(!c.low_latency);
-    }
-
-    #[test]
-    fn realtime_profile() {
-        let c = EncoderConfig::realtime(Size::new(1920, 1080), 60);
-        assert!(c.low_latency);
-        assert!(EncoderConfig::realtime(Size::new(2560, 1600), 60).low_latency);
-        assert!(!EncoderConfig::realtime(Size::new(3840, 2160), 60).low_latency, "4K: normal rate control");
-        assert_eq!(c.average_bitrate, 6_220_800);
-        assert_eq!(c.max_keyframe_interval_frames(), 240);
-        assert_eq!(EncoderConfig::realtime(Size::new(16, 16), 0).expected_fps, 1);
     }
 
     #[test]

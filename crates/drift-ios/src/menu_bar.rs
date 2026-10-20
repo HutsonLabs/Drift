@@ -1,12 +1,13 @@
-//! The remote Mac app's menus in the iPad's menu bar (task **EXT-3**; ADR `EXT-3-menu-mirroring`).
+//! Session menus in the iPad's menu bar (tasks **EXT-3**, **UI-kinds**): Drift's GNOME menus
+//! (`src-tauri/src/gnome_menu.rs`).
 //!
 //! iPadOS 26 shows an app's menus in a menu bar. tao owns the app delegate, so instead of
 //! `buildMenuWithBuilder:` the menus come from `UIMainMenuSystem`'s build handler
 //! ([`MenuBar::install`]). While a snapshot is shown, the handler replaces Drift's own File, Edit,
-//! Format, View, Window and Help menus with the remote app's, after Drift's app menu; without one,
+//! Format, View, Window and Help menus with the session's, after Drift's app menu; without one,
 //! the standard menus come back.
 //!
-//! Items are `UIAction`s, not `UIKeyCommand`s: hardware keys already go to the Mac (IOS-6), so a
+//! Items are `UIAction`s, not `UIKeyCommand`s: hardware keys already go to the remote desktop (IOS-6), so a
 //! key command would fire the shortcut twice. The shortcut shows as the item's subtitle.
 
 use std::cell::RefCell;
@@ -14,7 +15,7 @@ use std::ptr::NonNull;
 use std::rc::Rc;
 
 use block2::RcBlock;
-use drift_ext::menus::{MenuItem, MenuSnapshot};
+use drift_core::menus::{MenuItem, MenuSnapshot};
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
 use objc2::{MainThreadMarker, Message as _};

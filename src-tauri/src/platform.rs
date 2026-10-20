@@ -36,33 +36,3 @@ pub fn open_local_network_settings() -> Result<(), CommandError> {
             .map_err(|e| CommandError::Platform { message: e.to_string() })
     }
 }
-
-/// Scans a QR code with the camera over `window` and returns its text (IOS-9).
-#[cfg(target_os = "ios")]
-pub async fn scan_qr<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) -> Result<String, CommandError> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    window
-        .with_webview(move |platform| {
-            let Some(mtm) = objc2::MainThreadMarker::new() else { return };
-            // SAFETY: Tauri passes its live view controller on the main thread.
-            unsafe {
-                drift_ios::qr::scan(mtm, platform.view_controller(), move |result| {
-                    let _ = tx.send(result);
-                })
-            };
-        })
-        .map_err(|e| CommandError::Platform { message: e.to_string() })?;
-    match rx.await {
-        Ok(Ok(text)) => Ok(text),
-        Ok(Err(e)) => Err(CommandError::Pairing { message: e.to_string() }),
-        Err(_) => Err(CommandError::Pairing { message: "The scanner closed.".into() }),
-    }
-}
-
-/// A Mac has no camera flow for pairing: the code is typed or the QR text pasted.
-#[cfg(target_os = "macos")]
-pub async fn scan_qr<R: tauri::Runtime>(_window: &tauri::WebviewWindow<R>) -> Result<String, CommandError> {
-    Err(CommandError::Pairing {
-        message: "Type the code shown on the Mac, or paste its pairing link.".into(),
-    })
-}

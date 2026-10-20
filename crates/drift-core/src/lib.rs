@@ -18,16 +18,17 @@
 //! - [`triggers`]: [`TriggerMerger`], network/wake reconnect triggers (M7-2).
 //! - [`store`]: [`ProfileStore`], the `profiles.toml` document (M1-6).
 //! - [`messages`]: user-facing disconnect explanations with next steps (M1-6, M9-4).
-//! - [`mailbox`]: the one-slot newest-item mailbox between Drift Host's pipeline stages (HOST-5).
+//! - [`link`]: `drift-connect:` links from `host/drift-gnome-setup` (GNOME-only).
+//! - [`menus`]: the menu bar model behind the iPad menu bar's GNOME menus.
 
 pub mod audio;
 pub mod clock;
 pub mod geometry;
 pub mod input;
 pub mod layout;
-pub mod mailbox;
+pub mod link;
+pub mod menus;
 pub mod messages;
-pub mod pairing;
 pub mod profile;
 pub mod reconnect;
 pub mod state;
@@ -37,15 +38,15 @@ pub mod video;
 
 pub use clock::{Clock, SystemClock};
 pub use geometry::{Bgra, DesktopSize, Point, Rect, Size, ViewGeometry};
-pub use input::{InputEvent, MomentumPhase, MouseButton, ScrollPhase, SwipeDirection};
+pub use input::{InputEvent, MomentumPhase, MouseButton, ScrollPhase};
 pub use layout::{DisplayControlCaps, MonitorLayout, desired_layout};
 pub use messages::{ErrorAction, ErrorExplanation, explain_disconnect};
 pub use profile::{
-    CertFingerprint, ClipboardPrefs, CmdAs, ConnectMode, ConnectionProfile, DisplayPrefs, HostKind,
-    KeyboardPrefs, ProfileError, ProfileField, ProfileIssue, ProfileProblem, SecretRole, TouchMode,
+    CertFingerprint, ClipboardPrefs, CmdAs, ConnectMode, ConnectionProfile, DisplayPrefs, KeyboardPrefs,
+    ProfileError, ProfileField, ProfileIssue, ProfileProblem, SecretRole, TouchMode,
 };
 pub use reconnect::{ReconnectConfig, ReconnectDecision, ReconnectPolicy};
 pub use state::{ConnectStage, DisconnectReason, InvalidTransition, SessionState};
 pub use store::{ProfileStore, StoreError};
 pub use triggers::{Trigger, TriggerAction, TriggerMerger};
-pub use video::{BgraPicture, Nv12Frame, Nv12Planes, Nv12Source};
+pub use video::{Nv12Frame, Nv12Planes, Nv12Source};

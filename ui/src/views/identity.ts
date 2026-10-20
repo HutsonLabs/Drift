@@ -1,13 +1,12 @@
-// A session window's title bar (UI-windows boards 4, 5, 7; decisions 5 and 6; UI-kinds F): the
-// centred identity capsule (kind glyph, name, the GNOME mode or the Mac's quality step, then a
-// status dot, or a spinner while connecting; the greeter hint, else the host, as its tooltip)
-// and, on the right, Show Connections and Statistics. The whole bar drags the window; nothing in
-// it takes the keyboard (the title bar hands focus back).
+// A session window's title bar (UI-windows boards 4, 5, 7; decisions 5 and 6): the centred
+// identity capsule (mode glyph, name, mode, then a status dot, or a spinner while connecting;
+// the greeter hint, else the host, as its tooltip) and, on the right, Show Connections and
+// Statistics. The whole bar drags the window; nothing in it takes the keyboard (the title bar
+// hands focus back).
 import type { WindowIdentity } from "../bindings";
 import { h, mount } from "../dom";
-import { icon, kindGlyph } from "../icons";
-import { KIND_NAMES, QUALITY_NAMES, SHORT_MODE_NAMES } from "../kinds";
-import { STATUS_NAMES } from "../modes";
+import { icon, modeGlyph } from "../icons";
+import { SHORT_MODE_NAMES, STATUS_NAMES } from "../modes";
 
 /** What the title bar can ask for. */
 export interface IdentityIntents {
@@ -23,18 +22,17 @@ export function renderIdentity(root: HTMLElement, id: WindowIdentity, on: Identi
       : id.status === "idle"
         ? null
         : h("span", { class: `status ${id.status}`, "aria-hidden": "true" });
-  // What is on the other end (UI-kinds F): the GNOME mode, or the Mac's live quality step.
-  const detail = id.kind === "mac" ? (id.quality ? QUALITY_NAMES[id.quality] : "Drift Host") : SHORT_MODE_NAMES[id.mode];
+  const detail = SHORT_MODE_NAMES[id.mode];
   const capsule = h(
     "div",
     {
       class: "ident",
       role: "group",
-      "aria-label": `${id.name}, ${KIND_NAMES[id.kind]}, ${detail}, ${STATUS_NAMES[id.status]}`,
+      "aria-label": `${id.name}, ${detail}, ${STATUS_NAMES[id.status]}`,
       title: id.hint ?? id.host,
       "data-tauri-drag-region": true,
     },
-    kindGlyph(id.kind, "small"),
+    modeGlyph(id.mode, "small"),
     h("span", { class: "name", "data-tauri-drag-region": true }, id.name),
     h("span", { class: "detail", "data-tauri-drag-region": true }, detail),
     indicator,

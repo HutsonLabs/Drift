@@ -3,7 +3,7 @@
 // footer, the live note, the header and the "Keyboard, display and clipboard" disclosure.
 import { describe, expect, test } from "bun:test";
 import type { ConnectionProfile_Deserialize } from "../src/bindings";
-import { addGnome, FakeConnectionsApi, startConnections } from "./fakes";
+import { newConnection, FakeConnectionsApi, startConnections } from "./fakes";
 import { button, check, entry, field, flush, hasButton, key, labels, openConnection, profile, text, type } from "./helpers";
 
 const STUDIO = profile("headless", { name: "Studio Workstation", host: "192.168.1.20" });
@@ -24,7 +24,7 @@ function sheet(root: ParentNode): HTMLElement {
 
 async function newSheet(fake = fixture()) {
   const started = await startConnections(fake);
-  await addGnome(started.root);
+  await newConnection(started.root);
   return started;
 }
 
@@ -131,7 +131,7 @@ describe("new connection", () => {
     expect(text(root)).toContain("Office Desktop");
     expect(root.querySelector(".connections")?.hasAttribute("inert")).toBe(false);
 
-    await addGnome(root);
+    await newConnection(root);
     await flush();
     await fillValid(root);
     (sheet(root).querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -158,7 +158,7 @@ describe("new connection", () => {
     key(field(root, "Name"), "Escape");
     expect(root.querySelector("[role=dialog]")).toBeNull();
     expect(fake.names()).not.toContain("saveProfile");
-    await addGnome(root);
+    await newConnection(root);
     await flush();
     button(sheet(root), "Cancel").click();
     expect(root.querySelector("[role=dialog]")).toBeNull();

@@ -364,16 +364,3 @@ fn appkit_phase_bits_become_wire_phases() {
     assert_eq!(momentum_phase(4), MomentumPhase::Changed);
     assert_eq!(momentum_phase(8), MomentumPhase::Ended);
 }
-
-#[test]
-fn swipe_deltas_and_magnification() {
-    use drift_core::SwipeDirection;
-    use drift_macos::input::{magnification, swipe_direction};
-    assert_eq!(swipe_direction(1.0, 0.0), Some(SwipeDirection::Left));
-    assert_eq!(swipe_direction(-1.0, 0.0), Some(SwipeDirection::Right));
-    assert_eq!(swipe_direction(0.0, 1.0), Some(SwipeDirection::Up));
-    assert_eq!(swipe_direction(0.0, -1.0), Some(SwipeDirection::Down));
-    assert_eq!(swipe_direction(0.0, 0.0), None);
-    assert_eq!(magnification(0.0425), 43);
-    assert_eq!(magnification(f64::NAN), 0);
-}

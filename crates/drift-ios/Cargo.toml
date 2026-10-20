@@ -10,7 +10,6 @@ publish.workspace = true
 [dependencies]
 drift-apple.workspace = true
 drift-core.workspace = true
-drift-ext.workspace = true
 drift-input.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
@@ -23,8 +22,6 @@ tracing.workspace = true
 objc2.workspace = true
 objc2-foundation = { workspace = true, features = ["NSNotification", "NSString", "NSURL", "NSDictionary", "NSRunLoop", "NSObjCRuntime", "NSItemProvider", "NSProgress", "NSError", "NSData", "NSArray", "NSDate"] }
 objc2-ui-kit.workspace = true
-# The pairing QR scanner (IOS-9).
-objc2-av-foundation = "0.3.2"
 objc2-game-controller = "0.3.2"
 objc2-core-foundation.workspace = true
 objc2-quartz-core = { workspace = true, features = ["objc2-core-foundation", "objc2-metal"] }

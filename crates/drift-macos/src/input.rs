@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 
 use drift_core::{
     DesktopSize, InputEvent, KeyboardPrefs, MomentumPhase, MouseButton, Point, ScrollPhase, Size,
-    SwipeDirection, ViewGeometry,
+    ViewGeometry,
 };
 use drift_input::{
     KeyDown, Keyboard, KeyboardType, MenuShortcut, ModifierFlags, ScaleMode, ScrollAccumulator, ScrollConfig,
@@ -103,30 +103,6 @@ pub const fn momentum_phase(raw: u64) -> MomentumPhase {
     } else {
         MomentumPhase::None
     }
-}
-
-/// `swipeWithEvent:`'s `deltaX`/`deltaY` as the way the fingers moved: AppKit reports `+1` for
-/// a swipe to the left or upwards (EXT-2).
-pub fn swipe_direction(dx: f64, dy: f64) -> Option<SwipeDirection> {
-    if dx.abs() >= dy.abs() {
-        if dx > 0.0 {
-            Some(SwipeDirection::Left)
-        } else if dx < 0.0 {
-            Some(SwipeDirection::Right)
-        } else {
-            None
-        }
-    } else if dy > 0.0 {
-        Some(SwipeDirection::Up)
-    } else {
-        Some(SwipeDirection::Down)
-    }
-}
-
-/// `magnifyWithEvent:`'s `magnification` in thousandths (EXT-2).
-pub fn magnification(m: f64) -> i32 {
-    let v = (m * 1000.0).round();
-    if v.is_nan() { 0 } else { v.clamp(-1_000_000.0, 1_000_000.0) as i32 }
 }
 
 /// Input state of one remote view.

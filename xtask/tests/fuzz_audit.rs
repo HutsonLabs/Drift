@@ -38,10 +38,10 @@ fn complete_crates() -> Vec<FuzzCrate> {
 }
 
 #[test]
-fn the_plans_six_parsers_and_the_drift_channel_are_all_required() {
-    // Plan M9-2's six parsers, plus the `Drift::Mac::v1` framing (EXT-1).
+fn the_plans_six_parsers_are_all_required() {
+    // Plan M9-2's six parsers.
     let parsers: Vec<&str> = REQUIRED.iter().map(|r| r.parser).collect();
-    assert_eq!(parsers, ["GFX", "ZGFX", "redirection", "RDSTLS", "CLIPRDR", "pointer", "Drift::Mac::v1"]);
+    assert_eq!(parsers, ["GFX", "ZGFX", "redirection", "RDSTLS", "CLIPRDR", "pointer"]);
 }
 
 #[test]

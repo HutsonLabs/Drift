@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 
 use drift_app::gnome_menu::{GnomeAction, action, snapshot};
-use drift_ext::menus::MenuItem;
+use drift_core::menus::MenuItem;
 
 fn all(items: &[MenuItem]) -> Vec<&MenuItem> {
     items.iter().flat_map(|i| std::iter::once(i).chain(all(&i.children))).collect()

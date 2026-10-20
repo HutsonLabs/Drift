@@ -18,7 +18,6 @@ pub mod fake_server;
 pub mod fixtures;
 pub mod frame_sink;
 pub mod golden;
-pub mod host_spike;
 
 pub use clock::ManualClock;
 pub use fake_channels::{Channels, RecordedLayout, ServerClipFormat};

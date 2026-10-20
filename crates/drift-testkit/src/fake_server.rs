@@ -301,8 +301,6 @@ pub struct LegRecord {
     pub gfx_resets_sent: Vec<(u32, u32)>,
     /// `FrameAcknowledge` frame ids received.
     pub gfx_frame_acks: Vec<u32>,
-    /// What the server end of `Drift::Mac::v1` negotiated, if the leg offered it (EXT-1).
-    pub drift_mac_negotiated: Option<drift_ext::Negotiated>,
     /// `FrameAcknowledge`s with `SUSPEND_FRAME_ACKNOWLEDGEMENT`.
     pub gfx_suspend_acks: u32,
     /// CLIPRDR reached the ready state (the client answered the initial format-list request).
@@ -630,16 +628,6 @@ fn attach_channels(acceptor: &mut Acceptor, channels: Channels, state: &SharedSt
         if channels.display_control {
             dvc = dvc.with_dynamic_channel(FakeDisplayControl { state: Arc::clone(state) });
         }
-        if channels.drift_mac {
-            let link = drift_ext::channel::Link::new();
-            fake_channels::lock(state).drift_mac = Some(link.clone());
-            dvc = dvc.with_dynamic_channel(drift_ext::channel::DriftMacServer::new(
-                link,
-                drift_ext::wire::Capabilities::SCROLL
-                    | drift_ext::wire::Capabilities::STATUS
-                    | drift_ext::wire::Capabilities::PAIRING,
-            ));
-        }
         if channels.gfx {
             dvc = dvc.with_dynamic_channel(FakeGraphics {
                 state: Arc::clone(state),
@@ -733,7 +721,6 @@ impl Active<'_> {
                 r.monitor_layouts.clone_from(&s.layouts);
                 r.gfx_caps_advertised = s.gfx_caps_advertised;
                 r.gfx_frame_acks.clone_from(&s.gfx_frame_acks);
-                r.drift_mac_negotiated = s.drift_mac.as_ref().and_then(drift_ext::channel::Link::negotiated);
                 r.gfx_suspend_acks = s.gfx_suspend_acks;
                 r.gfx_resets_sent.clone_from(&s.gfx_resets_sent);
             });

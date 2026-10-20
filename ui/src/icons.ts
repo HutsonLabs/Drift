@@ -1,6 +1,6 @@
 // Line icons (24×24, 1.6 stroke), drawn as inline SVG so they follow `currentColor`. Every icon
 // is decorative: the control or text next to it carries the name.
-import type { ConnectMode, HostKind } from "./bindings";
+import type { ConnectMode } from "./bindings";
 
 const PATHS = {
   login: ["M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4", "M9 16l4-4-4-4", "M13 12H4"],
@@ -21,16 +21,6 @@ const PATHS = {
   ],
   gauge: ["M4 18a8 8 0 1 1 16 0", "M12 18l4-6"],
   window: ["M5.5 5h13A2.5 2.5 0 0 1 21 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5v-9A2.5 2.5 0 0 1 5.5 5z", "M3 9h18"],
-  // A Mac: a laptop.
-  mac: ["M6 5h12a1.5 1.5 0 0 1 1.5 1.5V16h-15V6.5A1.5 1.5 0 0 1 6 5z", "M2.5 16h19l-1 2.5a1 1 0 0 1-.9.5H4.4a1 1 0 0 1-.9-.5z"],
-  // GNOME: a foot (the GNOME logo's toes and sole).
-  gnome: [
-    "M13.5 10c3 0 5 2.4 5 5.3 0 2.7-2 4.7-4.6 4.7-2.3 0-3.4-1.5-3.4-3.3 0-1.4.8-2.2.8-3.5 0-1.8.5-3.2 2.2-3.2z",
-    "M8.6 3.5c1.6 0 2.4 1.6 2.4 3.3s-.9 2.7-2.1 2.7S6.5 8.2 6.5 6.5s.6-3 2.1-3z",
-    "M5 9.6a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4z",
-    "M12.6 3.8a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2z",
-    "M15.4 5.4a1 1 0 1 1 0 2 1 1 0 0 1 0-2z",
-  ],
 } as const;
 
 /** Filled glyphs (no stroke). */
@@ -67,18 +57,6 @@ export const MODE_ICONS: Record<ConnectMode, IconName> = {
   "desktop-sharing": "display",
   "remote-login": "login",
 };
-
-/** The icon for a kind of target. */
-export const KIND_ICONS: Record<HostKind, IconName> = { mac: "mac", gnome: "gnome" };
-
-/** A rounded, kind-tinted tile around the kind's icon (cards, sheets, the title bar). */
-export function kindGlyph(kind: HostKind, size: "" | "small" | "large" = ""): HTMLSpanElement {
-  const span = document.createElement("span");
-  span.className = ["glyph", `glyph-${kind}`, size].filter(Boolean).join(" ");
-  span.setAttribute("aria-hidden", "true");
-  span.append(icon(KIND_ICONS[kind]));
-  return span;
-}
 
 /** A rounded, mode-tinted tile around the mode's icon. */
 export function modeGlyph(mode: ConnectMode, size: "" | "small" | "large" = ""): HTMLSpanElement {

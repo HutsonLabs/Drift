@@ -10,6 +10,14 @@
 #                               "persistent" also enables gnome-headless-session@USER with
 #                               the systemd drop-in that fixes it on AnduinOS 2.0.3
 #                               (DynamicUser=no, User=gdm; plan §1.9).
+#   --install                   Install gnome-remote-desktop and openssl first when missing
+#                               (apt, dnf, zypper or pacman).
+#   --firewall                  Open every configured port (TCP) in ufw or firewalld, when
+#                               one of them is active.
+#
+# For every configured daemon whose certificate is known, a machine-readable line
+#   fingerprint: <system|USER> <sha256, grdctl format>
+# is printed, so a client can pin it up front (host/drift-gnome-setup does).
 #
 # Idempotent: every step reads the current state first and only acts when it differs.
 # Modes:
@@ -27,6 +35,7 @@
 # Desktop Sharing credentials live in the user's login keyring and can only be set from
 # GNOME Settings in an unlocked session (plan §1.9); this script does not touch them.
 #
+# host/drift-gnome-setup runs it from a Mac for one machine and adds the connection to Drift.
 # Run it as root on the host, e.g. from the dev Mac:
 #   ssh homelab@10.1.2.40 'sudo -n bash -s -- --check --system \
 #       --headless drifttest:3391 --headless drifttest2:3392:persistent' < host/drift-host-setup.sh
@@ -42,6 +51,8 @@ readonly SYSTEM_CERT_DIR=/var/lib/gnome-remote-desktop/.local/share/gnome-remote
 
 MODE=check
 SYSTEM=0
+INSTALL=0
+FIREWALL=0
 HEADLESS=()
 CHANGES=0
 ERRORS=0
@@ -107,6 +118,97 @@ gen_cert() {
   chmod 0600 "$dir/rdp-tls.key"
 }
 
+# fingerprint OWNER CERT: prints CERT's SHA-256 as `fingerprint: OWNER aa:bb:…` (lowercase hex
+# pairs, the format of `grdctl status` and Drift's certificate pins).
+fingerprint() {
+  local owner=$1 cert=$2 fp
+  [[ -r "$cert" ]] || return 0
+  fp=$(openssl x509 -in "$cert" -noout -fingerprint -sha256 2>/dev/null | sed 's/^.*=//' | tr '[:upper:]' '[:lower:]')
+  [[ -n "$fp" ]] && printf 'fingerprint: %s %s\n' "$owner" "$fp"
+  return 0
+}
+
+# wait_for_bus USER UID: after starting a persistent session, gives its bus up to 30 s.
+wait_for_bus() {
+  local user=$1 uid=$2 i
+  [[ $MODE == apply ]] || return 0
+  for i in $(seq 30); do
+    [[ -S "/run/user/$uid/bus" ]] && return 0
+    [[ $i -eq 1 ]] && printf 'wait:   %s: waiting for the session to start\n' "$user"
+    sleep 1
+  done
+}
+
+# The package manager's install command, or nothing.
+pkg_install() {
+  if command -v apt-get >/dev/null; then
+    apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+  elif command -v dnf >/dev/null; then
+    dnf install -y "$@"
+  elif command -v zypper >/dev/null; then
+    zypper --non-interactive install "$@"
+  elif command -v pacman >/dev/null; then
+    pacman -S --needed --noconfirm "$@"
+  else
+    return 1
+  fi
+}
+
+ensure_packages() {
+  local missing=()
+  command -v grdctl >/dev/null || missing+=(gnome-remote-desktop)
+  command -v openssl >/dev/null || missing+=(openssl)
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    ok "gnome-remote-desktop and openssl are installed"
+  elif command -v apt-get >/dev/null || command -v dnf >/dev/null ||
+    command -v zypper >/dev/null || command -v pacman >/dev/null; then
+    change "install ${missing[*]}" pkg_install "${missing[@]}"
+  else
+    err "install ${missing[*]} with this system's package manager, then run again"
+  fi
+}
+
+# Headless sessions need gnome-remote-desktop 46 or later (grdctl --headless).
+check_headless_support() {
+  if ! command -v grdctl >/dev/null; then
+    if [[ $MODE == apply ]]; then
+      err "grdctl is missing; pass --install or install gnome-remote-desktop"
+    else
+      printf 'skip:   headless support is checked once gnome-remote-desktop is installed\n'
+    fi
+    return
+  fi
+  if grdctl --help 2>&1 | grep -q -- '--headless'; then
+    ok "grdctl supports headless sessions"
+  else
+    err "this gnome-remote-desktop has no headless mode; GNOME 46 or later is needed"
+  fi
+}
+
+# open_port PORT: allows PORT/tcp in an active ufw or firewalld.
+open_port() {
+  local port=$1
+  if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
+    if ufw status 2>/dev/null | grep -Eq "^${port}/tcp[[:space:]]+ALLOW"; then
+      ok "ufw allows ${port}/tcp"
+    else
+      change "allow ${port}/tcp in ufw" ufw allow "${port}/tcp"
+    fi
+  elif command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then
+    if firewall-cmd --query-port="${port}/tcp" >/dev/null 2>&1; then
+      ok "firewalld allows ${port}/tcp"
+    else
+      change "allow ${port}/tcp in firewalld" firewalld_add "$port"
+    fi
+  else
+    ok "no active ufw or firewalld; ${port}/tcp is not filtered here"
+  fi
+}
+
+firewalld_add() {
+  firewall-cmd --add-port="$1/tcp" && firewall-cmd --permanent --add-port="$1/tcp"
+}
+
 write_dropin() {
   install -d -m 0755 "$DROPIN_DIR"
   printf '%s\n' "$DROPIN_CONTENT" >"$DROPIN_DIR/$DROPIN_NAME"
@@ -155,6 +257,8 @@ setup_system() {
   else
     ok "system TLS certificate configured ($cert)"
   fi
+  [[ $MODE == apply ]] && is_unset "$cert" && cert="$SYSTEM_CERT_DIR/rdp-tls.crt"
+  is_unset "$cert" || fingerprint system "$cert"
 
   if [[ -n "${DRIFT_SYSTEM_RDP_USER:-}" && -n "${DRIFT_SYSTEM_RDP_PASS:-}" ]]; then
     current=$(grdctl --system status --show-credentials 2>/dev/null || true)
@@ -200,6 +304,7 @@ setup_headless() {
   if [[ "$persistent" == "persistent" ]]; then
     ensure_dropin "$user"
     ensure_unit "gnome-headless-session@$user.service"
+    wait_for_bus "$user" "$uid"
   fi
 
   if [[ ! -S "/run/user/$uid/bus" ]]; then
@@ -228,6 +333,8 @@ setup_headless() {
   else
     ok "$user: TLS certificate configured ($cert)"
   fi
+  [[ $MODE == apply ]] && is_unset "$cert" && cert="$dir/rdp-tls.crt"
+  is_unset "$cert" || fingerprint "$user" "$cert"
 
   var_user="DRIFT_HEADLESS_RDP_USER_$(env_suffix "$user")"
   var_pass="DRIFT_HEADLESS_RDP_PASS_$(env_suffix "$user")"
@@ -273,6 +380,16 @@ setup_headless() {
     change "$user: disable automatic suspend" \
       as_user "$user" gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type nothing
   fi
+
+  # Nobody sits at a headless session: a locked one only swallows input (docs/gnome-host-setup.md),
+  # and RDP credentials already guard it.
+  current=$(as_user "$user" gsettings get org.gnome.desktop.screensaver lock-enabled 2>/dev/null || true)
+  if [[ "$current" == "false" ]]; then
+    ok "$user: screen lock disabled"
+  else
+    change "$user: disable the screen lock" \
+      as_user "$user" gsettings set org.gnome.desktop.screensaver lock-enabled false
+  fi
 }
 
 main() {
@@ -281,6 +398,8 @@ main() {
     --check | --dry-run) MODE=check ;;
     --apply) MODE=apply ;;
     --system) SYSTEM=1 ;;
+    --install) INSTALL=1 ;;
+    --firewall) FIREWALL=1 ;;
     --headless)
       [[ $# -ge 2 ]] || {
         echo "--headless needs USER:PORT[:persistent]" >&2
@@ -311,8 +430,17 @@ main() {
   fi
 
   printf 'drift-host-setup: mode=%s\n' "$MODE"
+  if [[ $INSTALL -eq 1 ]]; then
+    ensure_packages
+  fi
+  if [[ ${#HEADLESS[@]} -gt 0 ]]; then
+    check_headless_support
+  fi
   if [[ $SYSTEM -eq 1 ]]; then
     setup_system
+    if [[ $FIREWALL -eq 1 ]]; then
+      open_port 3389
+    fi
   fi
   local spec user port persistent
   for spec in "${HEADLESS[@]}"; do
@@ -322,6 +450,9 @@ main() {
       continue
     fi
     setup_headless "$user" "$port" "${persistent:-}"
+    if [[ $FIREWALL -eq 1 ]]; then
+      open_port "$port"
+    fi
   done
 
   if [[ $MODE == apply ]]; then

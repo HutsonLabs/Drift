@@ -14,7 +14,7 @@ fn read(file: &str) -> String {
 
 #[test]
 fn host_scripts_are_shellcheck_clean() {
-    for script in ["drift-host-setup.sh", "drift-host-report.sh"] {
+    for script in ["drift-host-setup.sh", "drift-host-report.sh", "drift-gnome-setup"] {
         let path = host(script);
         assert!(path.is_file(), "missing host/{script}");
         let out = Command::new("shellcheck")
@@ -37,7 +37,7 @@ fn setup_script_is_strict_and_defaults_to_check_mode() {
     assert!(s.starts_with("#!/usr/bin/env bash\n"));
     assert!(s.contains("\nset -euo pipefail\n"));
     assert!(s.contains("\nMODE=check\n"), "default mode must change nothing");
-    for flag in ["--check", "--dry-run", "--apply", "--system", "--headless"] {
+    for flag in ["--check", "--dry-run", "--apply", "--system", "--headless", "--install", "--firewall"] {
         assert!(s.contains(flag), "missing {flag}");
     }
     assert!(s.contains("change_secret"), "credential changes must not echo their command line");
@@ -63,4 +63,39 @@ fn report_script_is_read_only() {
     }
     assert!(!s.contains("--show-credentials"));
     assert_eq!(xtask::host_check::REPORT_SCRIPT, s);
+}
+
+/// GNOME-only: the setup reports each daemon's certificate fingerprint in a line the Mac side
+/// parses, and turns off the screen lock that would swallow a headless session's input.
+#[test]
+fn setup_script_reports_fingerprints_and_unlocks_headless_sessions() {
+    let s = read("drift-host-setup.sh");
+    assert!(s.contains("printf 'fingerprint: %s %s\\n'"), "machine-readable fingerprint line");
+    assert!(s.contains("org.gnome.desktop.screensaver lock-enabled false"));
+    for manager in ["apt-get", "dnf", "zypper", "pacman"] {
+        assert!(s.contains(manager), "--install knows {manager}");
+    }
+    for firewall in ["ufw allow", "firewall-cmd --permanent --add-port"] {
+        assert!(s.contains(firewall), "--firewall uses {firewall}");
+    }
+}
+
+/// GNOME-only: `drift-gnome-setup` opens a `drift-connect:` link without the password; the
+/// same link is parsed by `drift_core::link` (crates/drift-core/tests/connect_link.rs).
+#[test]
+fn gnome_setup_prints_the_connect_link_without_a_password() {
+    let pin =
+        "f3:e7:a2:00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff:01:02:03:04:05:06:07:08:09:0a:0b:0c:0d";
+    let out = Command::new(host("drift-gnome-setup"))
+        .args(["--print-link", "--name", "Work box", "--port", "3391", "--pin", pin, "me@box.local"])
+        .output()
+        .expect("run host/drift-gnome-setup");
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        format!("drift-connect:?name=Work%20box&host=box.local&port=3391&mode=headless&user=me&pin={pin}\n")
+    );
+    let s = read("drift-gnome-setup");
+    assert!(s.contains("umask 077"), "the password travels in a private file");
+    assert!(!s.contains("pass=$(urlencode"), "no password in a link");
 }

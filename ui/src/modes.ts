@@ -16,6 +16,13 @@ export const MODE_NAMES: Record<ConnectMode, string> = {
   "remote-login": "Remote Login",
 };
 
+/** A mode as the title bar names it. */
+export const SHORT_MODE_NAMES: Record<ConnectMode, string> = {
+  headless: "Headless",
+  "desktop-sharing": "Desktop Sharing",
+  "remote-login": "Remote Login",
+};
+
 /** A connection status as VoiceOver reads it. */
 export const STATUS_NAMES: Record<ConnectionStatus, string> = {
   idle: "Not connected",

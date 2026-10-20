@@ -8,11 +8,11 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use drift_core::{ConnectMode, HostKind, SessionState, Size};
+use drift_core::{ConnectMode, ConnectionProfile, SessionState, Size};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::view::{HostQuality, SessionView};
+use crate::view::SessionView;
 
 /// Where a profile's connection stands (gallery pills, Dock menu, Window menu, identity capsule).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, specta::Type)]
@@ -65,11 +65,6 @@ pub struct WindowIdentity {
     pub host: String,
     /// Connection mode (a GNOME computer's capsule names it).
     pub mode: ConnectMode,
-    /// What is on the other end (picks the glyph, the capsule's detail and the iPhone key row).
-    pub kind: HostKind,
-    /// The quality step a Drift Host reports (EXT-4), shown in a Mac's capsule; `None` before
-    /// the first report and for GNOME.
-    pub quality: Option<HostQuality>,
     /// Dot or spinner.
     pub status: ConnectionStatus,
     /// Greeter hint (tooltip) while the GNOME login screen waits.
@@ -108,10 +103,10 @@ pub enum ConnectionsIntent {
         /// The profile to edit.
         profile_id: Uuid,
     },
-    /// "Pair a Mac" with a `drift-pair:` link the system opened Drift with (IOS-9).
-    Pair {
-        /// The link (a QR payload).
-        uri: String,
+    /// The New Connection form, prefilled from a `drift-connect:` link (GNOME-only).
+    Prefill {
+        /// The unsaved connection.
+        profile: ConnectionProfile,
     },
 }
 

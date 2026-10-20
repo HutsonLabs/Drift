@@ -76,21 +76,39 @@ export const commands = {
 	windowIdentity: () => typedError<WindowIdentity, CommandError>(__TAURI_INVOKE("window_identity")),
 	/**  Turns the calling session window's statistics HUD on or off (the title bar's gauge). */
 	toggleStats: () => typedError<null, CommandError>(__TAURI_INVOKE("toggle_stats")),
-	/**  Recognises a scanned, pasted or typed pairing code (IOS-9). */
-	readPairingCode: (text: string) => typedError<PairingInput, CommandError>(__TAURI_INVOKE("read_pairing_code", { text })),
-	/**  The `drift-pair:` link the app was opened with, once (IOS-9). */
-	takePairingLink: () => __TAURI_INVOKE<string | null>("take_pairing_link"),
-	/**  Pairs a Mac running Drift Host and saves its connection (IOS-9). */
-	pairHost: (request: PairHostRequest) => typedError<ProfileEntry_Serialize, CommandError>(__TAURI_INVOKE("pair_host", { request })),
-	/**  Starts browsing for Drift Hosts; [`HostsDiscovered`] goes to the Connections page. */
-	startHostDiscovery: () => typedError<null, CommandError>(__TAURI_INVOKE("start_host_discovery")),
-	/**  Stops browsing for Drift Hosts. */
-	stopHostDiscovery: () => typedError<null, CommandError>(__TAURI_INVOKE("stop_host_discovery")),
 	/**
-	 *  Scans a pairing QR code with the camera and returns its text (iOS; on a Mac the code is
-	 *  typed or pasted instead).
+	 *  The unsaved connection of the `drift-connect:` link the app was opened with, once
+	 *  (GNOME-only); the Connections page opens it in the New Connection form.
 	 */
-	scanPairingQr: () => typedError<string, CommandError>(__TAURI_INVOKE("scan_pairing_qr")),
+	takeConnectLink: () => __TAURI_INVOKE<{
+	/**  Stable identifier; also the Keychain account key prefix. */
+	id: string,
+	/**  Display name (window title). */
+	name: string,
+	/**  Host name or IP address. */
+	host: string,
+	/**  TCP port (RemoteLogin default 3389). */
+	port: number,
+	/**  Connection mode. */
+	mode: ConnectMode,
+	/**  RDP user: system credentials (RemoteLogin) or daemon credentials (Headless/Sharing). */
+	rdp_username: string,
+	/**  RemoteLogin only: the Linux user, shown in the greeter hint. */
+	linux_username?: string | null,
+	/**
+	 *  TOFU-pinned certificate fingerprint of the first leg (or one set up front, for example by
+	 *  a `drift-connect:` link from `host/drift-gnome-setup`).
+	 */
+	cert_pin?: CertFingerprint | null,
+	/**  Keyboard preferences. */
+	keyboard: KeyboardPrefs,
+	/**  Display preferences. */
+	display: DisplayPrefs,
+	/**  Clipboard preferences. */
+	clipboard: ClipboardPrefs,
+	/**  Touch on iPhone and iPad (IOS-7); ignored on the Mac. */
+	touch?: TouchMode,
+} | null>("take_connect_link"),
 	/**
 	 *  iPhone key row (IOS-8): presses `keys` as one chord in the calling window's session.
 	 *  Names are `phone::SoftKey` names plus single letters and digits.
@@ -115,8 +133,7 @@ export const commands = {
 /** Events */
 export const events = {
 	connectionsChanged: makeEvent<ConnectionsChanged>("connections-changed"),
-	connectionsIntentRequested: makeEvent<ConnectionsIntentRequested>("connections-intent-requested"),
-	hostsDiscovered: makeEvent<HostsDiscovered>("hosts-discovered"),
+	connectionsIntentRequested: makeEvent<ConnectionsIntentRequested_Deserialize>("connections-intent-requested"),
 	phoneControlsChanged: makeEvent<PhoneControlsChanged>("phone-controls-changed"),
 	sessionViewChanged: makeEvent<SessionViewChanged_Deserialize>("session-view-changed"),
 	thumbnailUpdated: makeEvent<ThumbnailUpdated>("thumbnail-updated"),
@@ -196,10 +213,6 @@ message: string } |
 message: string } | 
 /**  The window has no session (or it has already ended). */
 { kind: "no-session" } | 
-/**  Pairing input was refused or a pairing check failed (IOS-9). */
-{ kind: "pairing"; 
-/**  Human-readable reason. */
-message: string } | 
 /**  The command exists for the UI but its backend is not wired yet. */
 { kind: "not-implemented"; 
 /**  What is missing. */
@@ -225,9 +238,7 @@ export type ConnectStage =
 /**  RDSTLS with one-time redirect credentials (Remote Login legs ≥ 2). */
 "rdstls" | 
 /**  MCS / capability exchange / finalization. */
-"activation" | 
-/**  Connected; a Drift Host's user is asked to approve this device (HOST-15). */
-"approval";
+"activation";
 
 /**  A saved connection (plan §3). Contains no secrets. */
 export type ConnectionProfile = ConnectionProfile_Serialize | ConnectionProfile_Deserialize;
@@ -249,15 +260,10 @@ export type ConnectionProfile_Deserialize = {
 	/**  RemoteLogin only: the Linux user, shown in the greeter hint. */
 	linux_username?: string | null,
 	/**
-	 *  TOFU-pinned certificate fingerprint of the first leg; for a paired Mac host, the pin
-	 *  taken from the pairing (never trust-on-first-use).
+	 *  TOFU-pinned certificate fingerprint of the first leg (or one set up front, for example by
+	 *  a `drift-connect:` link from `host/drift-gnome-setup`).
 	 */
 	cert_pin?: CertFingerprint | null,
-	/**
-	 *  The Drift Host this profile was paired with (IOS-9). `None` for GNOME hosts, which keep
-	 *  TOFU; absent from `profiles.toml` when `None`, so older files and readers are unaffected.
-	 */
-	paired_host?: string | null,
 	/**  Keyboard preferences. */
 	keyboard?: KeyboardPrefs,
 	/**  Display preferences. */
@@ -285,15 +291,10 @@ export type ConnectionProfile_Serialize = {
 	/**  RemoteLogin only: the Linux user, shown in the greeter hint. */
 	linux_username?: string | null,
 	/**
-	 *  TOFU-pinned certificate fingerprint of the first leg; for a paired Mac host, the pin
-	 *  taken from the pairing (never trust-on-first-use).
+	 *  TOFU-pinned certificate fingerprint of the first leg (or one set up front, for example by
+	 *  a `drift-connect:` link from `host/drift-gnome-setup`).
 	 */
 	cert_pin?: CertFingerprint | null,
-	/**
-	 *  The Drift Host this profile was paired with (IOS-9). `None` for GNOME hosts, which keep
-	 *  TOFU; absent from `profiles.toml` when `None`, so older files and readers are unaffected.
-	 */
-	paired_host?: string | null,
 	/**  Keyboard preferences. */
 	keyboard: KeyboardPrefs,
 	/**  Display preferences. */
@@ -327,20 +328,42 @@ export type Connections = {
 export type ConnectionsChanged = Connections;
 
 /**  What the Connections page should open when Rust brings it forward. */
-export type ConnectionsIntent = 
-/**  The New Connection sheet (Cmd+N, Dock ▸ New Connection…). */
-{ kind: "new" } | 
-/**  The edit sheet of a profile (Cmd+E, the error sheet's Edit Connection…). */
-{ kind: "edit"; 
-/**  The profile to edit. */
-profile_id: string } | 
-/**  "Pair a Mac" with a `drift-pair:` link the system opened Drift with (IOS-9). */
-{ kind: "pair"; 
-/**  The link (a QR payload). */
-uri: string };
+export type ConnectionsIntent = ConnectionsIntent_Serialize | ConnectionsIntent_Deserialize;
 
 /**  Emitted to the `connections` page to open a sheet. */
-export type ConnectionsIntentRequested = ConnectionsIntent;
+export type ConnectionsIntentRequested = ConnectionsIntentRequested_Serialize | ConnectionsIntentRequested_Deserialize;
+
+/**  Emitted to the `connections` page to open a sheet. */
+export type ConnectionsIntentRequested_Deserialize = ConnectionsIntent_Deserialize;
+
+/**  Emitted to the `connections` page to open a sheet. */
+export type ConnectionsIntentRequested_Serialize = ConnectionsIntent_Serialize;
+
+/**  What the Connections page should open when Rust brings it forward. */
+export type ConnectionsIntent_Deserialize = 
+/**  The New Connection sheet (Cmd+N, Dock ▸ New Connection…). */
+({ kind: "new" }) & { profile?: never; profile_id?: never } | 
+/**  The edit sheet of a profile (Cmd+E, the error sheet's Edit Connection…). */
+({ kind: "edit"; 
+/**  The profile to edit. */
+profile_id: string }) & { profile?: never } | 
+/**  The New Connection form, prefilled from a `drift-connect:` link (GNOME-only). */
+({ kind: "prefill"; 
+/**  The unsaved connection. */
+profile: ConnectionProfile_Deserialize }) & { profile_id?: never };
+
+/**  What the Connections page should open when Rust brings it forward. */
+export type ConnectionsIntent_Serialize = 
+/**  The New Connection sheet (Cmd+N, Dock ▸ New Connection…). */
+({ kind: "new" }) & { profile?: never; profile_id?: never } | 
+/**  The edit sheet of a profile (Cmd+E, the error sheet's Edit Connection…). */
+({ kind: "edit"; 
+/**  The profile to edit. */
+profile_id: string }) & { profile?: never } | 
+/**  The New Connection form, prefilled from a `drift-connect:` link (GNOME-only). */
+({ kind: "prefill"; 
+/**  The unsaved connection. */
+profile: ConnectionProfile_Serialize }) & { profile_id?: never };
 
 /**  Why a session stopped (plan §3). */
 export type DisconnectReason = 
@@ -367,12 +390,7 @@ export type DisconnectReason =
 /**  The remote user logged off. */
 { kind: "logged-off-remotely" } | 
 /**  macOS Local Network Privacy denied the connection (`EHOSTUNREACH`, errno 65). */
-{ kind: "local-network-denied" } | 
-/**
- *  A Drift Host refused this device: wrong or expired pairing code, or a device it does not
- *  know (HOST-8). The text says which. Not retryable.
- */
-{ kind: "pairing-refused"; detail: string };
+{ kind: "local-network-denied" };
 
 /**  Display preferences. */
 export type DisplayPrefs = {
@@ -404,53 +422,6 @@ export type ErrorExplanation = {
 	/**  Buttons to offer; the first is the default. */
 	actions: ErrorAction[],
 };
-
-/**
- *  A Drift Host found with Bonjour, from its TXT record
- *  (`v`, `id`, `host`, `fp`, optional `name`, `port`, `user` and `approve`).
- */
-export type HostAdvert = {
-	/**  The Bonjour service instance name. */
-	service_name: string,
-	/**  The Drift Host's stable id. */
-	host_id: string,
-	/**  The Mac's name (the service name when the record has none). */
-	name: string,
-	/**  Host name to connect to (the Mac's `.local` name). */
-	host: string,
-	/**  RDP port. */
-	port: number,
-	/**  SHA-256 of the host's TLS certificate. */
-	fingerprint: CertFingerprint,
-	/**  The account devices sign in with (`user`, HOST-15); `None` from older hosts. */
-	account?: string | null,
-	/**  The host can approve a device without a code (`approve=1`, HOST-15). */
-	approval?: boolean,
-};
-
-/**
- *  What is on the other end of a profile (UI-kinds): it drives the gallery, the configuration
- *  sheet, the title bar, the iPhone key row and the iPad menu bar.
- */
-export type HostKind = 
-/**  A Mac running Drift Host, paired with this device (IOS-9). */
-"mac" | 
-/**  A GNOME computer (GNOME Remote Desktop); its [`ConnectMode`] says how. */
-"gnome";
-
-/**  A Drift Host's quality step (EXT-4), as the HUD names it. */
-export type HostQuality = 
-/**  Full bit rate and frame rate. */
-"best" | 
-/**  A lower bit rate. */
-"high" | 
-/**  Lower again, half the frame rate. */
-"medium" | 
-/**  The lowest step. */
-"low";
-
-/**  Emitted to the `connections` page while discovery runs: every Drift Host currently found. */
-export type HostsDiscovered = HostAdvert[];
 
 /**  Keyboard preferences. */
 export type KeyboardPrefs = {
@@ -484,55 +455,6 @@ export type OpenConnection = {
 	/**  The reconnect attempt while reconnecting. */
 	attempt: number | null,
 };
-
-/**  A pairing to perform. */
-export type PairHostRequest = 
-/**  From a QR payload. */
-{ kind: "qr"; 
-/**  The payload. */
-uri: string; 
-/**  The account on the Mac. */
-username: string; 
-/**  Its password, to store like any profile's (optional). */
-password: string | null } | 
-/**  A host found with Bonjour and the code typed from its screen. */
-{ kind: "advert"; 
-/**  The host. */
-advert: HostAdvert; 
-/**  The typed code. */
-code: string; 
-/**  The account on the Mac. */
-username: string; 
-/**  Its password (optional). */
-password: string | null } | 
-/**
- *  A host found with Bonjour that approves devices itself: no code; its user clicks Allow
- *  when the device first connects (HOST-15).
- */
-{ kind: "approve"; 
-/**  The host. */
-advert: HostAdvert; 
-/**  The account on the Mac. */
-username: string; 
-/**  Its password (optional). */
-password: string | null };
-
-/**  What a scanned, pasted or typed pairing code turned out to be. */
-export type PairingInput = 
-/**  A QR payload: it names the host, so no Bonjour host needs choosing. */
-{ kind: "qr"; 
-/**  The payload, to pass back to [`PairHostRequest::Qr`]. */
-uri: string; 
-/**  The Mac's name. */
-name: string; 
-/**  Host name. */
-host: string; 
-/**  RDP port. */
-port: number } | 
-/**  A typed code, formatted `1234 5678`. */
-{ kind: "code"; 
-/**  The code. */
-code: string };
 
 /**  What the session page shows of the iPhone controls (the `PhoneControlsChanged` event). */
 export type PhoneControls = {
@@ -810,8 +732,6 @@ export type StatsView = {
 	latency_p95_tenths_ms: number,
 	/**  Frames awaiting acknowledgement. */
 	unacked_frames: number,
-	/**  The quality a Drift Host reports, or `None` for any other server (EXT-4). */
-	host_quality: HostQuality | null,
 };
 
 /**
@@ -847,13 +767,6 @@ export type WindowIdentity = {
 	host: string,
 	/**  Connection mode (a GNOME computer's capsule names it). */
 	mode: ConnectMode,
-	/**  What is on the other end (picks the glyph, the capsule's detail and the iPhone key row). */
-	kind: HostKind,
-	/**
-	 *  The quality step a Drift Host reports (EXT-4), shown in a Mac's capsule; `None` before
-	 *  the first report and for GNOME.
-	 */
-	quality: HostQuality | null,
 	/**  Dot or spinner. */
 	status: ConnectionStatus,
 	/**  Greeter hint (tooltip) while the GNOME login screen waits. */
