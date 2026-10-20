@@ -102,6 +102,12 @@ pub fn audit(src_tauri: &Path) -> Vec<String> {
     problems
 }
 
+/// Everything wrong with an Icon Composer file (empty means it is complete).
+#[must_use]
+pub fn icon_composer_audit(_icon: &Path) -> Vec<String> {
+    vec!["APP-icon: not implemented".to_owned()]
+}
+
 /// The iPhone and iPad icon set, relative to `src-tauri/` (IOS-5: tracked in the Xcode project).
 pub const IOS_SET: &str = "gen/apple/Assets.xcassets/AppIcon.appiconset";
 
