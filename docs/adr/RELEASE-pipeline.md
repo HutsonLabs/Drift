@@ -2,12 +2,14 @@
 
 - Status: accepted
 - Date: 2026-10-18
-- Replaces the `cargo xtask bundle` stub (M9-5) and ties together STORE-1 to STORE-4
+- Replaces the `cargo xtask bundle` stub (M9-5) and ties together STORE-1 to STORE-3
+- Amended 2026-10-20 (ADR GNOME-only): Drift Host is retired, so a release is three artifacts
+  and `--verify-reproducible` is gone
 
 ## Context
 
-Releases took several hand-run commands (a TestFlight upload per platform, `host-release`, a
-Drift DMG by hand), each picking its own build number and output folder; iOS and macOS ended
+Releases took several hand-run commands (a TestFlight upload per platform, a Drift DMG by
+hand), each picking its own build number and output folder; iOS and macOS ended
 up on different builds (26.10 (2) and 26.10 (3)). A failure halfway
 meant starting again, and nothing recorded what a release was built from.
 
@@ -15,7 +17,7 @@ meant starting again, and nothing recorded what a release was built from.
 
 **Lockstep.** iOS and macOS are always released together and never out of version or build
 sync. One release is one `yy.mm` version and one build number N, used by the iOS `.ipa`,
-the Mac App Store `.pkg` and both DMGs. N is App Store Connect's highest build on **any**
+the Mac App Store `.pkg` and the Drift DMG. N is App Store Connect's highest build on **any**
 platform + 1, chosen once. There is no single-platform publish path (the old
 `cargo xtask testflight` is gone). The `sync-check` step reads `CFBundleShortVersionString`
 and `CFBundleVersion` back out of every artifact and refuses to go on unless all equal
@@ -27,18 +29,17 @@ a new N. When App Store Connect is already out of step (today iOS 2, macOS 3), o
 exists on one platform only, a new release still uses the highest + 1 on both, which puts
 them back in step; the build-number step says so.
 
-**Drift and Drift Host ship together** (RELEASE-lockstep, 2026-10-19). Every release builds and
-publishes all four artifacts — the iOS `.ipa`, the Mac App Store `.pkg`, Drift's DMG and Drift
-Host's DMG — with the same version and build N, **whether or not either app changed** since
-the last release. There is no "skip the unchanged one" rule and no judgement call about what
-counts as a material change: an unchanged app is simply rebuilt with the new number. This keeps
-a paired Drift and Drift Host on matching numbers, so "which Host goes with this Drift" never
-needs answering. Every option set includes both DMG steps, and `sync-check` refuses a release
-that is missing any of the four (`xtask/tests/release.rs`,
-`drift_and_drift_host_always_ship_together`).
+**Every release ships all three artifacts** (RELEASE-lockstep, 2026-10-19; Drift Host dropped by
+ADR GNOME-only, 2026-10-20). Every release builds and publishes the iOS `.ipa`, the Mac App
+Store `.pkg` and Drift's DMG with the same version and build N, **whether or not each one
+changed** since the last release. There is no "skip the unchanged one" rule and no judgement
+call about what counts as a material change: an unchanged artifact is simply rebuilt with the
+new number. Every option set includes the DMG step, and `sync-check` refuses a release that is
+missing any of the three (`xtask/tests/release.rs`,
+`every_run_ships_ios_the_mac_app_store_and_the_dmg_together`).
 
 1. **One command**, `cargo xtask release`, with named steps in a fixed order: preflight, gate,
-   build number, clean, iOS, Mac App Store, Drift DMG, Drift Host DMG, notarize, checksums,
+   build number, clean, iOS, Mac App Store, Drift DMG, notarize, checksums,
    sync check, then the publish steps TestFlight (both platforms), What to Test, Spaces. The
    order and the rules are data in
    `xtask::release` and tested in `xtask/tests/release.rs`; `xtask/src/release_cmd.rs` runs them.
@@ -57,18 +58,17 @@ that is missing any of the four (`xtask/tests/release.rs`,
    files are listed in `release::VERSION_FILES` and must agree. `--set-version yy.mm` rewrites
    them all, refreshes `Cargo.lock` and starts `release/notes/<yy.mm>.md` from the template.
    One build number per release (App Store Connect's highest + 1) goes into every artifact:
-   the iOS and Mac App Store bundles, Drift's DMG app and Drift Host's `Info.plist`.
+   the iOS and Mac App Store bundles and Drift's DMG app.
 5. **Gate receipt.** `cargo xtask ci` (full gate, clean tree) writes
    `target/ci-receipts/<HEAD>`; the release reuses it or runs the gate itself.
 6. **Artifacts** go to `target/release-out/<yy.mm>-<build>/`: `Drift_<v>.<b>_iOS.ipa`,
-   `Drift_<v>.<b>_MacAppStore.pkg`, `Drift_<v>.<b>_aarch64.dmg`,
-   `Drift-Host_<v>.<b>_aarch64.dmg`, `SHA256SUMS`, `manifest.json` (commit, version, build,
+   `Drift_<v>.<b>_MacAppStore.pkg`, `Drift_<v>.<b>_aarch64.dmg`, `SHA256SUMS`, `manifest.json` (commit, version, build,
    `SOURCE_DATE_EPOCH`, toolchain, lockfile hashes, each step with times, outputs and errors,
    final artifacts with SHA-256 and size; written atomically) and `release.log`. Drift's
-   Developer ID DMG is built like Drift Host's: `tauri build --bundles app`, then `ditto`,
+   Developer ID DMG is built with `tauri build --bundles app`, then `ditto`,
    `hdiutil` and `codesign`, never Tauri's DMG script (its Finder step fails with a locked
    screen). Tauri is kept away from the App Store Connect credentials for the Mac builds, so it
-   does not notarize the bare app; the pipeline notarizes and staples the DMGs.
+   does not notarize the bare app; the pipeline notarizes and staples the DMG.
 7. **Resume.** `--resume` continues the last run (`target/release-out/LATEST`) of the same
    version and commit. A finished step is skipped only if every output it recorded still has
    the recorded SHA-256; preflight and the gate always run; stapling updates the DMG records.
@@ -83,7 +83,7 @@ that is missing any of the four (`xtask/tests/release.rs`,
    Spaces step reuses an existing tag on the build's commit and an existing release (attaching
    only missing files), so reruns do not duplicate anything.
 9. **Tags** are `v<yy.mm>.<build>` (three parts, like the earlier `v0.2.0`), annotated, pushed
-   to `origin`; the release on spaces.hutson.cloud carries both DMGs and `SHA256SUMS`, with the
+   to `origin`; the release on spaces.hutson.cloud carries the DMG and `SHA256SUMS`, with the
    notes file plus the checksums as its notes.
 
 **Releases live on spaces.hutson.cloud, never GitHub** (RELEASE-spaces, 2026-10-19). The
@@ -98,8 +98,8 @@ build of an already notarized release.
 10. **Determinism.** Every build step inherits `SOURCE_DATE_EPOCH` (HEAD's commit time),
     `CARGO_INCREMENTAL=0` and `RUSTFLAGS` remapping the checkout to `.` and cargo home to
     `/cargo`; builds use `--locked` and `bun install --frozen-lockfile`; bundle outputs are
-    removed before building. `cargo xtask release --verify-reproducible` builds `drift-host`
-    twice from scratch and compares the binaries.
+    removed before building. (The `--verify-reproducible` check built `drift-host` twice and
+    compared the binaries; it went with Drift Host.)
 
 ## What is not byte-reproducible
 
@@ -107,12 +107,11 @@ Code signatures carry a secure timestamp and a CMS blob, notarization tickets ar
 submission, `hdiutil` images embed creation times, and Xcode archives and `.ipa` files carry
 build metadata (and `altool`/App Store processing re-signs). So signed artifacts differ
 between runs even from the same commit; the manifest's lockfile hashes, commit and toolchain
-identify what they were built from, and the unsigned binaries are what the reproducibility
-check compares.
+identify what they were built from.
 
 ## Owner's confirmations (2026-10-19)
 
 - Tags are `v<yy.mm>.<build>` (e.g. `v26.10.4`).
-- The Developer ID DMGs (Drift and Drift Host) stay arm64 only; the Mac App Store package is
+- The Developer ID DMG stays arm64 only; the Mac App Store package is
   universal, as App Store distribution requires.
 - Preflight thresholds stay: 40 GB free disk, and a Mac App Store profile valid for 14 more days.

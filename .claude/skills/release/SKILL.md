@@ -1,6 +1,6 @@
 ---
 name: release
-description: Release Drift deterministically — build every artifact (iOS App Store .ipa, Mac App Store .pkg, Drift and Drift Host Developer ID DMGs), notarize, upload to TestFlight, publish the DMG release on spaces.hutson.cloud (never GitHub). Use when asked to release, ship, cut a release, push a TestFlight build, publish a dmg, or bump the version.
+description: Release Drift deterministically — build every artifact (iOS App Store .ipa, Mac App Store .pkg, Drift Developer ID DMG), notarize, upload to TestFlight, publish the DMG release on spaces.hutson.cloud (never GitHub). Use when asked to release, ship, cut a release, push a TestFlight build, publish a dmg, or bump the version.
 ---
 
 # Release Drift
@@ -10,16 +10,16 @@ It never uploads or publishes unless asked with a flag.
 
 **Lockstep rule:** iOS and macOS ship in lockstep — always released together, with the same `yy.mm` version
 and the same build number N (App Store Connect's highest on any platform + 1), and that N is
-also in both DMGs. Never upload one platform alone and never pick numbers by hand; there is
+also in the DMG. Never upload one platform alone and never pick numbers by hand; there is
 no single-platform command. If App Store Connect shows the platforms on different builds
 (for example iOS 2, macOS 3), the next release uses the highest + 1 on both. If a release
 uploaded one platform and failed on the other, run `--resume`: it uploads the missing one
 with the same N.
 
-**Drift and Drift Host ship together:** every release builds all four artifacts (iOS `.ipa`,
-Mac App Store `.pkg`, Drift DMG, Drift Host DMG) with the same version and N, even when one of
-the apps has not changed since the last release. Never skip or hold back an unchanged app, and
-never decide what counts as a material change; `sync-check` fails if any artifact is missing.
+**Every release builds all three artifacts** (iOS `.ipa`, Mac App Store `.pkg`, Drift DMG) with
+the same version and N, even when one of them has not changed since the last release. Never skip
+or hold back an unchanged one, and never decide what counts as a material change; `sync-check`
+fails if any artifact is missing.
 
 ## Ask first
 
@@ -49,7 +49,7 @@ A dry run, preflight and building artifacts need no permission.
    becomes TestFlight's "What to Test"; the whole file plus checksums becomes the release notes.
 4. Gate: the pipeline reuses `target/ci-receipts/<HEAD>` from a passing `cargo xtask ci` on a
    clean tree, or runs the gate itself (about 40 minutes).
-5. Rehearse: `cargo xtask release --dry-run` (builds and validates all four artifacts; branch
+5. Rehearse: `cargo xtask release --dry-run` (builds and validates all three artifacts; branch
    and push checks are warnings only).
 6. Release, with the flags the user approved:
    ```sh
@@ -79,7 +79,7 @@ A dry run, preflight and building artifacts need no permission.
 ```sh
 D=target/release-out/<yy.mm>-<build>
 (cd $D && shasum -a 256 -c SHA256SUMS)
-xcrun stapler validate "$D"/Drift_*_aarch64.dmg "$D"/Drift-Host_*_aarch64.dmg
+xcrun stapler validate "$D"/Drift_*_aarch64.dmg
 spctl -a -t open --context context:primary-signature -vv "$D"/*.dmg
 hdiutil attach -nobrowse "$D"/Drift_*_aarch64.dmg   # then:
 codesign --verify --deep --strict -vv /Volumes/Drift/Drift.app && spctl -a -vv /Volumes/Drift/Drift.app

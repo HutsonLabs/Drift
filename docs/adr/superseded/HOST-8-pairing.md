@@ -1,5 +1,7 @@
 # HOST-8 — Pairing and device keys
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Tasks: HOST-8 (host side) and the rest of IOS-9 (client side); ADR `IOS-0` decision 7,

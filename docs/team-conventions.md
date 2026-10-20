@@ -21,7 +21,9 @@ Read `plan.md` §0–§5 first; it is the source of truth. This page summarises 
 ## ADRs
 
 Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<slug>.md`
-(task-ID prefix, so parallel tasks never collide on numbers). Existing ADRs:
+(task-ID prefix, so parallel tasks never collide on numbers). Superseded ADRs move to
+`docs/adr/superseded/` and are kept for history (the Drift Host ones since ADR `GNOME-only`).
+Current ADRs:
 
 | ADR | Topic |
 |---|---|
@@ -47,44 +49,19 @@ Any decision not already fixed by `plan.md` gets an ADR in `docs/adr/<TASKID>-<s
 | `UI-windows-gallery` | Connections gallery window + one window per session: no tabbing, title-bar webview, frames, thumbnails, Dock menu, menus, IPC contract |
 | `IOS-3-drift-apple-split` | `drift-apple` (Keychain, `NWPathMonitor`, LNP) shared by `drift-macos` and `drift-ios`; foreground as the iOS wake trigger; Settings link |
 | `IOS-5-ios-app-shell` | the app on iOS: `windows_ios.rs` shell, one window (scene on iPad) per connection, tracked Xcode project, `smoke-env`, `fake_host` |
-| `IOS-9-pairing` | client half of Mac pairing: `_drift-host._tcp` TXT, Damm-checked code, `drift-pair:` QR link, `paired_host` profiles, Keychain device key and pins |
 | `IOS-10-clipboard-on-ios` | UIPasteboard adapter, no polling, writes for the front window, `UIPasteControl` paste = clipboard + remote Ctrl+V |
-| `HOST-3-capture` | `drift-capture`: one `SCStream` per display, NV12 (BGRA for AVC444), damage from dirty rects, pointer sampled separately (`currentSystemCursor`), permission preflight |
-| `HOST-5-frame-mailbox` | `drift_core::mailbox`: one slot, newest wins, drops counted, `post_merging` keeps damage, async `recv` |
 | `IOS-11-session-switcher` | native switcher button over session windows, own-scene activation (tao `set_focus` bug), closed scenes close sessions, `DRIFT_SMOKE_SCRIPT` |
 | `IOS-6-ios-input` | iPad input in Rust (not a Swift plugin): HID table, `Pointer`, `GCKeyboard`/`GCMouse`, hover, pointer lock per view controller, shortcuts iPadOS keeps |
 | `IOS-7-touch-modes` | trackpad and direct touch, two-finger scroll and right click, `ConnectionProfile::touch`, iPhone pinch zoom as a view transform |
 | `IOS-8-iphone-layout` | iPhone portrait (picture, trackpad, key row) and landscape (full screen, auto-hiding key row); web key row with `send_keys`/`type_text`/`set_touch_mode`; `ResizeWatcher` |
-| `HOST-6-input-injection` | `drift-inject`: `kvk_for` from the same table, injection plan (flags, drags, clicks, 40 px per notch), CGEventPost at the HID tap, Accessibility |
-| `EXT-3-menu-mirroring` | client polls `0x02xx` menu messages, strict bounded snapshots, lazy Accessibility reader, responder `Chain` with pairing, `UIMainMenuSystem` build handler, `UIAction` items, no Mac mirroring |
-| `EXT-1-channel-framing` | `drift-ext`: `DRFT` v1 header, types by task, Hello negotiation, fallback without DVC errors, `SessionOptions::drift_mac`, fuzz target |
-| `HOST-1-server-spike` | `ironrdp-server` + `egfx` on loopback: AVC420 bit-exact to Drift, DISP layouts reach the host, what is missing for AVC444 (client caps and decode, encoder) |
-| `HOST-8-pairing` | pairing on `Drift::Mac::v1` after TLS + NLA: challenge, signed pair/auth requests, nothing shown before authorization, `devices.toml`, loopback-only without pairing |
-| `HOST-12-quic-transport` | no lossy RDP-UDP; reliable RDP-UDP2 collapses under loss; QUIC (quinn, BBR, pinned host, stream per GFX frame) for Drift-to-Drift; QUIC-then-TCP order |
-| `EXT-5-hevc-hdr` | HEVC Main / 4:4:4 between paired Drift ends: `0x05xx` offer/select, `Codec1Type::DriftHevc` (0xD001), pixel transfer to 4:4:4/10-bit sources, low-latency RC ≤ 2560×1600, HDR tags only |
-| `AVC444-client` | V10 caps only for paired Drift Hosts (GNOME keeps V8.1: V10 makes g-r-d send AVC444v2), AVC444 v1 decode with two VT sessions + CPU combine to BGRA, `drift_host::codec::choose` |
-| `HOST-4-realtime-encoder` | real-time VideoToolbox profile (low-latency RC up to 2560×1600), NV12 input, AVC444 v1 split/combine with chroma filter, AVC420/444 stream writers, 4K measurements |
-| `HOST-2-host-skeleton` | `drift-host` crate + binary: loopback default listener, one NLA account (Keychain), self-signed identity, one session (extra refused), `FrameSource` test pattern, DISP resize, input counted only, `add_dvc_factory` for `Drift::Mac::v1` |
-| `HOST-pipeline` | live picture per connection (capture → mailbox → real-time AVC420, damage → regions, never encode under backpressure), pointer updates with a shape cache, automatic injection with Accessibility |
-| `HOST-7-link-hygiene` | `NET_SERVICE_TYPE_VI` on the session socket, idle heartbeat = last pointer update every 100 ms, backlog from frames in flight + `SO_NWRITE` with hysteresis |
-| `HOST-11-clipboard-and-audio` | host runs the client's `ClipboardSync` on a clipboard thread; 16-bit stereo PCM rdpsnd from ScreenCaptureKit; `AVAudioEngine` player with a 200 ms cap; sound for every session |
-| `HOST-9-menu-bar` | Drift Host menu-bar app in Rust/AppKit (`drift-host-app`): pure menu model, permissions guidance, first-run alert, `SMAppService` login item, `cargo xtask host-bundle` |
-| `HOST-10-virtual-display` | private `CGVirtualDisplay` isolated in `cg_virtual` with a launch self-test, pure `ModePlan` (640×480…5K, HiDPI from 150 %), `DisplayManager` seam, physical fallback |
-| `HOST-13-login-window` | root daemon only brokers (accept, route, `SCM_RIGHTS` hand-off, store writes); Aqua and LoginWindow agents serve; `getpeereid` admission; shared store group `admin`; no public login-window capture |
-| `HOST-14-extra-paths` | AWDL via Bonjour P2P flags and `SO_RECV_ANYIF`; VPN = any `utun`, no NAT traversal; `NetworkPath` + `is_away` for EXT-4; no USB link (usbmuxd is private) |
-| `HOST-15-guided-setup` | approve on the Mac instead of a code (`ApprovalRequest`, `APPROVAL` capability, 2 min wait, Don't Allow default and counted like a wrong code); TXT `user`/`approve`; `Connecting { Approval }`; password prompt checked with OpenDirectory; auto-opened "Set Up a Device" window with code and QR |
-| `EXT-2-scroll-gestures` | precise scroll carries its wheel fallback; gestures only with `GESTURES`; swipes → Mission Control/Spaces shortcuts, pinch → Command-=/-, several responders per channel end |
-| `EXT-4-quality-hints` | host steps a 4-level ladder from its backlog (down fast, up after 10 s clear), client caps it; away (non-private address or public name) defaults to Medium; status in the HUD |
 | `STORE-1-mac-app-store` | `tauri.mas.conf.json` + `entitlements.mas.plist`, universal build, `cargo xtask mas-package`, what the account still lacks, export compliance |
 | `STORE-2-review-risk` | `drawsBackground` is wry's private transparency key (macOS and iOS); iOS uses public transparency; native overlays for the MAS build if review rejects; `cargo xtask review-risk` |
 | `STORE-3-ios-app-store` | privacy manifest from a scan of the built app, export options that never upload, `macos-private-api` via `drift-macos` only, `libapp.a` linked not bundled |
-| `STORE-4-host-release` | `cargo xtask host-release [--notarize]`: Developer ID, inside-out signing, Hardened Runtime, no sandbox or entitlements, notarized and stapled DMG |
-| `RELEASE-pipeline` | iOS and macOS in lockstep (one yy.mm version, one build number, both DMGs too); `cargo xtask release`: ordered resumable steps, manifest, preflight, gate receipt, yy.mm versions and one build number, publish only behind flags, determinism and its limits |
-| `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), Drift Host on the Mac over RDP + `Drift::Mac::v1` DVC, App Store eligibility |
+| `RELEASE-pipeline` | iOS and macOS in lockstep (one yy.mm version, one build number; iOS `.ipa`, Mac App Store `.pkg`, Drift DMG); `cargo xtask release`: ordered resumable steps, manifest, preflight, gate receipt, yy.mm versions and one build number, publish only behind flags, determinism and its limits |
+| `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), App Store eligibility (its Mac host half is superseded by `GNOME-only`) |
 | `IOS-fix-ipad-launch` | tao 0.35.3 vendored in `third_party/tao` (scene configuration returned released → release builds crashed at launch on iPad); full-bleed `icon-ios.svg` and `ios_audit` for the iOS app icon |
 | `APP-icon` | Icon Composer `AppIcon.icon` is the one icon source: Mac bundle (`Assets.car` via Tauri), iOS target resource, no PNG appiconset; flat `icns`/PNGs rendered from it |
-| `HOST-icon` | Drift Host's own `crates/drift-host-app/AppIcon.icon`, compiled by actool in `host-bundle` (`Assets.car` + `AppIcon.icns`); `Info.plist` names `AppIcon` |
-| `UI-kinds-target-kinds` | Mac (Drift Host) and GNOME target kinds from `paired_host`: All / Macs / GNOME filter, kind-first add flow, a sheet per kind, title-bar mode or quality step, GNOME menus in the iPad menu bar, per-kind iPhone key row |
+| `GNOME-only` | Drift Host retired; GNOME targets only; `drift-connect:` links; `host/drift-gnome-setup` |
 
 ## Commands
 
@@ -102,11 +79,11 @@ another JS package manager.
 | `cargo xtask e2e [nextest args]` | real-host tests through SSH forwards (below) |
 | `cargo xtask import-fixtures [--staging DIR]` | sanitize + import `~/code/drift-spikes/fixtures-staging` into `fixtures/` (M0-3, ADR `M0-3-fixture-capture-and-sanitization`) |
 | `cargo xtask host-setup-check` | read-only check of the GNOME host over SSH (M0-4, `docs/gnome-host-setup.md`) |
+| `host/drift-gnome-setup [user@]machine` | set up a Linux machine with GNOME for Drift from the Mac: install, headless session, firewall, opens the prefilled connection in Drift; see `docs/gnome-host-setup.md` |
 | `cargo xtask bundle` | M9-5 (stub; superseded by `cargo xtask release`) |
-| `cargo xtask release [--dry-run] [--testflight] [--github] [--resume]` | the release pipeline (ADR `RELEASE-pipeline`, skill `.claude/skills/release`); iOS and macOS always together, one build number: preflight, gate receipt, one build number, iOS `.ipa`, Mac App Store `.pkg`, Drift and Drift Host DMGs, notarization, `SHA256SUMS`, `manifest.json` in `target/release-out/<yy.mm>-<build>/`; publishes only with a flag |
-| `cargo xtask release --set-version YY.MM` / `--verify-reproducible` | rewrite every version file (+ `Cargo.lock`, notes from `release/notes/TEMPLATE.md`); build `drift-host` twice and compare |
+| `cargo xtask release [--dry-run] [--testflight] [--spaces] [--resume]` | the release pipeline (ADR `RELEASE-pipeline`, skill `.claude/skills/release`); iOS and macOS always together, one build number: preflight, gate receipt, one build number, three artifacts (iOS `.ipa`, Mac App Store `.pkg`, Drift DMG), notarization, `SHA256SUMS`, `manifest.json` in `target/release-out/<yy.mm>-<build>/`; publishes only with a flag |
+| `cargo xtask release --set-version YY.MM` | rewrite every version file (+ `Cargo.lock`, notes from `release/notes/TEMPLATE.md`) |
 | `cargo xtask review-risk <app>` | private-API strings App Review may flag in a built Mac or iOS app (STORE-2) |
-| `cargo xtask host-release [--notarize]` | Drift Host: Developer ID, DMG, notarization + stapling (STORE-4); never publishes |
 | `cargo xtask mas-package [--profile F]` | the Mac App Store `.pkg`: universal, sandboxed, Apple Distribution + installer signature (STORE-1) |
 | `cargo tauri dev` / `cargo tauri build` | run / bundle the app (UI is built by bun first) |
 

@@ -1,5 +1,7 @@
 # AVC444-client — Full chroma between Drift and Drift Host
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Fills a gap in ADR `IOS-0` decision 2, which assumed Drift's client already decoded AVC444.

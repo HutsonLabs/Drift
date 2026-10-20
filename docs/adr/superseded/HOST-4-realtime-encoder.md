@@ -1,5 +1,7 @@
 # HOST-4 — Real-time encoder and AVC444 for the Mac host
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Task: HOST-4 (`TASKS.md`); answers ADR `IOS-0` open question 5

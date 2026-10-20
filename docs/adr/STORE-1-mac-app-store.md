@@ -21,7 +21,8 @@
    `productbuild` wraps it in `bundle/mas/Drift.pkg` signed with the "3rd Party Mac Developer
    Installer" identity (pinned by SHA-1).
 5. **Short description** now names both host kinds: "Remote desktop for GNOME Remote Desktop and
-   Macs running Drift Host".
+   Macs running Drift Host". *Amended by ADR `GNOME-only` (2026-10-20): Drift Host is retired;
+   it is now "Remote desktop for GNOME computers".*
 
 ## Account and TestFlight (2026-10-18)
 

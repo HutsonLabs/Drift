@@ -1,5 +1,7 @@
 # HOST-10 — A virtual display sized to the device
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Task: HOST-10 (`TASKS.md`); implements ADR `IOS-0` decision 5

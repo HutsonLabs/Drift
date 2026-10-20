@@ -1,5 +1,9 @@
 # IOS-0 — Drift on iPhone and iPad, a Mac host, and App Store distribution
 
+> Partly superseded by ADR GNOME-only (2026-10-20): the Mac host half (decisions 2–7, 10 and the
+> Drift Host bullet of 9) is retired with Drift Host and kept for history; the iOS client half
+> stands.
+
 - Status: accepted
 - Date: 2026-10-17
 - Amended: 2026-10-17. Decision 6 now treats UDP as a first-class transport, with QUIC as the

@@ -1,5 +1,7 @@
 # HOST-11 — Clipboard and sound between Drift Host and Drift
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Task: HOST-11 (`TASKS.md`); builds on ADRs `M5-1-clipboard-format-mapping`, `HOST-2-host-skeleton`

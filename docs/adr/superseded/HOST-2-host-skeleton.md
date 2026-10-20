@@ -1,5 +1,7 @@
 # HOST-2 — The Drift Host skeleton
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Task: HOST-2 (`TASKS.md`); builds on ADR `HOST-1-server-spike`

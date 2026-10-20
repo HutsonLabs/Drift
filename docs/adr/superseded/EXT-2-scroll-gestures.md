@@ -1,5 +1,7 @@
 # EXT-2 — Precise scroll and trackpad gestures on `Drift::Mac::v1`
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Task: EXT-2 (`TASKS.md`); builds on ADR `EXT-1-channel-framing` and ADR `HOST-6-input-injection`

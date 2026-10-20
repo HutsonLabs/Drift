@@ -1,5 +1,7 @@
 # IOS-9 — Pairing with a Mac host, client half
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Task: IOS-9 (`TASKS.md`); follows ADR `IOS-0` decision 7 and decision 3's pairing row. The

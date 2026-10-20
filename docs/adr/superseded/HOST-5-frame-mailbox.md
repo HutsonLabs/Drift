@@ -1,5 +1,7 @@
 # HOST-5 — One-slot newest-frame mailbox
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Task: HOST-5 (`TASKS.md`); ADR `IOS-0` decision 4. The idea is from Sill; no code is copied.

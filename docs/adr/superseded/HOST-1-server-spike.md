@@ -1,5 +1,7 @@
 # HOST-1 — `ironrdp-server` with `egfx` as Drift Host's server
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Task: HOST-1 (`TASKS.md`); answers ADR `IOS-0` open question 4

@@ -1,5 +1,7 @@
 # EXT-5 — HEVC and HDR between Drift ends
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted (HEVC); HDR partly done
 - Date: 2026-10-18
 - Task: EXT-5 (`TASKS.md`); follows ADR `IOS-0` decision 2, ADR `HOST-4-realtime-encoder`, ADR

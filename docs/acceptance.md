@@ -431,278 +431,28 @@ app is in the background. Still to do by hand:
       Simulator runs can script this with `DRIFT_SMOKE_SCRIPT="wait:8;connect:Fake host 2;wait:8;pick:session-0"`
       (`fake_host` with `FAKE_HOST_PROFILES=2`).
 
-### IOS-9 — Pairing (ADR `IOS-9-pairing`)
+## GNOME-only — Setting up a machine from the Mac (ADR `GNOME-only`)
 
-Done in an iPad simulator on 2026-10-18 with `cargo run -p drift-apple --example advertise_host`
-on the Mac: the "Pair a Mac" sheet lists the advertised host, and a `drift-pair:` link
-(`DRIFT_SMOKE_PAIRING_LINK` with the `smoke-env` build) fills the code and names the host. Still
-to do by hand:
+Pending: the homelab host was unreachable on 2026-10-20, so none of these has been run yet. Use a
+fresh machine for the first three (`docs/gnome-host-setup.md`, "Setting up a machine from your
+Mac").
 
-- [ ] **Camera:** on a device, Scan Code asks for the camera once, reads the QR code printed by
-      `advertise_host` (any QR generator), fills the link and closes; Cancel closes without a
-      code; with the camera denied, the sheet says so.
-- [ ] **System Camera app:** scanning the same QR code with the Camera app offers to open Drift,
-      which opens "Pair a Mac" with the link (warm and cold launch).
-- [ ] **Local Network prompt:** the first discovery on a device shows iOS's Local Network prompt;
-      after denying it the list stays empty and pairing by link still works.
-- [ ] **Pair and connect:** pair with a typed code and an account; the new card shows Trusted;
-      connecting it reaches the pin check (a wrong certificate fails before credentials are sent).
-- [ ] **With Drift Host (HOST-8):** on the Mac, `drift-host set-password`, then `drift-host pair`.
-      On the iPad, the Mac appears in "Pair a Mac"; scan the terminal's QR code (or type the
-      code), connect: the picture appears and `drift-host devices` lists the iPad. Disconnect and
-      connect again without a code: it works. On the Mac, `drift-host forget <id>`: the next
-      connection fails with "This device is not paired with this Mac." A wrong code is refused
-      with "The Mac did not accept the code." The same steps work from Drift for Mac.
-
-## HOST — Drift Host (Mac)
-
-### HOST-8 — Pairing (ADR `HOST-8-pairing`)
-
-Verified on loopback by `crates/drift-host/tests/pairing_e2e.rs`. Still to do by hand:
-
-- [ ] **Over the network:** `drift-host pair` on one Mac; pair from Drift on another Mac and on an
-      iPad (steps in the IOS-9 section above). Microsoft's Windows App connects (TLS and NLA
-      succeed) but sees nothing and is dropped after 15 s.
-- [ ] **Bonjour:** `dns-sd -B _drift-host._tcp` on another Mac lists the host while `drift-host`
-      runs, and `dns-sd -L` shows the TXT record (`v`, `id`, `name`, `host`, `port`, `fp`).
-- [ ] **Lockout:** five wrong codes in a row are refused with "Too many wrong codes"; a minute
-      later pairing needs a new `drift-host pair`.
-- [ ] **QUIC (HOST-12):** a paired iPad on Wi-Fi connects over QUIC (`drift-host` logs
-      `session starting … quic=true`); block UDP 3389 in the Mac's firewall and connect again: it
-      falls back to TCP within about 3 s.
-- [ ] **Pairing off:** `pairing = false` in `host.toml` with `listen = "0.0.0.0:3389"`: the host
-      listens on 127.0.0.1 only (`lsof -iTCP:3389`).
-
-### HOST-2 — Host skeleton (ADR `HOST-2-host-skeleton`)
-
-- [ ] `cargo run -p drift-host -- set-password` (type a test password), then `cargo run -p drift-host`:
-      it prints the listen address (127.0.0.1:3389), the certificate fingerprint and the account.
-- [ ] **Drift for Mac:** add a profile for 127.0.0.1 with that account, accept the certificate
-      (its fingerprint matches the one printed); the colour-bar test pattern shows; resizing the
-      window resizes the desktop (the host logs `client layout`); typing and clicking show up as
-      `input` lines with `RUST_LOG=drift_host=debug`, with no key values in the log.
-- [ ] **A second client** while the first is connected fails at once; the first keeps going.
-- [ ] **Microsoft Windows App** (if installed): connect to 127.0.0.1 with the same account; the
-      pattern shows (AVC420 over EGFX).
-- [ ] With `pairing = false` and `listen = "0.0.0.0:3389"` in `host.toml`, the host warns that it stays on loopback (HOST-8).
-
-### HOST-pipeline — The screen and input through Drift Host (ADR `HOST-pipeline`)
-
-With Screen Recording and Accessibility granted to the process running `drift-host`:
-
-- [ ] Run `drift-host` (after `drift-host set-password`); the log has no "test pattern" line.
-      Connect from Drift for Mac: the Mac's screen appears, moves smoothly (a video playing,
-      windows dragged) and the remote pointer follows, with its shape changing over text and
-      links.
-- [ ] Type and click from the client: the Mac reacts (inject_input unset = automatic). Disconnect
-      while holding Shift and a mouse button: nothing stays held.
-- [ ] Without Screen Recording: the log says so and the client shows the colour-bar pattern.
-- [ ] Without Accessibility and `inject_input` unset: the log says input is logged, not injected.
-
-### HOST-7 — Link hygiene (ADR `HOST-7-link-hygiene`)
-
-- [ ] **Service class:** during a session, `sudo tcpdump -i en0 -v port 3389` on the Mac shows the
-      host's packets with DSCP CS4/AF4x (video), or check Wireless Diagnostics' sniffer for AC_VI.
-- [ ] **Heartbeat on a phone:** connect an iPhone over Wi-Fi to an idle desktop; type a key every
-      few seconds. With the heartbeat the echo arrives in about one round trip; set
-      `HEARTBEAT_INTERVAL` very high (a test build) and compare: without it the first packet after
-      idle waits for the radio to wake (typically 50–200 ms more).
-- [ ] **Backlog:** throttle the link (Network Link Conditioner, 1 Mbit/s) while a video plays: the
-      host logs `backlog Building` then `Backlogged`; remove the throttle: `Clear` within a second.
-
-### HOST-3 — Capture (ADR `HOST-3-capture`)
-
-Needs a Mac where the process running the tests (Terminal, or the CI runner) has Screen
-Recording in System Settings › Privacy & Security:
-
-- [ ] `cargo test -p drift-capture --test sck_smoke -- --nocapture` prints no "skipped" lines: the
-      displays list with pixel sizes, the first frame is IOSurface-backed, the display's pixel
-      size, and a full update.
-- [ ] **Dirty rects:** with a stream running, move a small window; the reported rects cover it in
-      output pixels on a Retina display (not half-size, which would mean they are points).
-- [ ] **Pointer:** the stream's frames never contain the pointer; moving it to a second display
-      reports `Hidden` for the first.
-
-### HOST-11 — Clipboard and sound (ADR `HOST-11-clipboard-and-audio`)
-
-Loopback tests cover both clipboard directions and a test tone. By hand, with `drift-host`
-running and Drift connected:
-
-- [ ] **Mac → device:** copy text, then an image (a screenshot) on the Mac; paste on the iPad
-      or the client Mac. Copy a 40 MiB image: it is refused, nothing hangs.
-- [ ] **Device → Mac:** copy text on the client and paste it on the Mac (`pbpaste`); the Mac's
-      clipboard is not sent back to the client (no flicker, one change).
-- [ ] **Sound:** with Screen Recording granted to `drift-host`, play a video on the Mac: the
-      client plays it within a fraction of a second, in sync with the picture. Without Screen
-      Recording the session works, silently, and the host log says why.
-- [ ] **Stall:** pull the network for 5 s and restore it: the sound catches up with the
-      picture (no growing delay).
-- [ ] **iOS:** sound plays with the ringer switch on silent and mixes with music from another
-      app; locking the device stops it.
-- [ ] **GNOME:** a GNOME session with audio enabled in g-r-d now plays its sound in Drift.
-
-### HOST-6 / EXT — Injection and the `Drift::Mac::v1` channel
-
-- [ ] **HOST-6 injection (by hand, once HOST-2 wires it):** with Accessibility granted to Drift
-      Host, type from a client: letters with Shift, Command shortcuts (Windows key), arrows,
-      Option-accented text, and Unicode text from the iOS keyboard. Click, double-click, drag a
-      window, right-click, middle-click, scroll both ways with a wheel. Disconnect while holding
-      Shift and a mouse button: nothing stays held on the Mac. Without Accessibility, the host
-      says so and injects nothing. `cargo test -p drift-inject --test cg_events -- --ignored`
-      posts one harmless move (passed on the dev Mac on 2026-10-18).
-- [ ] **EXT-1 against a real Drift Host (after HOST-2):** connect the Mac client and an iPad to
-      Drift Host; the client log shows `Drift::Mac::v1 negotiated`. Connect the same client to
-      the GNOME host: no such line, and the session works as before.
-
-### EXT-3 — Menu mirroring (ADR `EXT-3-menu-mirroring`)
-
-Done on 2026-10-18: an iPad simulator connected to `cargo run -p drift-host --example menu_host
--- <app data dir>/Library/DriftSmoke` showed this Mac's frontmost app's menus (`remote menus in
-the menu bar … menus=4` in the log). Still to do by hand:
-
-- [ ] **Choose an item:** on an iPad with a pointer or keyboard, open the menu bar over a live
-      session to the Mac's TextEdit; Format › Font › Show Fonts opens the Fonts panel on the Mac.
-      Disabled items are grey, checked ones show a checkmark, shortcuts show as subtitles.
-- [ ] **Switch apps on the Mac:** bring Safari forward; within about 3 s the iPad's menus are
-      Safari's. Switch to Connections on the iPad: Drift's own menus come back.
-- [ ] **Large menus:** Xcode in front; the menu arrives (under 8192 elements) and the host stays
-      responsive.
-- [ ] **Without Accessibility:** revoke it for Drift Host; the iPad shows Drift's own menus and
-      the host logs that it has no Accessibility.
-
-### HOST-4 — Real-time encoder (ADR `HOST-4-realtime-encoder`)
-
-Measured on an M4 Pro on 2026-10-18 with `cargo run --release -p drift-video --example
-realtime_bench -- <width> <height> <frames>` while other builds ran. Still to do by hand:
-
-- [ ] **Quiet machine:** rerun the benchmark at 3840×2160, 2560×1600 and 1920×1080 with nothing
-      else running; update the ADR's table if the CPU-split or AVC444 rows move.
-- [ ] **M1:** run it on an M1 Mac (ADR `IOS-0` open question 5 asked about M1).
-
-### AVC444 — Full chroma from a Drift Host (ADR `AVC444-client`)
-
-Done on 2026-10-18 on loopback (`cargo test -p drift-rdp --test avc444_host`): a session with
-the Drift Host caps negotiates V10, and an AVC444 frame from HOST-4's encoder is drawn with a
-chroma PSNR of 34.7 dB on coloured strokes. Still to do by hand:
-
-- [ ] **GNOME unchanged:** connect to the GNOME host with an ordinary profile; the log shows
-      `GFX capabilities confirmed` with V8.1 and the session looks as before (no V10 offered).
-- [ ] **Text quality:** once Drift Host streams the real screen (HOST-2 + HOST-3/4), compare red
-      and blue text on white between a paired profile (AVC444) and the same Mac at 2560×1600
-      (AVC420): coloured strokes stay crisp with AVC444.
-
-### HOST-9 — Menu-bar app (ADR `HOST-9-menu-bar`)
-
-`cargo xtask host-bundle`, then open `target/release/bundle/Drift Host.app`:
-
-- [ ] A display icon appears in the menu bar and no Dock icon. The menu starts with the status
-      line ("Waiting on 127.0.0.1:3389 (this Mac only)", or "Stopped: no password stored…" before
-      `drift-host set-password`), then paired devices, Start at Login and Quit Drift Host.
-- [ ] On a Mac without the grants, an alert explains Screen Recording first; "Open Settings" opens
-      Privacy › Screen & System Audio Recording. The icon shows a warning triangle until Screen
-      Recording and Accessibility are granted, and "Allow …" items disappear once they are.
-- [ ] Connect from Drift: the status line says "A device is connected"; disconnect: back to waiting.
-- [ ] Start at Login checks and unchecks; System Settings › General › Login Items lists Drift Host.
-- [ ] Quit Drift Host stops the listener (the port is free again).
-
-### HOST-10 — Virtual display (ADR `HOST-10-virtual-display`)
-
-- [ ] `cargo test -p drift-host --test cg_virtual -- --ignored` passes (creates a 1600×1000 HiDPI
-      display for a second; passed on the dev Mac, macOS 27, 2026-10-18).
-- [ ] Connect from an iPad to Drift Host: System Settings › Displays shows a "Drift Host" display at
-      the iPad's resolution; the iPad's picture is sharp (no scaling) and fills the screen.
-- [ ] Rotate the iPad / resize the Mac client window: the virtual display follows; disconnect: it
-      disappears and windows on it move back to the Mac's own display.
-- [ ] With `virtual_display = false` in `host.toml`, the host captures the main display and the
-      client letterboxes.
-
-
-### HOST-13 — Daemon, agents and the login window (ADR `HOST-13-login-window`)
-
-Needs the signed `Drift Host.app` (STORE-4) and an administrator. Never done on the dev Mac.
-
-- [ ] **Install:** from the app, register the daemon and the user agent; approve the daemon in
-      System Settings › General › Login Items. `sudo launchctl print system/com.hutsonlabs.drift.host.daemon`
-      shows it running; `launchctl print gui/$UID/com.hutsonlabs.drift.host.agent` shows the agent.
-- [ ] **Login-window agent:** `sudo cp "Drift Host.app/Contents/Library/LaunchAgents/com.hutsonlabs.drift.host.loginwindow.plist" /Library/LaunchAgents/`
-      (with `BundleProgram` replaced by the absolute path of `drift-host`), then log out.
-- [ ] **Store:** `/Library/Application Support/com.hutsonlabs.drift.host` is `root:admin 0750`,
-      `host-key.der` is `0640`; a non-admin user's agent logs that it cannot read the key.
-- [ ] **Logged in:** a paired iPad connects to the Mac's address; the daemon log says "connection
-      handed over" and the picture is the user's desktop. Switch users: the next connection goes to
-      the other user's agent.
-- [ ] **After a restart, nobody logged in:** the iPad connects; record what the login-window agent
-      shows (ScreenCaptureKit picture, or the test pattern). Typing the password from the iPad is
-      only possible if a picture appears.
-
-### HOST-14 — Extra paths (ADR `HOST-14-extra-paths`)
-
-- [ ] **Peer-to-peer Wi-Fi:** Mac on one Wi-Fi network, iPad on none (Wi-Fi on, not joined).
-      Drift on the iPad lists the Mac under "Pair a Mac"; pairing and connecting work; the
-      client log shows the path `PeerToPeer { awdl0 }`.
-- [ ] **VPN:** with the iPad away (cellular) and the user's VPN (WireGuard, Tailscale or the
-      Mac's own) up, connect to the Mac's VPN address: pins match, the path is `Vpn`, and EXT-4's
-      away quality applies.
-- [ ] **No VPN, away:** connecting to the Mac's LAN address from cellular fails with the usual
-      unreachable error (there is no NAT traversal).
-
-### HOST-15 — Guided setup (ADR `HOST-15-guided-setup`)
-
-On a Mac with no Drift Host password stored (`security delete-generic-password -s
-com.hutsonlabs.drift.host` first, if one is):
-
-- [ ] Open Drift Host with Screen Recording and Accessibility granted: "Enter the Password for
-      <account>" opens by itself; the menu says "Set up: enter your Mac's password".
-- [ ] A wrong password is refused with "That password is not right."; the right one is saved and
-      "Set Up a Device" opens by itself with the Mac's name, `<name>.local:3389`, the account, a
-      code and a QR code. Copy Pairing Link puts a `drift-pair:` link on the clipboard; New Code
-      changes the code.
-- [ ] Revoke Accessibility, relaunch: the first-run alert comes first, and the password prompt or
-      the device window only after it is granted again.
-- [ ] On an iPad: Pair a Mac… lists the Mac, choosing it fills in the account and says "No code
-      needed"; Pair connects and shows "Click Allow on the Mac to finish pairing…". On the Mac,
-      "Allow “<iPad>” to use this Mac?" appears with Don't Allow as the default. Allow: the
-      desktop appears, the device window closes, Paired Devices lists the iPad.
-- [ ] Don't Allow: the iPad shows "The Mac declined this device." Ignoring the prompt for two
-      minutes: "Nobody clicked Allow on the Mac in time."
-- [ ] Update Mac Password… asks again and restarts the host; a paired iPad reconnects.
-
-### EXT-2 — Precise scroll and gestures (ADR `EXT-2-scroll-gestures`)
-
-Needs Drift Host on a Mac with Accessibility granted, and Drift for Mac or iPad paired with it:
-
-- [ ] **Momentum:** flick a long page in Safari on the host from a Mac trackpad: it keeps moving
-      after the fingers lift and rubber-bands at the end, as it does locally.
-- [ ] **iPad:** the same with an iPad's trackpad, and with two fingers on the screen.
-- [ ] **Swipes:** a three- or four-finger swipe up shows Mission Control on the host, down shows
-      App Exposé, left and right change Spaces (turn off the local Mac's own three-finger
-      gestures in System Settings › Trackpad first, or it keeps them).
-- [ ] **Pinch:** pinching out in Safari zooms in one step per quarter of a spread.
-- [ ] **GNOME:** the same Mac client against the GNOME host scrolls exactly as before.
-
-### EXT-4 — Quality hints (ADR `EXT-4-quality-hints`)
-
-- [ ] **Slow link:** with Drift Host streaming a busy screen (a video), throttle the link to
-      5 Mbit/s (Network Link Conditioner on the client Mac). Within a few seconds the HUD shows
-      the quality dropping (`high`, then `medium`) and the picture keeps moving instead of
-      stalling; remove the throttle and it climbs back one step every ten seconds or so.
-- [ ] **Away:** connect to the host by a public name or through Tailscale: the HUD shows
-      `medium quality` from the start; on the same Wi-Fi by its `.local` name it shows `best`.
-
-### EXT-5 — HEVC and HDR (ADR `EXT-5-hevc-hdr`)
-
-Measured on an M4 Pro on 2026-10-18 with `cargo run --release -p drift-video --example hevc_bench
--- <width> <height> 240` (load average about 300). `tests/hevc_e2e.rs` streams HEVC between a
-paired client and Drift Host on loopback. Still to do by hand:
-
-- [ ] **Real screen, Mac client:** pair Drift for Mac with Drift Host (Screen Recording granted),
-      connect: the host log says `codec offer … Main444`, the client shows coloured text without
-      fringes, and the statistics HUD's bit rate matches the table in the ADR.
-- [ ] **iPad:** the same pairing from an iPad: the host picks HEVC Main (the iPad offers 4:2:0
-      only); check whether VideoToolbox on the device decodes a 4:4:4 stream before offering it.
-- [ ] **Quiet machine and M1:** rerun the benchmark with nothing else running, and on an M1 Mac.
-- [ ] **HDR (after capture and EDR rendering land):** on an HDR display, an HDR video on the Mac
-      shows HDR highlights on the client; on an SDR display the session stays SDR.
+- [ ] **Fresh machine:** on a fresh Ubuntu 24.04+ or Fedora 40+ install with GNOME, an account
+      nobody logs in to at the screen, SSH and sudo, run `host/drift-gnome-setup user@machine`
+      from the Mac. The setup installs `gnome-remote-desktop` (it was missing), opens the port
+      in ufw or firewalld when one is active, and ends with `0 error(s)`.
+- [ ] **Prefilled in Drift:** Drift comes forward with a New Connection form filled in (name,
+      host, port 3390, Headless, user) and the certificate pinned; the password is on the
+      clipboard and nowhere in the link or the output. Paste it, Save, connect: the headless
+      GNOME desktop appears without a certificate prompt, and stays unlocked after 15 idle
+      minutes.
+- [ ] **Rerun:** `host/drift-gnome-setup --keep-password user@machine` reports
+      `0 change(s) applied`; `--check` changes nothing and reports nothing pending.
+- [ ] **Remote Login:** `--remote-login` adds a second link (`<name> login`, port 3389); connecting
+      it shows GNOME's login screen.
+- [ ] **iPhone:** with `qrencode` installed, scan the printed QR code with the iPhone's Camera app:
+      Drift opens (warm and cold launch) with the same form prefilled; paste the password (from
+      the Mac via Universal Clipboard, or typed), Save and connect.
 
 ## STORE — Distribution (validate only; nothing is uploaded or published)
 
@@ -723,6 +473,3 @@ App Store Connect app record; answer the export-compliance question. Then:
 - [ ] **iOS overlays without the private key:** in a simulator with `FAKE_HOST_CLOSE_AFTER=10`,
       the reconnect overlay dims the last frame and the picture shows through (STORE-3 removed
       wry's `drawsBackground` from iOS builds; only the live picture was checked).
-- [x] **Drift Host DMG** (STORE-4): notarized, stapled, Gatekeeper-accepted on 2026-10-18.
-- [ ] **Drift Host on a clean Mac:** install from the DMG on a Mac that never ran a build;
-      it opens without a Gatekeeper warning and asks for Screen Recording and Accessibility.

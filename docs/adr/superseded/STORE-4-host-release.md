@@ -1,5 +1,7 @@
 # STORE-4 — Drift Host release: Developer ID, notarized DMG
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Task: STORE-4 (`TASKS.md`); ADR `IOS-0` decision 9, ADR `HOST-9-menu-bar`

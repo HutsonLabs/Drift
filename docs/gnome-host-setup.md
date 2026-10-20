@@ -1,14 +1,71 @@
-# GNOME 50 host setup
+# GNOME host setup
 
-How to prepare a GNOME Remote Desktop (g-r-d) 50 host for Drift, and how the homelab test
-host (`homelab@10.1.2.40`, plan §5.2) is kept in that state. Everything here was verified on
-AnduinOS 2.0.3 (Ubuntu 26.04 base, GNOME Shell 50.1, gdm3 50.1, gnome-remote-desktop 50.2).
+How to set up a Linux machine with GNOME for Drift from a Mac (ADR `GNOME-only`), how to
+prepare a GNOME Remote Desktop (g-r-d) 50 host for Drift, and how the homelab test
+host (`homelab@10.1.2.40`, plan §5.2) is kept in that state. The homelab sections were verified
+on AnduinOS 2.0.3 (Ubuntu 26.04 base, GNOME Shell 50.1, gdm3 50.1, gnome-remote-desktop 50.2).
+`host/drift-gnome-setup` has not yet been run against a fresh machine (the homelab host was
+unreachable on 2026-10-20); its manual checks are in `docs/acceptance.md` (GNOME-only).
 
 | File | Purpose |
 |---|---|
+| `host/drift-gnome-setup` | Runs on the Mac: sets up one machine over SSH and opens the prefilled connection in Drift. |
 | `host/drift-host-setup.sh` | Idempotent setup script (`--check` by default, `--apply` to change). |
 | `host/gnome-headless-session-dropin.conf` | The systemd drop-in that makes `gnome-headless-session@.service` work on AnduinOS 2.0.3. |
 | `host/drift-host-report.sh` | Read-only state report used by `cargo xtask host-setup-check`. |
+
+## Setting up a machine from your Mac
+
+```bash
+host/drift-gnome-setup user@machine
+```
+
+One command gives the account a GNOME desktop that Drift can reach without anyone logged in at
+the machine. Over SSH it copies `host/drift-host-setup.sh` to the machine and runs it with sudo
+(`--apply --install --firewall --headless USER:PORT:persistent`, below), which:
+
+- installs `gnome-remote-desktop` and `openssl` when missing (apt, dnf, zypper or pacman);
+- gives the account a persistent headless GNOME session on a fixed RDP port (3390 by default)
+  with a TLS certificate and RDP credentials;
+- turns off idle suspend and the screen lock for that session;
+- opens the port in ufw or firewalld when one of them is active.
+
+Then, on the Mac, it copies a new 24-character RDP password to the clipboard and opens a
+`drift-connect:` link, so Drift shows a New Connection form filled in with the machine, port,
+mode, user and the certificate's fingerprint already pinned. Paste the password, check the
+details and click Save; nothing is saved before that. With `qrencode` installed
+(`brew install qrencode`) it also prints the link as a QR code: scan it with the iPhone or iPad
+Camera app to open the same form in Drift there.
+
+The password never goes into the link or the script's output. It reaches the machine over SSH
+in a file only you and root can read, which is deleted when the setup ends.
+
+Requirements:
+
+- SSH access to the machine from the Mac, and sudo there (`ssh -t`, so sudo can ask for your
+  password).
+- GNOME 46 or later: older `gnome-remote-desktop` has no headless mode, and the setup stops
+  with an error.
+- An account nobody logs in to at the machine's screen. GNOME runs one session per account, so
+  a headless session and a local login for the same account get in each other's way; create a
+  separate account (for example `remote`) and pass it with `--user` if you use the machine
+  yourself.
+
+| Option | Effect |
+|---|---|
+| `--user NAME` | The Linux account that gets the headless session (default: the SSH user). |
+| `--port N` | The headless session's RDP port (default 3390). |
+| `--name NAME` | The connection's name in Drift (default: the machine's short name). |
+| `--rdp-user NAME` | The RDP user name (default: the account name). |
+| `--keep-password` | Keep the RDP credentials already set; Drift asks for the password when connecting. |
+| `--remote-login` | Also set up Remote Login: GNOME's login screen on port 3389, for any account, with the same RDP user and password. Adds a second link (`<name> login`) with its own pin. |
+| `--check` | Show what would change on the machine; change nothing, set no password, open nothing. |
+| `--no-open` | Print the link instead of opening Drift. |
+| `--print-link` | Only print the `drift-connect:` link for the options and machine (no SSH; pass the fingerprint with `--pin`). |
+
+The setup is idempotent: run again with `--keep-password`, it reports `0 change(s) applied`;
+without it, the only change is the new password. If the machine reports no fingerprint, Drift
+asks you to trust the certificate on the first connect instead.
 
 ## What Drift needs on the host
 
@@ -20,7 +77,8 @@ AnduinOS 2.0.3 (Ubuntu 26.04 base, GNOME Shell 50.1, gdm3 50.1, gnome-remote-des
 
 ## The setup script
 
-Run it as root on the host. From the dev Mac:
+`host/drift-gnome-setup` runs it for you. To run it by hand, run it as root on the host. From
+the dev Mac:
 
 ```bash
 # 1. See what would change (changes nothing; exit 0 = already converged, 2 = changes pending).
@@ -37,6 +95,13 @@ cargo xtask host-setup-check
 
 Each step reads the current state first and acts only when it differs, so re-running
 `--apply` reports `0 change(s) applied`. The steps:
+
+**`--install`** (first, before anything else): `gnome-remote-desktop` and `openssl` are installed
+when `grdctl` or `openssl` is missing, with apt, dnf, zypper or pacman. With none of those it is
+an error that names the packages to install by hand.
+
+Whenever `--headless` is given, the script also checks that `grdctl` has `--headless` (GNOME 46
+or later) and stops with an error otherwise.
 
 **`--system` (Remote Login)**
 1. TLS certificate and key: kept if `grdctl --system status` shows them; otherwise a
@@ -70,6 +135,23 @@ Each step reads the current state first and acts only when it differs, so re-run
 7. Automatic suspend off for the user
    (`org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'`): an idle
    headless session otherwise shows "Suspending soon because of inactivity".
+8. Screen lock off for the user (`org.gnome.desktop.screensaver lock-enabled false`): nobody
+   sits at a headless session, a locked one swallows input (see the E2E section below), and
+   the RDP credentials already guard it.
+
+**`--firewall`**: after each daemon is set up, its port (3389 for `--system`, PORT for each
+`--headless`) is allowed as TCP in ufw or firewalld, whichever is active (`ufw allow PORT/tcp`;
+`firewall-cmd --add-port` for the running and the permanent configuration). With neither
+active it does nothing.
+
+**Fingerprints.** For every daemon whose certificate is known, the script prints a
+machine-readable line
+
+```
+fingerprint: <system|USER> <sha256 as aa:bb:…, lowercase>
+```
+
+which `host/drift-gnome-setup` reads to pin the certificate in the `drift-connect:` link.
 
 Headless daemons are always read-write (`grd_settings_headless_new` forces `rdp-view-only`
 to false), so the plan's `disable-view-only` step is not needed.

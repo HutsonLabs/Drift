@@ -1,5 +1,7 @@
 # HOST-13 — Daemon, agents and the login window
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Task: HOST-13 (`TASKS.md`); follows ADR `IOS-0` decision 10

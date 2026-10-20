@@ -1,5 +1,7 @@
 # EXT-3 — Menu mirroring
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Task: EXT-3 (`TASKS.md`); builds on ADR `EXT-1-channel-framing` and ADR `HOST-8-pairing`

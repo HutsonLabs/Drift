@@ -1,5 +1,7 @@
 # HOST-7 — Link hygiene: service class, idle heartbeat, backlog
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Task: HOST-7 (`TASKS.md`); ADR `IOS-0` decision 6 (both ideas from Sill, reimplemented)

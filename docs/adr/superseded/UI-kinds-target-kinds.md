@@ -1,5 +1,7 @@
 # UI-kinds — Mac and GNOME target kinds
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 Status: accepted (2026-10-18). Builds part 2 of `docs/design/mockup-targets.html`.
 
 ## Context

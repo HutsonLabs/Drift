@@ -8,7 +8,10 @@
 
 1. **Usage strings.** `NSLocalNetworkUsageDescription`, `NSBonjourServices`
    (`_drift-host._tcp`) and `NSCameraUsageDescription` were already in `Info.plist` and
-   `project.yml` (IOS-5, IOS-9); `tests/app_config.rs` keeps them there.
+   `project.yml` (IOS-5, IOS-9); `tests/app_config.rs` keeps them there. *Amended by ADR
+   `GNOME-only` (2026-10-20): `NSBonjourServices` and `NSCameraUsageDescription` went with
+   pairing, and `tests/app_config.rs` now checks they are absent; `NSLocalNetworkUsageDescription`
+   stays.*
 2. **Privacy manifest** `drift-app_iOS/PrivacyInfo.xcprivacy`, bundled as a resource: no
    tracking, no tracking domains, no collected data, and four required-reason API categories
    with the reasons that fit Drift: file timestamps (`C617.1`, files in the app's container),

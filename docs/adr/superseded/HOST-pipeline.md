@@ -1,5 +1,7 @@
 # HOST-pipeline — The live picture, the pointer and injection in Drift Host
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Tasks: the glue between HOST-2 (host skeleton), HOST-3 (capture), HOST-4 (encoder), HOST-5

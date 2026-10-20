@@ -1,5 +1,7 @@
 # EXT-4 — Quality hints on `Drift::Mac::v1`
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Task: EXT-4 (`TASKS.md`); builds on ADR `HOST-7-link-hygiene` (the backlog meter) and ADR

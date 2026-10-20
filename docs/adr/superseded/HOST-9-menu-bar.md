@@ -1,5 +1,7 @@
 # HOST-9 — Drift Host's menu-bar app
 
+> Superseded by ADR GNOME-only (2026-10-20): Drift Host is retired; this is kept for history.
+
 - Status: accepted
 - Date: 2026-10-18
 - Task: HOST-9 (`TASKS.md`); follows ADR `IOS-0` decision 9 and ADR `HOST-2-host-skeleton`
