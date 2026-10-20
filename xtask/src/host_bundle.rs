@@ -18,6 +18,8 @@ pub struct BundlePlan {
     pub build_args: Vec<String>,
     /// `(from, to)` copies, in order.
     pub copies: Vec<(PathBuf, PathBuf)>,
+    /// `xcrun` arguments that compile the app icon into `Contents/Resources` (HOST-icon).
+    pub actool_args: Vec<String>,
 }
 
 /// The plan for `profile` (`release` or `debug`) in the repository at `root`.
@@ -46,5 +48,5 @@ pub fn plan(root: &Path, profile: &str) -> BundlePlan {
             contents.join("Library").join(folder).join(name),
         ));
     }
-    BundlePlan { app, build_args, copies }
+    BundlePlan { app, build_args, copies, actool_args: Vec::new() }
 }
