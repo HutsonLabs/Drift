@@ -22,13 +22,36 @@
     {
       "layers" : [
         {
-          "image-name" : "hugeicons--monitor 2.svg",
-          "name" : "hugeicons--monitor 2",
+          "blend-mode-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : "screen"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : "overlay"
+            }
+          ],
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "display-p3:0.98393,0.98795,1.00000,0.60000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "display-p3:0.98393,0.98795,1.00000,0.60000"
+              }
+            }
+          ],
+          "image-name" : "computer.svg",
+          "name" : "computer",
           "position" : {
-            "scale" : 0.7,
+            "scale" : 30,
             "translation-in-points" : [
-              -5.305631407281908e-05,
-              9
+              0,
+              0
             ]
           }
         },

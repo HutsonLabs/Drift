@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1080" height="1080" viewBox="0 0 1080 1080">
-  <title>hugeicons--monitor.svg</title>
-  <g id="Layer_1" data-name="Layer 1">
-    <path d="M699.972 899.982 L379.988 899.982 M699.972 180.018 L379.988 180.018 C266.874 180.018 210.316 180.018 175.158 215.176 C140 250.294 140 306.892 140 420.006 L140 500.002 C140 613.116 140 669.714 175.158 704.832 C210.316 739.95 266.874 739.99 379.988 739.99 L699.972 739.99 C813.126 739.99 869.684 739.99 904.802 704.832 C940 669.714 940 613.116 940 500.002 L940 420.006 C940 306.892 940 250.294 904.802 215.176 C869.724 180.018 813.166 180.018 700.012 180.018" fill="none" stroke="#ffffff" stroke-width="60" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M479.983 899.982 L479.983 739.99 M599.977 739.99 L599.977 899.982" fill="none" stroke="#ffffff" stroke-width="60"/>
-  </g>
-</svg>

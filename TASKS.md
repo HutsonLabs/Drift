@@ -177,3 +177,5 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 - [✓] **APP-icon Icon Composer app icon.** The owner's `app.icon` is the one icon for the Mac and
   iOS apps. *`src-tauri/icons/AppIcon.icon`, bundled by Tauri into `Assets.car` and added to
   the iOS target; the flat `icns` and PNGs are rendered from it (ADR `APP-icon`).*
+- [✓] **HOST-icon Drift Host app icon.** Drift Host gets its own Icon Composer icon. *`crates/drift-host-app/AppIcon.icon`, compiled into
+  `Drift Host.app` by `cargo xtask host-bundle` (ADR `APP-icon` decision 6).*

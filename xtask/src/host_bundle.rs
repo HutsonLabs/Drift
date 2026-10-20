@@ -48,5 +48,29 @@ pub fn plan(root: &Path, profile: &str) -> BundlePlan {
             contents.join("Library").join(folder).join(name),
         ));
     }
-    BundlePlan { app, build_args, copies, actool_args: Vec::new() }
+    // HOST-icon: actool turns the Icon Composer file into `Assets.car` (the icon macOS 26 and
+    // later draw) and a flat `AppIcon.icns`; the partial Info.plist it writes is not needed,
+    // because `Info.plist` already names the icon.
+    let actool_args = [
+        "actool".to_owned(),
+        root.join(crate::icons::HOST_SOURCE).display().to_string(),
+        "--compile".to_owned(),
+        contents.join("Resources").display().to_string(),
+        "--app-icon".to_owned(),
+        "AppIcon".to_owned(),
+        "--platform".to_owned(),
+        "macosx".to_owned(),
+        "--target-device".to_owned(),
+        "mac".to_owned(),
+        "--minimum-deployment-target".to_owned(),
+        "27.0".to_owned(),
+        "--output-partial-info-plist".to_owned(),
+        target.join("bundle").join("drift-host-icon.plist").display().to_string(),
+        "--output-format".to_owned(),
+        "human-readable-text".to_owned(),
+        "--errors".to_owned(),
+        "--warnings".to_owned(),
+    ]
+    .to_vec();
+    BundlePlan { app, build_args, copies, actool_args }
 }

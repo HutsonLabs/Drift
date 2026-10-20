@@ -52,7 +52,10 @@ fn the_bundle_compiles_the_host_app_icon() {
     let p = plan(Path::new("/repo"), "release");
     let args = p.actool_args.join(" ");
     assert!(args.starts_with("actool /repo/crates/drift-host-app/AppIcon.icon "), "{args}");
-    assert!(args.contains("--compile /repo/target/release/bundle/Drift Host.app/Contents/Resources"), "{args}");
+    assert!(
+        args.contains("--compile /repo/target/release/bundle/Drift Host.app/Contents/Resources"),
+        "{args}"
+    );
     assert!(args.contains("--app-icon AppIcon"), "{args}");
     assert!(args.contains("--platform macosx"), "{args}");
     assert!(args.contains("--minimum-deployment-target 27.0"), "{args}");
@@ -64,7 +67,10 @@ fn the_bundle_compiles_the_host_app_icon() {
     let root = xtask::repo::root();
     let plist = std::fs::read_to_string(root.join("crates/drift-host-app/Info.plist")).unwrap();
     for key in ["CFBundleIconName", "CFBundleIconFile"] {
-        assert!(plist.contains(&format!("<key>{key}</key>\n\t<string>AppIcon</string>")), "{key} is not AppIcon");
+        assert!(
+            plist.contains(&format!("<key>{key}</key>\n\t<string>AppIcon</string>")),
+            "{key} is not AppIcon"
+        );
     }
     let problems = xtask::icons::icon_composer_audit(&root.join(xtask::icons::HOST_SOURCE));
     assert!(problems.is_empty(), "{}", problems.join("\n"));
