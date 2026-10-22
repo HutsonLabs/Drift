@@ -607,6 +607,25 @@ body.connections #app { background: var(--window); }
   .card:hover { transform: none; }
 }
 
+/* Touch targets (RESP-11, ADR RESP-2): 44 × 44 points under a coarse pointer, Apple's minimum.
+   Switches take the whole label row; the ⋯ and toolbar buttons grow to 44. */
+@media (pointer: coarse) {
+  button,
+  .tb-btn,
+  .icon-btn,
+  .seg button,
+  .over button,
+  .menu button[role="menuitem"],
+  .key-row .key,
+  details.advanced summary,
+  label.check { min-height: 44px; }
+  button, .seg button { min-width: 44px; }
+  .icon-btn { width: 44px; }
+  .tb-btn { min-width: 44px; }
+  .key-row .key { height: 44px; }
+  .menu { min-width: 240px; }
+}
+
 /* ---- Pop-up menu (⋯ and context menu) ------------------------------------------------------- */
 .menu-backdrop { position: fixed; inset: 0; z-index: 20; }
 .menu {
