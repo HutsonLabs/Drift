@@ -38,6 +38,15 @@ fn mas_entitlements_keep_the_sandbox_and_name_the_app_and_team() {
     assert_eq!(plist_value(&e, "com.apple.developer.team-identifier").as_deref(), Some(TEAM_ID));
 }
 
+/// The release signs and preflights the DMG with `store::DEVELOPER_ID`; Tauri signs the app with
+/// the identity pinned in `tauri.conf.json`. They must be the same certificate.
+#[test]
+fn the_release_and_the_bundle_pin_the_same_developer_id() {
+    let conf: serde_json::Value = serde_json::from_str(&read("src-tauri/tauri.conf.json")).unwrap();
+    assert_eq!(conf["bundle"]["macOS"]["signingIdentity"], store::DEVELOPER_ID);
+    assert_eq!(store::DEVELOPER_ID, "DABE738AA854E6CE4FA33E69C1F0AFC5830C8646");
+}
+
 #[test]
 fn mas_config_signs_with_apple_distribution_and_the_mas_entitlements() {
     let conf: serde_json::Value = serde_json::from_str(&read("src-tauri/tauri.mas.conf.json")).unwrap();
