@@ -915,17 +915,19 @@ fn set_whats_new(build_id: &str, text: &str, out: &Path) -> Result<()> {
     Ok(())
 }
 
-/// The spaces.hutson.cloud API token, checked against the server.
+/// The spaces.hutson.cloud API token from [`release::SPACES_TOKEN_FILE`], checked against the
+/// server. Never read from the environment.
 fn spaces_token() -> Result<String> {
-    let token =
-        std::env::var(release::SPACES_TOKEN_VAR).ok().filter(|t| !t.is_empty()).with_context(|| {
-            format!("{} is not set (spaces.hutson.cloud API token)", release::SPACES_TOKEN_VAR)
-        })?;
+    let home = std::env::var_os("HOME").context("HOME is not set")?;
+    let path = release::spaces_token_path(Path::new(&home));
+    let text = std::fs::read_to_string(&path)
+        .with_context(|| format!("reading the spaces.hutson.cloud token from {}", path.display()))?;
+    let token = release::parse_spaces_token(&text).map_err(|e| anyhow::anyhow!("{} {e}", path.display()))?;
     let (status, _) = spaces_api(&token, "GET", "/user", None, None)?;
     if status != 200 {
         bail!(
-            "{} is not accepted by spaces.hutson.cloud (HTTP {status}); make a token with repository write access",
-            release::SPACES_TOKEN_VAR
+            "the token in {} is not accepted by spaces.hutson.cloud (HTTP {status}); it needs repository write access",
+            path.display()
         );
     }
     Ok(token)

@@ -419,3 +419,29 @@ fn builds_may_only_touch_the_generated_xcode_project() {
     assert_eq!(release::unexpected_changes(dirty), ["Cargo.lock", "stray.txt"]);
     assert_eq!(release::RESTORED_AFTER_BUILD, ["src-tauri/gen/apple"]);
 }
+
+// RELEASE-spaces-token Red: the spaces.hutson.cloud token is read from one fixed file, never from
+// the environment, so a release publishes the same way from any shell.
+#[test]
+fn the_spaces_token_comes_from_one_fixed_file() {
+    assert_eq!(release::SPACES_TOKEN_FILE, "code/.spaces-tok");
+    assert_eq!(
+        release::spaces_token_path(Path::new("/Users/me")),
+        PathBuf::from("/Users/me/code/.spaces-tok")
+    );
+    assert_eq!(release::parse_spaces_token("abc123\n").unwrap(), "abc123");
+    assert_eq!(release::parse_spaces_token("abc123").unwrap(), "abc123");
+    for bad in ["", "\n", "  \n", "abc\ndef\n", "abc def\n"] {
+        assert!(release::parse_spaces_token(bad).is_err(), "{bad:?} should be rejected");
+    }
+}
+
+#[test]
+fn no_source_reads_the_old_token_variable() {
+    let src = xtask::repo::root().join("xtask/src");
+    for entry in std::fs::read_dir(&src).unwrap() {
+        let path = entry.unwrap().path();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(!text.contains("FORGEJO_API_KEY"), "{} still names FORGEJO_API_KEY", path.display());
+    }
+}

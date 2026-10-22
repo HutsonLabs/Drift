@@ -89,7 +89,9 @@ missing any of the three (`xtask/tests/release.rs`,
 **Releases live on spaces.hutson.cloud, never GitHub** (RELEASE-spaces, 2026-10-19). The
 `--github` flag, the `github` remote push and `gh release create` are gone. `--spaces` creates
 the release through the Forgejo API (`https://spaces.hutson.cloud/api/v1`, repository
-`HutsonLabs/drift`, token in `FORGEJO_API_KEY`, sent to `curl` on stdin). `--publish
+`HutsonLabs/drift`, token read from `~/code/.spaces-tok` — one fixed file holding only the
+token, never an environment variable (RELEASE-spaces-token, 2026-10-22) — and sent to `curl` on
+stdin). `--publish
 <yy.mm>-<build>` publishes a finished build without rebuilding it: the run must not be a dry
 run, notarization, checksums and the sync check must have finished, every artifact must still
 match its recorded SHA-256, and the build's commit must be on `origin/main`; the tag is placed on
