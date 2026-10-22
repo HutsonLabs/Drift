@@ -448,6 +448,21 @@ body[data-hud="stats"] #app { display: flex; align-items: flex-end; justify-cont
 .search input[type="search"] { border-radius: 999px; padding-left: 30px; background: var(--hover); box-shadow: inset 0 0 0 0.5px var(--hairline); }
 .search input::-webkit-search-decoration { appearance: none; }
 
+/* RESP-6: the iOS app has no traffic lights; compact widths wrap the toolbar into a title row
+   (title, count, Search, +), a full-width filter, and the search field when it is open. */
+.search-toggle { display: none; }
+[data-platform="ios"] .toolbar { padding-left: 16px; }
+@media (max-width: 599px) {
+  .toolbar { flex-wrap: wrap; height: auto; min-height: 52px; row-gap: 8px; padding: 6px 12px 10px 16px; }
+  .toolbar .seg { order: 1; flex: 1 1 100%; }
+  .toolbar .seg button { flex: 1; }
+  .toolbar .search-toggle { display: inline-flex; }
+  .toolbar .search { display: none; order: 2; flex: 1 1 100%; width: auto; }
+  .toolbar.searching .search { display: block; }
+  .notice-slot .notice { margin: 0 16px 12px; }
+  .gallery-scroll { padding: 6px 16px 24px; }
+}
+
 /* ---- Connections window (index.html) -------------------------------------------------------- */
 body.connections { overflow: hidden; }
 body.connections #app { background: var(--window); }

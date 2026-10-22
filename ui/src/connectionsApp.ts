@@ -73,6 +73,7 @@ export class ConnectionsApp {
     this.count = h("span", { class: "count" });
     const search = h("input", {
       type: "search",
+      id: "connections-search",
       placeholder: "Search",
       "aria-label": "Search connections",
       spellcheck: "false",
@@ -80,6 +81,32 @@ export class ConnectionsApp {
         this.query = search.value;
         this.renderGallery();
       },
+    });
+    // Compact widths (RESP-6): the stylesheet shows this button instead of the field, and the
+    // field opens on its own row under the title.
+    const searchToggle = h(
+      "button",
+      { type: "button", class: "tb-btn search-toggle", "aria-label": "Search", "aria-expanded": "false", "aria-controls": search.id },
+      icon("search"),
+    );
+    const setSearching = (on: boolean) => {
+      toolbar.classList.toggle("searching", on);
+      searchToggle.setAttribute("aria-expanded", String(on));
+      if (on) {
+        search.focus();
+      } else if (search.value !== "") {
+        search.value = "";
+        this.query = "";
+        this.renderGallery();
+      }
+    };
+    searchToggle.addEventListener("click", () => setSearching(!toolbar.classList.contains("searching")));
+    search.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && search.value === "" && toolbar.classList.contains("searching")) {
+        e.preventDefault();
+        setSearching(false);
+        searchToggle.focus();
+      }
     });
     // The toolbar is the window's transparent title bar: dragging it moves the window, and the
     // first 88 points belong to the traffic lights.
@@ -90,6 +117,7 @@ export class ConnectionsApp {
       this.count,
       h("span", { class: "spacer", "data-tauri-drag-region": true }),
       h("div", { class: "seg", role: "group", "aria-label": "Show" }, Object.values(this.filterButtons)),
+      searchToggle,
       h("div", { class: "search" }, icon("search"), search),
       h("button", { type: "button", class: "tb-btn", "aria-label": "New Connection", title: "Add a GNOME computer (⌘N)", onclick: () => void this.openNew() }, icon("plus")),
     );
