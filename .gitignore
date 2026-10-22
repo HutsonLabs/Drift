@@ -13,3 +13,5 @@ ui/dist/
 lcov.info
 # Tauri-generated capability schemas; the iOS Xcode project in gen/apple is tracked (IOS-5).
 src-tauri/gen/schemas/
+ui/responsive/dist/
+ui/responsive/shots/

@@ -392,3 +392,19 @@ fn the_gate_lints_the_app_library_for_both_ios_targets() {
         assert!(line.contains("-D warnings"), "`{line}` must deny warnings");
     }
 }
+
+/// RESP-1: the breakpoint harness is part of the merge gate, after the UI builds, with its
+/// WebKit provisioned first.
+#[test]
+fn the_gate_runs_the_breakpoint_harness() {
+    let steps = ci_plan::ci(Options::default());
+    let args = |s: &Step| match &s.action {
+        Action::Run { program: Program::Bun, args, dir } if dir == "ui" => Some(args.join(" ")),
+        _ => None,
+    };
+    let position = |want: &str| steps.iter().position(|s| args(s).as_deref() == Some(want));
+    let webkit = position("node_modules/playwright-core/cli.js install webkit").expect("the gate installs Playwright's WebKit");
+    let harness = position("run responsive").expect("the gate runs `bun run responsive`");
+    let build = position("run build").expect("the gate builds the UI");
+    assert!(build < webkit && webkit < harness, "build, then WebKit, then the harness");
+}
