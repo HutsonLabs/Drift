@@ -2,8 +2,10 @@
 // controller. Everything testable lives in connectionsApp.ts and views/.
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { commands, events } from "./bindings";
+import { applyPlatform } from "./platform";
 import { ConnectionsApp } from "./connectionsApp";
 
+applyPlatform();
 const root = document.getElementById("app");
 if (root) {
   const app = new ConnectionsApp(root, commands);

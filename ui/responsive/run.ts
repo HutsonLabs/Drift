@@ -24,6 +24,7 @@ const KEY_ROWS_HEIGHT_PORTRAIT = 56;
 
 const IPHONE_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
+const MAC_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
 const IPAD_UA = "Mozilla/5.0 (iPad; CPU OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
 
 interface Breakpoint {
@@ -34,6 +35,8 @@ interface Breakpoint {
   landscape?: boolean;
   /** Left and right safe-area insets (landscape iPhone). */
   safeX?: number;
+  /** The Mac app: a fine pointer and a Mac user agent; guards against touch rules leaking. */
+  mac?: boolean;
 }
 
 export const BREAKPOINTS: Breakpoint[] = [
@@ -47,6 +50,8 @@ export const BREAKPOINTS: Breakpoint[] = [
   { id: "B8-834", w: 834, h: 1210, phone: false },
   { id: "B9-1210", w: 1210, h: 834, phone: false },
   { id: "B10-1376", w: 1376, h: 1032, phone: false },
+  { id: "MAC-640", w: 640, h: 420, phone: false, mac: true },
+  { id: "MAC-1100", w: 1100, h: 720, phone: false, mac: true },
 ];
 
 const PAGES = [
@@ -68,6 +73,7 @@ const STATES = [...PAGES, "s-banner", "s-stats", "s-keys"];
 /** The frame the iOS shell gives `state`'s page at `bp`, or null if it has none there. */
 function frame(bp: Breakpoint, state: string): { w: number; h: number } | null {
   if (PAGES.includes(state)) return { w: bp.w, h: bp.h };
+  if (bp.mac && state === "s-keys") return null;
   if (state === "s-banner") return { w: Math.min(BANNER.width, bp.w - 2 * HUD_INSET), h: BANNER.height };
   if (state === "s-stats") return { w: STATS.width, h: STATS.height };
   // The key row is iPhone only; iOS 17's narrowest iPhone is 375 pt.
@@ -102,6 +108,7 @@ function check(state: string): string[] {
     return Math.round(e.getBoundingClientRect().height / lh);
   };
   const coarse = matchMedia("(pointer: coarse)").matches;
+  const ios = document.documentElement.dataset.platform === "ios";
   const interactive = Array.from(
     document.querySelectorAll("button, input:not([type=hidden]), select, summary, [role=menuitem]"),
   ).filter(visible);
@@ -121,7 +128,8 @@ function check(state: string): string[] {
     }
   }
   for (const e of controls) {
-    if (e.closest(".cfg") && e.getBoundingClientRect().width < 120) {
+    // The port field is narrow by design (84 pt).
+    if (e.closest(".cfg") && !e.closest(".port") && e.getBoundingClientRect().width < 120) {
       fail("F1 collapsed", `${name(e)} is ${px(e.getBoundingClientRect().width)} pt wide`);
     }
   }
@@ -131,7 +139,7 @@ function check(state: string): string[] {
     if (r.top < -1) fail("F12 unreachable", `${name(s).split(" ")[0]} top at y ${px(r.top)}`);
     const bottom = s.matches(".cfg") ? H : Math.max(H, se.scrollHeight);
     if (r.bottom > bottom + 1) fail("F12 unreachable", `${name(s).split(" ")[0]} bottom at y ${px(r.bottom)} of ${bottom}`);
-    if (document.documentElement.dataset.platform === "ios" && document.body.matches(".session") && r.top < 56 && r.left < 56) {
+    if (ios && document.body.matches(".session") && r.top < 56 && r.left < 56) {
       fail("F17 switcher", `${name(s).split(" ")[0]} runs under the switcher button (top ${px(r.top)})`);
     }
   }
@@ -169,7 +177,7 @@ function check(state: string): string[] {
       }
     }
     const fp = cfg.querySelector(".pin .fingerprint");
-    if (fp && W >= 390 && lines(fp) > 2) fail("F5 fingerprint", `wraps to ${lines(fp)} lines`);
+    if (fp && ios && W >= 390 && lines(fp) > 2) fail("F5 fingerprint", `wraps to ${lines(fp)} lines`);
     const summary = cfg.querySelector("details.advanced summary");
     if (summary && lines(summary) > 1 && summary.getBoundingClientRect().height > 50) fail("F7 summary", "wraps");
   }
@@ -181,7 +189,7 @@ function check(state: string): string[] {
       fail("F8 search", `search field is ${s && visible(s) ? px(s.getBoundingClientRect().width) : 0} pt wide`);
     }
   }
-  if (W >= 744) {
+  if (ios && W >= 744) {
     for (const n of Array.from(document.querySelectorAll<HTMLElement>(".item-name")).filter(visible)) {
       if (n.scrollWidth > n.clientWidth + 1 || n.scrollHeight > n.clientHeight + 1) fail("F10 name", `"${n.textContent}" is cut off`);
     }
@@ -244,8 +252,8 @@ try {
       const ctx = await browser.newContext({
         viewport: { width: f.w, height: f.h },
         deviceScaleFactor: 2,
-        hasTouch: true,
-        userAgent: bp.phone ? IPHONE_UA : IPAD_UA,
+        hasTouch: !bp.mac,
+        userAgent: bp.mac ? MAC_UA : bp.phone ? IPHONE_UA : IPAD_UA,
       });
       const page = await ctx.newPage();
       await page.goto(`http://localhost:${server.port}/#${state}`);

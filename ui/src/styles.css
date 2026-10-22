@@ -309,6 +309,7 @@ details.advanced[open] summary svg.icon { transform: rotate(90deg); }
 /* ---- Sheets: connecting, certificate, errors -------------------------------------------- */
 .scrim { min-height: 100%; display: grid; place-items: center; padding: 32px; background: var(--scrim); }
 .sheet {
+  container: sheet / inline-size;
   width: min(460px, 100%);
   padding: 28px;
   border-radius: 24px;
@@ -594,6 +595,7 @@ body.connections #app { background: var(--window); }
 .sheet-scrim { place-items: start center; padding: 58px 24px 24px; }
 .confirm-scrim { z-index: 30; }
 .cfg {
+  container: cfg / inline-size;
   width: min(680px, 100%);
   max-height: 100%;
   display: flex;

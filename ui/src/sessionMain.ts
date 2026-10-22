@@ -2,8 +2,10 @@
 // Everything testable lives in sessionApp.ts and views/.
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { commands, events } from "./bindings";
+import { applyPlatform } from "./platform";
 import { SessionApp } from "./sessionApp";
 
+applyPlatform();
 const root = document.getElementById("app");
 if (root) {
   const app = new SessionApp(root, commands);

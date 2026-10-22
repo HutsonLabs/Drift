@@ -2,8 +2,10 @@
 // controller. Everything testable lives in titlebarApp.ts and views/identity.ts.
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { commands, events } from "./bindings";
+import { applyPlatform } from "./platform";
 import { TitlebarApp } from "./titlebarApp";
 
+applyPlatform();
 const root = document.getElementById("titlebar");
 if (root) {
   const app = new TitlebarApp(root, commands);
