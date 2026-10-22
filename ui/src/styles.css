@@ -629,6 +629,24 @@ body.connections #app { background: var(--window); }
 .cfg-foot .note { color: var(--secondary); font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .cfg-foot .live-note { margin-left: 6px; }
 .cfg-foot .live-note .status { width: 6px; height: 6px; }
+/* Compact sheet (RESP-3, ADR RESP-2): each row stacks label, control, hint and error, and Port
+   wraps under Host. The certificate row and the connection type have their own rules. */
+@container cfg (max-width: 559px) {
+  .cfg-body .group .field:not(.pin, .mode) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "label" "control" "hint" "error";
+    row-gap: 0;
+    align-items: start;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  .cfg-body .group .field:not(:has(> .hint)) > label { grid-row: auto; }
+  .cfg-body .group .field:not(.pin, .mode, .check-field) > label { margin-bottom: 6px; }
+  .cfg-body .group .field > .hint { margin-top: 6px; }
+  .cfg-body .group .row { flex-wrap: wrap; }
+  .cfg-body .group .row .grow { flex: 1 1 100%; padding-right: 16px; }
+  .cfg-body .group .row .port { flex: 1 1 100%; padding: 0 16px 12px; }
+}
 .sheet.confirm { width: min(380px, 100%); }
 .sheet.confirm h2 { font-size: 17px; margin: 14px 0 6px; }
 .sheet.confirm > p { color: var(--secondary); }
