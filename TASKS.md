@@ -106,3 +106,12 @@ git history at commit `ce6c578`; the ADRs are in `docs/adr/superseded/`.
   iOS apps. *`src-tauri/icons/AppIcon.icon`, bundled by Tauri into `Assets.car` and added to
   the iOS target; the flat `icns` and PNGs are rendered from it (ADR `APP-icon`).*
 - **HOST-icon Drift Host app icon.** Retired by ADR `GNOME-only` (`APP-icon` decision 6).
+
+## RESP — Mobile responsiveness
+
+The iPhone and iPad web UI audited at 10 breakpoints (320 pt to 1376 pt, phone landscape, iPad
+split). The findings are in `docs/responsive/findings.md` and the remediation tasks RESP-1 to
+RESP-17 in `docs/responsive/tasks.md`.
+
+- [✓] **RESP-0 Breakpoint audit.** *20 findings, 7 of them P1 (the configuration sheet on phones,
+  the toolbar, tap to connect, and session sheets in phone landscape and at 320 pt).*
