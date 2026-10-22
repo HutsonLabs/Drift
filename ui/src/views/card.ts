@@ -1,6 +1,7 @@
 // One gallery card (UI-windows board 1, decision 16): a 16:9 preview (the mode's gradient and
 // glyph, or the session's live thumbnail) with the state pills, the one primary action shown on
-// hover and focus, then the mode glyph, name, `host · mode`, and the ⋯ button.
+// hover and focus (always, on touch screens), then the mode glyph, name, `host · mode`, and the ⋯
+// button. On touch a tap runs the primary action and a long press opens the menu (RESP-7).
 import type { ConnectionStatus, OpenConnection, ProfileEntry_Serialize } from "../bindings";
 import { h } from "../dom";
 import { icon, MODE_ICONS, modeGlyph } from "../icons";
@@ -153,5 +154,51 @@ export function renderCard(model: CardModel, now: number, on: CardIntents): HTML
     card.focus();
     on.menu(p.id, { x: e.clientX, y: e.clientY });
   });
+  touchGestures(card, p.id, on);
   return card;
+}
+
+/** How long a finger stays down before a press opens the menu (iOS's long-press duration). */
+const LONG_PRESS_MS = 500;
+/** How far a finger may drift and still be a press, not a scroll. */
+const PRESS_SLOP = 10;
+
+/**
+ * Touch screens (RESP-7): a tap runs the primary action, since there is no hover to reveal it,
+ * and a long press opens the ⋯ menu, since WKWebView sends no `contextmenu` for one. A mouse or
+ * trackpad keeps double-click and the context menu.
+ */
+function touchGestures(card: HTMLElement, id: string, on: CardIntents): void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let start = { x: 0, y: 0 };
+  let longPressed = false;
+  const cancel = () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = null;
+  };
+  card.addEventListener("pointerdown", (e) => {
+    if (e.pointerType !== "touch" || (e.target instanceof Element && e.target.closest("button"))) return;
+    longPressed = false;
+    start = { x: e.clientX, y: e.clientY };
+    cancel();
+    timer = setTimeout(() => {
+      timer = null;
+      longPressed = true;
+      on.menu(id, start);
+    }, LONG_PRESS_MS);
+  });
+  card.addEventListener("pointermove", (e) => {
+    if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > PRESS_SLOP) cancel();
+  });
+  card.addEventListener("pointerup", cancel);
+  card.addEventListener("pointercancel", cancel);
+  card.addEventListener("click", (e) => {
+    if (longPressed) {
+      longPressed = false;
+      return;
+    }
+    if (!matchMedia("(pointer: coarse)").matches) return;
+    if (e.target instanceof Element && e.target.closest("button")) return;
+    on.primary(id);
+  });
 }
