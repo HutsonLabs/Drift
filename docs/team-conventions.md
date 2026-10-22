@@ -61,6 +61,7 @@ Current ADRs:
 | `IOS-0-ios-client-mac-host-app-store` | Drift on iPhone/iPad (Tauri iOS), App Store eligibility (its Mac host half is superseded by `GNOME-only`) |
 | `IOS-fix-ipad-launch` | tao 0.35.3 vendored in `third_party/tao` (scene configuration returned released → release builds crashed at launch on iPad); full-bleed `icon-ios.svg` and `ios_audit` for the iOS app icon |
 | `APP-icon` | Icon Composer `AppIcon.icon` is the one icon source: Mac bundle (`Assets.car` via Tauri), iOS target resource, no PNG appiconset; flat `icns`/PNGs rendered from it |
+| `RESP-2-touch-platform` | `data-platform` (ios/macos), touch sizing under `pointer: coarse`, `cfg`/`sheet` containers and compact breakpoints, safe areas left to WKWebView, the WebKit breakpoint harness as the layout test |
 | `GNOME-only` | Drift Host retired; GNOME targets only; `drift-connect:` links; `host/drift-gnome-setup` |
 
 ## Commands

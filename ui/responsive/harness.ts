@@ -2,6 +2,7 @@
 // (`ConnectionsApp`, `SessionApp`) from the `ui/test` fakes and fixtures, chosen by the URL hash,
 // then sets `data-ready` on <html> (or `data-error` with the stack).
 import { ConnectionsApp } from "../src/connectionsApp";
+import { applyPlatform } from "../src/platform";
 import { SessionApp } from "../src/sessionApp";
 import { FakeConnectionsApi } from "../test/fakes";
 import { certPrompt, entry, LNP_EXPLANATION, openConnection, profile, sessionView, stats } from "../test/helpers";
@@ -110,6 +111,7 @@ async function session(state: string): Promise<void> {
   await wait();
 }
 
+applyPlatform();
 const state = location.hash.slice(1);
 (state.startsWith("c-") ? connections(state) : session(state))
   .then(() => document.documentElement.setAttribute("data-ready", "1"))
