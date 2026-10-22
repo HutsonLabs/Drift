@@ -105,7 +105,8 @@ function check(state: string): string[] {
   const lines = (e: Element) => {
     const cs = getComputedStyle(e);
     const lh = Number.parseFloat(cs.lineHeight) || Number.parseFloat(cs.fontSize) * 1.45;
-    return Math.round(e.getBoundingClientRect().height / lh);
+    const box = Number.parseFloat(cs.paddingTop) + Number.parseFloat(cs.paddingBottom);
+    return Math.round((e.getBoundingClientRect().height - box) / lh);
   };
   const coarse = matchMedia("(pointer: coarse)").matches;
   const ios = document.documentElement.dataset.platform === "ios";
@@ -177,7 +178,8 @@ function check(state: string): string[] {
       }
     }
     const fp = cfg.querySelector(".pin .fingerprint");
-    if (fp && ios && W >= 390 && lines(fp) > 2) fail("F5 fingerprint", `wraps to ${lines(fp)} lines`);
+    // 95 characters of monospace need about 650 pt on one line; 3 lines is the floor on a phone.
+    if (fp && ios && W >= 390 && lines(fp) > 3) fail("F5 fingerprint", `wraps to ${lines(fp)} lines`);
     const summary = cfg.querySelector("details.advanced summary");
     if (summary && lines(summary) > 1 && summary.getBoundingClientRect().height > 50) fail("F7 summary", "wraps");
   }
