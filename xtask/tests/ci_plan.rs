@@ -403,7 +403,8 @@ fn the_gate_runs_the_breakpoint_harness() {
         _ => None,
     };
     let position = |want: &str| steps.iter().position(|s| args(s).as_deref() == Some(want));
-    let webkit = position("node_modules/playwright-core/cli.js install webkit").expect("the gate installs Playwright's WebKit");
+    let webkit = position("node_modules/playwright-core/cli.js install webkit")
+        .expect("the gate installs Playwright's WebKit");
     let harness = position("run responsive").expect("the gate runs `bun run responsive`");
     let build = position("run build").expect("the gate builds the UI");
     assert!(build < webkit && webkit < harness, "build, then WebKit, then the harness");
