@@ -425,7 +425,10 @@ fn builds_may_only_touch_the_generated_xcode_project() {
 #[test]
 fn the_spaces_token_comes_from_one_fixed_file() {
     assert_eq!(release::SPACES_TOKEN_FILE, "code/.spaces-tok");
-    assert_eq!(release::spaces_token_path(Path::new("/Users/me")), PathBuf::from("/Users/me/code/.spaces-tok"));
+    assert_eq!(
+        release::spaces_token_path(Path::new("/Users/me")),
+        PathBuf::from("/Users/me/code/.spaces-tok")
+    );
     assert_eq!(release::parse_spaces_token("abc123\n").unwrap(), "abc123");
     assert_eq!(release::parse_spaces_token("abc123").unwrap(), "abc123");
     for bad in ["", "\n", "  \n", "abc\ndef\n", "abc def\n"] {

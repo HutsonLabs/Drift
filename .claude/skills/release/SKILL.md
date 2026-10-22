@@ -29,8 +29,8 @@ Get the user's explicit go-ahead in this conversation before each of these; neve
 - **TestFlight upload** (`--testflight`): visible to testers.
 - **Release on spaces.hutson.cloud** (`--spaces`, or `--publish <yy.mm>-<build>` for a finished
   build): tags and releases are seen by everyone with access. Releases are never published on
-  GitHub. Needs `FORGEJO_API_KEY` (a spaces.hutson.cloud token with repository write access) from
-  `~/code/term.hut/.env`; preflight checks it against the server.
+  GitHub. The token (repository write access) is read from `~/code/.spaces-tok`, a file holding
+  only the token; no environment variable is used. Preflight checks it against the server.
 
 A dry run, preflight and building artifacts need no permission.
 

@@ -90,7 +90,7 @@ enum Cmd {
         #[arg(long)]
         testflight: bool,
         /// Tag `v<yy.mm>.<build>`, push the tag to `origin` and publish the DMG as a release on
-        /// spaces.hutson.cloud (token in `FORGEJO_API_KEY`).
+        /// spaces.hutson.cloud (token in `~/code/.spaces-tok`).
         #[arg(long)]
         spaces: bool,
         /// Publish an earlier finished build on spaces.hutson.cloud without rebuilding it

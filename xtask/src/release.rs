@@ -707,8 +707,27 @@ pub fn release_notes(notes: &str, sums: &str) -> String {
 pub const SPACES_API: &str = "https://spaces.hutson.cloud/api/v1";
 /// The repository on spaces.hutson.cloud.
 pub const SPACES_REPO: &str = "HutsonLabs/drift";
-/// The environment variable holding the spaces.hutson.cloud API token.
-pub const SPACES_TOKEN_VAR: &str = "FORGEJO_API_KEY";
+/// The file holding the spaces.hutson.cloud API token, relative to `$HOME`. One fixed place, never
+/// an environment variable, so a release publishes the same way from any shell.
+pub const SPACES_TOKEN_FILE: &str = "code/.spaces-tok";
+
+/// Where the spaces.hutson.cloud token is for the user whose home is `home`.
+pub fn spaces_token_path(home: &Path) -> PathBuf {
+    home.join(SPACES_TOKEN_FILE)
+}
+
+/// The token in the text of [`SPACES_TOKEN_FILE`]: exactly one non-empty line without spaces
+/// (a trailing newline is fine). Anything else is an error rather than a guess.
+pub fn parse_spaces_token(text: &str) -> Result<String, String> {
+    let lines: Vec<&str> = text.lines().collect();
+    match lines.as_slice() {
+        [token] if !token.trim().is_empty() && !token.contains(char::is_whitespace) => {
+            Ok((*token).to_owned())
+        }
+        [] | [_] => Err("is empty or not a single token".to_owned()),
+        _ => Err(format!("has {} lines; it must hold only the token", lines.len())),
+    }
+}
 
 /// The body of `POST /repos/{SPACES_REPO}/releases` for release `version` (`build`) of commit
 /// `commit`.
