@@ -659,6 +659,15 @@ body.connections #app { background: var(--window); }
   .cfg-body .segmented { grid-template-columns: minmax(0, 1fr); }
   .cfg-body .segment { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; }
 }
+/* Footer on compact widths (RESP-5): the note on its own line, the buttons share the row. */
+@container cfg (max-width: 559px) {
+  .cfg-foot { flex-wrap: wrap; row-gap: 10px; padding: 12px 16px 16px; }
+  .cfg-foot .note { order: -1; flex: 1 1 100%; }
+  .cfg-foot .live-note { margin-left: 0; }
+  .cfg-foot .spacer { display: none; }
+  .cfg-foot > button { flex: 1 1 auto; }
+  .cfg-foot > button.primary { flex-grow: 2; }
+}
 .sheet.confirm { width: min(380px, 100%); }
 .sheet.confirm h2 { font-size: 17px; margin: 14px 0 6px; }
 .sheet.confirm > p { color: var(--secondary); }
