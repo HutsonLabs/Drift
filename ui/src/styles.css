@@ -668,6 +668,13 @@ body.connections #app { background: var(--window); }
   .cfg-foot > button { flex: 1 1 auto; }
   .cfg-foot > button.primary { flex-grow: 2; }
 }
+/* Trusted certificate on compact widths (RESP-13): label, the fingerprint in a card as in the
+   certificate prompt, then Forget Certificate. */
+@container cfg (max-width: 559px) {
+  .cfg-body .group .pin { grid-template-columns: minmax(0, 1fr); grid-template-areas: "label" "fp" "button"; row-gap: 10px; }
+  .cfg-body .group .pin .fingerprint { padding: 10px 12px; border-radius: 10px; background: var(--field); box-shadow: inset 0 0 0 0.5px var(--hairline); }
+  .cfg-body .group .pin button { justify-self: start; }
+}
 .sheet.confirm { width: min(380px, 100%); }
 .sheet.confirm h2 { font-size: 17px; margin: 14px 0 6px; }
 .sheet.confirm > p { color: var(--secondary); }

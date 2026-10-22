@@ -115,7 +115,8 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` done
 - [ ] **RESP-13 Stacked certificate row.** (F5; B1–B6)
   - The trusted-certificate row stacks label, then the full-width fingerprint (in a `.fp-card`
     as in the certificate prompt), then Forget Certificate, whenever its container is < 560 pt.
-  - Red: the fingerprint is at most 2 lines at 402.
+  - Red: the fingerprint is at most 3 lines at 390 pt and wider (95 monospace characters need
+    about 650 pt for one line, so 2 lines can't be reached on a phone).
 - [ ] **RESP-14 Key row fits the phone.** (F14, F15; B1–B5)
   - In portrait, every key is reachable without a hidden swipe. Pick one of these in the IOS-8
     ADR amendment:
