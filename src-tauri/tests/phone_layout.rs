@@ -3,8 +3,8 @@
 #![allow(clippy::unwrap_used)]
 
 use drift_app::phone::{
-    AUTO_HIDE_SECS, AutoHide, Frame, Insets, KEY_ROW_HEIGHT, PhoneLayout, SoftKey, chord_events,
-    phone_layout, text_events,
+    AUTO_HIDE_SECS, AutoHide, Frame, Insets, KEY_ROW_HEIGHT, KEY_ROWS_HEIGHT_PORTRAIT, PhoneLayout, SoftKey,
+    chord_events, phone_layout, text_events,
 };
 use drift_core::{DesktopSize, InputEvent, Size};
 
@@ -25,7 +25,7 @@ fn portrait_puts_the_picture_on_top_and_the_pad_and_keys_below() {
     // Full width, desktop aspect (402 × 1000/1600 = 251.25), just below the status area.
     assert_eq!(l.picture, frame(0.0, 62.0, 402.0, 251.25));
     let keys = l.keys.expect("key row in portrait");
-    assert_eq!(keys, frame(0.0, 874.0 - 34.0 - KEY_ROW_HEIGHT, 402.0, KEY_ROW_HEIGHT));
+    assert_eq!(keys, frame(0.0, 874.0 - 34.0 - KEY_ROWS_HEIGHT_PORTRAIT, 402.0, KEY_ROWS_HEIGHT_PORTRAIT));
     let pad = l.pad.expect("trackpad in portrait");
     assert_eq!(pad, frame(0.0, 62.0 + 251.25, 402.0, keys.y - (62.0 + 251.25)));
 }
@@ -147,4 +147,12 @@ fn landscape_controls_hide_after_a_quiet_spell() {
 #[test]
 fn space_is_a_soft_key() {
     assert_eq!(SoftKey::from_name("space"), Some(SoftKey::Space));
+}
+
+/// RESP-14 Red: the portrait key row is two rows of 44-point keys (6-point gaps and margins), so
+/// every key shows without a hidden swipe; landscape keeps one row.
+#[test]
+fn the_portrait_key_row_has_two_rows_of_44_point_keys() {
+    assert!((KEY_ROWS_HEIGHT_PORTRAIT - (6.0 + 44.0 + 6.0 + 44.0 + 6.0)).abs() < 1e-9);
+    assert!((KEY_ROW_HEIGHT - (6.0 + 44.0 + 6.0)).abs() < 1e-9);
 }

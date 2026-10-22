@@ -127,3 +127,20 @@ describe("session page start on iPhone", () => {
     expect(hasButton(root, "Touch: tap where you touch")).toBe(true);
   });
 });
+
+describe("key row icons (RESP-14)", () => {
+  test("the keyboard and touch-mode keys are icons with their names, not text glyphs", () => {
+    for (const [touch, icon] of [
+      ["trackpad", "icon-trackpad"],
+      ["direct", "icon-hand"],
+    ] as const) {
+      const { root } = row(touch);
+      const keyboard = button(root, "Keyboard");
+      expect(keyboard.querySelector("svg.icon-keyboard")).not.toBeNull();
+      expect((keyboard.textContent ?? "").trim()).toBe("");
+      const mode = root.querySelector<HTMLButtonElement>(".key.touch-mode")!;
+      expect(mode.querySelector(`svg.${icon}`)).not.toBeNull();
+      expect((mode.textContent ?? "").trim()).toBe("");
+    }
+  });
+});
