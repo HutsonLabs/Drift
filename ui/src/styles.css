@@ -333,6 +333,10 @@ details.advanced[open] summary svg.icon { transform: rotate(90deg); }
 .fp-card .fingerprint { color: var(--text); font-size: 12px; }
 .sheet label.check { padding-top: 12px; }
 
+/* iOS (RESP-8): the native switcher button (IOS-11, 44 points at the safe area's top-left + 12)
+   floats over session pages, so their sheets start below it. */
+[data-platform="ios"] body.session .scrim { padding-top: 68px; }
+
 /* Connecting */
 .sheet.connecting h1 { margin-top: 0; }
 .sheet.connecting .spinner { display: none; }

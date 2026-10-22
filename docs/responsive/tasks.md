@@ -16,7 +16,8 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` done
 
 - [✓] **RESP-0 Breakpoint audit.** Evaluate every page state of the iOS app's web UI at the 10
   breakpoints B1–B10 (320 pt to 1376 pt, phone landscape, iPad split). Inventory the findings and
-  plan the fixes. *`docs/responsive/findings.md`, with screenshots in `docs/responsive/shots/`.*
+  plan the fixes. *`docs/responsive/findings.md`, with screenshots in `docs/responsive/shots/`.
+  F12 corrected from P1 to P3 on 2026-10-22 (see the finding).*
 
 ## Foundation
 
@@ -75,13 +76,12 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` done
     `contextmenu`).
   - Keyboard and mouse behaviour on the Mac is unchanged (gallery tests stay green).
   - Red: `pointer: coarse` + `click` on a card calls `connect`.
-- [ ] **RESP-8 Sheets that scroll instead of overflowing upwards.** (F12, F17; B5)
-  - `.scrim` uses `place-items: safe center` (or `align-content: start` once content exceeds
-    the viewport) and scrolls vertically.
-  - On iOS the session page pads the top by the switcher's 44 + 12 pt so the switcher never
-    covers sheet content.
-  - Red: the certificate and error sheets have `top ≥ 0` and their last button can be scrolled
-    into view at 874 × 402.
+- [ ] **RESP-8 Session sheets clear the switcher.** (F17, F12; B1, B5)
+  - *Re-scoped:* F12 was a measuring error (WebKit had scrolled the focused button into view);
+    tall sheets were always reachable by scrolling, so F12 is P3 and needs no change.
+  - On iOS the session page pads its sheets' top by the switcher's 44 + 12 pt and a 12-pt gap
+    (68 pt) so the switcher never covers sheet content.
+  - Red: harness F17 (a session sheet under the switcher at 320 pt).
 - [ ] **RESP-9 Error sheet within the width.** (F13; B1–B2)
   - The action buttons may wrap and stack full-width on compact widths.
   - `.sheet` gets `min-width: 0` and `max-width: 100%`, so nothing inside can make it wider.

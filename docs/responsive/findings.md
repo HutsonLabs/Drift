@@ -116,12 +116,13 @@ and `↩` in the ⋯ menu. They show without a hardware keyboard.
 
 ### Session page
 
-**F12 · P1 · B5.** Sheets taller than the screen can't be reached.
-`.scrim` is `min-height: 100%; display: grid; place-items: center`. A sheet taller than the 402-pt
-landscape height overflows **upwards**. The certificate sheet starts at y = −67, so its icon and
-part of its title are off screen and can't be scrolled to. The error sheet runs 6 pt past the
-bottom. The native 44-pt switcher button (safe area + 12) also sits over the sheet's top-left.
-Shot: `874x402-iphone-land_s-certificate.png`.
+**F12 · P3 · B5** *(corrected 2026-10-22; first filed as P1).* A sheet taller than the screen opens scrolled.
+The audit measured the certificate sheet at y = −67 and called it unreachable. That was WebKit
+scrolling the focused Connect button into view (scrollTop 99): at scroll 0 the sheet starts at
+y = 32 and the page scrolls to every part of it (RESP-1's harness measures at scroll 0). What
+remains is cosmetic: the sheet opens scrolled with its icon off the top. The native 44-pt
+switcher button (safe area + 12) does sit over a session sheet's top-left where the sheet
+reaches it (F17). Shot: `874x402-iphone-land_s-certificate.png`.
 
 **F13 · P1 · B1 (B2 by 1 pt).** The error sheet overflows sideways.
 The action buttons are `nowrap` ("Open Local Network Settings" is 204 pt), so the sheet grows past
