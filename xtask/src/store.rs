@@ -100,4 +100,4 @@ pub fn review_risks(binary: &[u8]) -> Vec<ReviewRisk> {
 
 /// The Developer ID Application identity Drift's DMG is signed with (SHA-1; the one pinned in
 /// `tauri.conf.json`).
-pub const DEVELOPER_ID: &str = "FE9B9ADD91CB67176BFE80FF725F77539D75BD96";
+pub const DEVELOPER_ID: &str = "DABE738AA854E6CE4FA33E69C1F0AFC5830C8646";

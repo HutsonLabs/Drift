@@ -90,10 +90,12 @@ another JS package manager.
 | `cargo tauri dev` / `cargo tauri build` | run / bundle the app (UI is built by bun first) |
 
 `cargo tauri build` signs with the Developer ID identity pinned in `tauri.conf.json`
-(`bundle.macOS.signingIdentity`, by SHA-1 — the name is shared by two certificates). It lives in
-`~/Library/Keychains/term-hut-signing.keychain-db`, which `~/.local/bin/signing-unlock` unlocks
-from every zsh (hooked in `~/.zshenv`) and at GUI login, so builds over SSH work too. If codesign
-fails with `errSecInternalComponent`, the keychain is locked: run `signing-unlock -v`. Check a
+(`bundle.macOS.signingIdentity`, by SHA-1 — the name has been shared by two certificates;
+`xtask::store::DEVELOPER_ID` must match). Since 26.10 build 10 it lives in
+`~/Library/Keychains/iceberg-signing.keychain-db` (no auto-lock), so builds over SSH work too; the
+earlier `term-hut-signing` keychain and its `signing-unlock` helper are gone. If codesign fails
+with `errSecInternalComponent`, that keychain is locked: unlock it with
+`security unlock-keychain ~/Library/Keychains/iceberg-signing.keychain-db`. Check a
 build with `codesign -dv --verbose=2 target/release/bundle/macos/Drift.app`.
 Notarize and staple the .dmg with `xcrun notarytool submit … --wait` (App Store Connect API key)
 and `xcrun stapler staple`; `cargo xtask bundle` does not wire this up yet (M9-5).
