@@ -74,6 +74,7 @@ another JS package manager.
 | `cargo xtask ci` | the merge gate: npm-ban, secret-scan, workflow audit, `bun install --frozen-lockfile`, `bun test`, `bun run typecheck`, `bun run build`, bindings freshness, fmt, clippy `--all-features --all-targets`, the vendored IronRDP fork's fmt + tests, nextest under llvm-cov + coverage gate, `cargo deny`, and the iOS crates linted for
 `aarch64-apple-ios` and `aarch64-apple-ios-sim` with their simulator tests linked (IOS-2). The step list lives in `xtask/src/ci_plan.rs` and is asserted by `xtask/tests/ci_plan.rs` (ADR `M0-6-ci-gate-coverage`) |
 | `cargo xtask ci --no-coverage` | same, without instrumentation (faster locally) |
+| `bun run responsive [state] [--shots]` (in `ui/`) | the RESP-1 breakpoint harness: every iOS web UI state in WebKit at B1–B10, one rule per finding of `docs/responsive/findings.md`; also a step of `cargo xtask ci` |
 | `cargo xtask bindings` | regenerate `ui/src/bindings.ts` after changing IPC commands/types |
 | `cargo xtask npm-ban` / `secret-scan` / `workflows` | the individual hygiene checks |
 | `cargo xtask e2e [nextest args]` | real-host tests through SSH forwards (below) |
