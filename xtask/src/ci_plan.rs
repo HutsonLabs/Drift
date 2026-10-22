@@ -283,6 +283,9 @@ pub fn ci(options: Options) -> Vec<Step> {
         run("bun test", Program::Bun, "ui", &["test"]),
         run("bun run typecheck", Program::Bun, "ui", &["run", "typecheck"]),
         run("bun run build", Program::Bun, "ui", &["run", "build"]),
+        // RESP-1: the iOS web UI at every breakpoint, in WebKit (a no-op once it is installed).
+        run("playwright webkit", Program::Bun, "ui", &["node_modules/playwright-core/cli.js", "install", "webkit"]),
+        run("bun run responsive", Program::Bun, "ui", &["run", "responsive"]),
         check("bindings freshness", Check::BindingsFresh),
     ];
     steps.extend(lint_steps());
