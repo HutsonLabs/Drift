@@ -640,6 +640,12 @@ body.connections #app { background: var(--window); }
   .menu { min-width: 240px; }
 }
 
+/* Keyboard hints (RESP-17, ADR RESP-2): hidden when nothing can hover. An iPad with a trackpad
+   or mouse attached, usually a keyboard case too, keeps them. */
+@media (any-hover: none) {
+  kbd { display: none; }
+}
+
 /* ---- Pop-up menu (⋯ and context menu) ------------------------------------------------------- */
 .menu-backdrop { position: fixed; inset: 0; z-index: 20; }
 .menu {
