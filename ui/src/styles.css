@@ -797,17 +797,20 @@ body.session[data-controls="keys"] {
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
 }
+/* Two rows in the portrait strip, one in landscape (phone::KEY_ROWS_HEIGHT_PORTRAIT, RESP-14):
+   the keys wrap and share the width, so none hides off the edge. */
 .key-row {
   display: flex;
+  flex-wrap: wrap;
+  align-content: center;
   align-items: center;
   gap: 6px;
   height: 100vh;
-  padding: 0 8px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  padding: 6px 8px;
+  overflow: hidden;
 }
 .key-row .key {
-  flex: 0 0 auto;
+  flex: 1 0 auto;
   min-width: 44px;
   height: 40px;
   padding: 0 10px;
@@ -819,6 +822,7 @@ body.session[data-controls="keys"] {
   box-shadow: var(--shadow-control);
   touch-action: manipulation;
 }
+.key-row .key svg.icon { width: 20px; height: 20px; }
 .key-row .key:active,
 .key-row .key.modifier[aria-pressed="true"] {
   background: var(--accent);

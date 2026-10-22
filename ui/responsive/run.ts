@@ -20,7 +20,7 @@ const BANNER = { width: 560, height: 76 };
 const STATS = { width: 300, height: 56 };
 /** The key row's strip: one row in landscape, two in portrait (`phone::KEY_ROW_HEIGHT*`). */
 const KEY_ROW_HEIGHT = 56;
-const KEY_ROWS_HEIGHT_PORTRAIT = 56;
+const KEY_ROWS_HEIGHT_PORTRAIT = 106;
 
 const IPHONE_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
