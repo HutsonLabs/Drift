@@ -150,6 +150,12 @@ select {
   background-size: 4px 4px;
   background-repeat: no-repeat;
 }
+/* Touch (RESP-10): WebKit zooms the page in when a control under 16 px takes focus; 44-point
+   rows as in iOS forms. */
+@media (pointer: coarse) {
+  input[type="text"], input[type="password"], input[type="number"], input[type="search"], select { font-size: 16px; min-height: 44px; }
+  select { background-position: calc(100% - 15px) 20px, calc(100% - 11px) 20px; }
+}
 input[aria-invalid="true"] { box-shadow: 0 0 0 3px color-mix(in oklab, var(--danger) 20%, transparent), inset 0 0 0 1px var(--danger); }
 
 /* Checkboxes render as switches (they carry role="switch"). */
@@ -459,7 +465,7 @@ body[data-hud="stats"] #app { display: flex; align-items: flex-end; justify-cont
 .seg button { min-height: 26px; padding: 0 12px; background: none; box-shadow: none; color: var(--secondary); font-size: 12px; }
 .seg button[aria-pressed="true"] { background: var(--selected); color: var(--text); box-shadow: var(--shadow-control); }
 .search { position: relative; width: 220px; color: var(--tertiary); }
-.search svg.icon { position: absolute; left: 10px; top: 8px; width: 14px; height: 14px; }
+.search svg.icon { position: absolute; left: 10px; top: 50%; width: 14px; height: 14px; transform: translateY(-50%); }
 .search input[type="search"] { border-radius: 999px; padding-left: 30px; background: var(--hover); box-shadow: inset 0 0 0 0.5px var(--hairline); }
 .search input::-webkit-search-decoration { appearance: none; }
 
