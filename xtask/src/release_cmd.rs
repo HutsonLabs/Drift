@@ -260,7 +260,7 @@ fn preflight(root: &Path, args: &Args, version: &str) -> Result<()> {
         .output()?;
     let _ = std::fs::remove_file(&probe);
     if !signed.status.success() {
-        problems.push("the signing keychain is locked (run `signing-unlock -v`)".to_owned());
+        problems.push(format!("codesign cannot sign with {} (is its keychain locked?)", store::DEVELOPER_ID));
     }
     // The Mac App Store profile.
     let profile = profile_path(args);

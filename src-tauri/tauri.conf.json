@@ -64,7 +64,7 @@
       "minimumSystemVersion": "27.0",
       "entitlements": "entitlements.plist",
       "hardenedRuntime": true,
-      "signingIdentity": "FE9B9ADD91CB67176BFE80FF725F77539D75BD96"
+      "signingIdentity": "DABE738AA854E6CE4FA33E69C1F0AFC5830C8646"
     },
     "iOS": {
       "minimumSystemVersion": "17.0",

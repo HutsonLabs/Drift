@@ -39,8 +39,11 @@ A dry run, preflight and building artifacts need no permission.
 1. Credentials and keychain (never print the values):
    ```sh
    set -a; . ~/code/term.hut/.env; set +a
-   signing-unlock -v
+   security show-keychain-info ~/Library/Keychains/iceberg-signing.keychain-db  # unlocked?
    ```
+   The Developer ID is in the `iceberg-signing` keychain (`docs/team-conventions.md`). The Mac
+   App Store profile goes in `~/Library/MobileDevice/Provisioning Profiles/Drift_Mac_App_Store.provisionprofile`;
+   the last release's `.pkg` carries a copy (`Contents/embedded.provisionprofile`).
 2. Version (only for a new month or when asked): `cargo xtask release --set-version 26.11`,
    then edit `release/notes/26.11.md` (from `release/notes/TEMPLATE.md`), commit
    `chore(release): 26.11`, push `main`. Build numbers are automatic (App Store Connect's
