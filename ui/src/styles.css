@@ -581,6 +581,10 @@ body.connections #app { background: var(--window); }
 .item-text { display: grid; min-width: 0; }
 .item-name { font-weight: 600; font-size: 13.5px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item-detail { color: var(--secondary); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* iOS (RESP-16): wider cards and names on up to two lines, so landscape iPads don't cut names
+   short sooner than portrait. */
+[data-platform="ios"] .gallery { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+[data-platform="ios"] .item-name { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .icon-btn { width: 28px; min-height: 28px; padding: 0; background: var(--hover); box-shadow: inset 0 0 0 0.5px var(--hairline); color: var(--secondary); }
 .icon-btn:hover { background: var(--selected); color: var(--text); }
 .icon-btn svg.icon { width: 15px; height: 15px; }
