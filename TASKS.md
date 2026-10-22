@@ -114,4 +114,7 @@ split). The findings are in `docs/responsive/findings.md` and the remediation ta
 RESP-17 in `docs/responsive/tasks.md`.
 
 - [✓] **RESP-0 Breakpoint audit.** *20 findings, 7 of them P1 (the configuration sheet on phones,
-  the toolbar, tap to connect, and session sheets in phone landscape and at 320 pt).*
+  the toolbar, tap to connect, and session sheets in phone landscape and at 320 pt); F12 later
+  corrected to P3.*
+- [✓] **RESP-1–17 Remediation.** *The breakpoint harness is in the gate and passes; device checks in
+  `docs/acceptance.md` § RESP.*

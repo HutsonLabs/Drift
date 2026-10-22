@@ -454,6 +454,22 @@ Mac").
       Drift opens (warm and cold launch) with the same form prefilled; paste the password (from
       the Mac via Universal Clipboard, or typed), Save and connect.
 
+## RESP — Mobile responsiveness on a device (`docs/responsive/tasks.md`)
+
+The layout is checked in WebKit by `bun run responsive` (RESP-1, in the gate); these need a real
+iPhone and iPad.
+
+- [ ] **No focus zoom (RESP-10):** on an iPhone, tap Name, Host and the toolbar's Search; the page
+  does not zoom in.
+- [ ] **Phone sheet (RESP-12):** on an iPhone, New Connection fills the screen; the gallery does not
+  show through the sheet, in light and dark.
+- [ ] **Tap and hold (RESP-7):** on an iPhone, a tap on a card connects (or shows its window); a
+  press of half a second opens its menu without the system callout.
+- [ ] **Key row (RESP-14):** on the narrowest supported iPhone (375 pt) in portrait every key shows
+  in two rows; in landscape one row.
+- [ ] **Keyboard hints (RESP-17):** on an iPad, ⌘N and the menu shortcuts are hidden with touch only
+  and show with a Magic Keyboard (trackpad) attached.
+
 ## STORE — Distribution (validate only; nothing is uploaded or published)
 
 Blocked on the developer account (ADRs `STORE-1`..`STORE-3`): create the
