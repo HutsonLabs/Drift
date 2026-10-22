@@ -333,6 +333,17 @@ details.advanced[open] summary svg.icon { transform: rotate(90deg); }
 .fp-card .fingerprint { color: var(--text); font-size: 12px; }
 .sheet label.check { padding-top: 12px; }
 
+/* Narrow session sheets (RESP-9, ADR RESP-2): tighter margins, and the actions stack full width
+   so a long label ("Open Local Network Settings") never pushes past the sheet. */
+@media (max-width: 400px) {
+  .scrim { padding: 16px; }
+  .sheet { padding: 24px 18px; }
+}
+@container sheet (max-width: 359px) {
+  .actions { flex-wrap: wrap; }
+  .actions > button { flex: 1 1 100%; white-space: normal; }
+}
+
 /* iOS (RESP-8): the native switcher button (IOS-11, 44 points at the safe area's top-left + 12)
    floats over session pages, so their sheets start below it. */
 [data-platform="ios"] body.session .scrim { padding-top: 68px; }
