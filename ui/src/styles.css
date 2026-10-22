@@ -428,6 +428,16 @@ body[data-hud="stats"] #app { display: flex; align-items: flex-end; justify-cont
 .banner strong { font-weight: 600; }
 .banner-text > span { color: oklch(1 0 0 / 0.72); font-size: 12px; }
 
+/* Narrow banner (RESP-15): the HUD frame is a fixed 76 points tall (present::hud_frame), so on
+   narrow phones the banner tightens and its hint keeps to two lines. */
+@media (max-width: 419px) {
+  .banner { margin-top: 6px; gap: 10px; padding: 6px 16px 6px 8px; border-radius: 24px; }
+  .banner-icon { width: 28px; height: 28px; }
+  .banner strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .banner-text { min-width: 0; }
+  .banner-text > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; line-height: 1.35; }
+}
+
 /* ---- Status dots and spinner (cards, pills, the identity capsule) ---------------------------- */
 .status { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 2px color-mix(in oklab, var(--good) 25%, transparent); }
 .status.reconnecting { background: var(--warn); box-shadow: 0 0 0 2px color-mix(in oklab, var(--warn) 25%, transparent); }
