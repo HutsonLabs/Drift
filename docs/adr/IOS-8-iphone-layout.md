@@ -41,6 +41,12 @@
    `smoke-env` feature, `DRIFT_SMOKE_ORIENTATION=landscape` asks the scene for landscape
    (`requestGeometryUpdate`) 8 s after the window opens.
 
+9. **Amended by RESP-14 (2026-10-22).** The portrait key row is two rows of 44-point keys
+   (`phone::KEY_ROWS_HEIGHT_PORTRAIT`, 106 points; the trackpad gives up 50 points), because the
+   13 keys need about 717 points and a hidden sideways swipe hid the arrows. Landscape keeps one
+   56-point row (`KEY_ROW_HEIGHT`). The keyboard and touch-mode keys are SVG icons
+   (`keyboard`, `trackpad`, `hand`) instead of ⌨ ▭ ☝.
+
 ## Consequences
 
 - Layout, key events and auto-hide are unit tested (`src-tauri/tests/phone_layout.rs`), the key

@@ -5,6 +5,7 @@
 // as the key row's strip (`phone::phone_layout`). The modifiers are GNOME's: Ctrl Alt ⇧ Super,
 // with a one-tap Activities.
 import { h, mount } from "../dom";
+import { icon } from "../icons";
 
 /** What the key row asks Rust to do (see `commands::send_keys` / `type_text` / `set_touch_mode`). */
 export interface KeyRowActions {
@@ -93,7 +94,7 @@ export function renderKeyRow(root: HTMLElement, touch: string, actions: KeyRowAc
   const keyboard = h(
     "button",
     { type: "button", class: "key", "aria-label": "Keyboard", onclick: () => field.focus() },
-    "⌨",
+    icon("keyboard"),
   );
   const next = touch === "trackpad" ? "direct" : "trackpad";
   const touchSwitch = h(
@@ -104,7 +105,7 @@ export function renderKeyRow(root: HTMLElement, touch: string, actions: KeyRowAc
       "aria-label": `Touch: ${TOUCH_NAMES[touch] ?? touch}`,
       onclick: () => actions.setTouchMode(next),
     },
-    touch === "trackpad" ? "▭" : "☝",
+    icon(touch === "trackpad" ? "trackpad" : "hand"),
   );
 
   mount(

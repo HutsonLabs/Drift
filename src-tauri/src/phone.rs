@@ -51,8 +51,13 @@ pub struct PhoneLayout {
     pub keys: Option<Frame>,
 }
 
-/// Height of the key row in points (without the safe-area inset below it).
+/// Height of the landscape key row in points (without the safe-area inset below it): one row of
+/// 44-point keys with 6-point margins.
 pub const KEY_ROW_HEIGHT: f64 = 56.0;
+
+/// Height of the portrait key row in points (without the safe-area inset below it): two rows of
+/// 44-point keys, so every key shows on the narrowest iPhone (RESP-14).
+pub const KEY_ROWS_HEIGHT_PORTRAIT: f64 = 106.0;
 
 /// Largest share of the usable portrait height the picture may take.
 const MAX_PICTURE_SHARE: f64 = 0.6;
@@ -87,8 +92,12 @@ pub fn phone_layout(
     let usable = finite(h - safe.top - safe.bottom);
     let picture_h = (w * aspect).min(usable * MAX_PICTURE_SHARE);
     let picture = Frame { x: 0.0, y: safe.top, width: w, height: picture_h };
-    let keys =
-        Frame { x: 0.0, y: finite(h - safe.bottom - KEY_ROW_HEIGHT), width: w, height: KEY_ROW_HEIGHT };
+    let keys = Frame {
+        x: 0.0,
+        y: finite(h - safe.bottom - KEY_ROWS_HEIGHT_PORTRAIT),
+        width: w,
+        height: KEY_ROWS_HEIGHT_PORTRAIT,
+    };
     let pad_top = safe.top + picture_h;
     let pad = Frame { x: 0.0, y: pad_top, width: w, height: finite(keys.y - pad_top) };
     PhoneLayout { picture, pad: Some(pad), keys: Some(keys) }
