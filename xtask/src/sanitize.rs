@@ -245,7 +245,7 @@ impl<'a> Reader<'a> {
 /// Decodes a UTF-16LE user name, dropping trailing NULs.
 fn utf16_name(bytes: &[u8]) -> Result<String> {
     ensure!(bytes.len().is_multiple_of(2), "odd UTF-16 length");
-    let units: Vec<u16> = bytes.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+    let units: Vec<u16> = bytes.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
     let s = String::from_utf16(&units).context("invalid UTF-16 user name")?;
     Ok(s.trim_end_matches('\0').to_owned())
 }

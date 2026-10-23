@@ -276,7 +276,7 @@ pub fn load_png_rgba(bytes: &[u8]) -> (Size<u32>, Vec<u8>) {
 pub fn psnr_bgra_vs_rgba(bgra: &[u8], rgba: &[u8]) -> f64 {
     assert_eq!(bgra.len(), rgba.len(), "image sizes differ");
     let mut sse = 0f64;
-    for (a, b) in bgra.chunks_exact(4).zip(rgba.chunks_exact(4)) {
+    for (a, b) in bgra.as_chunks::<4>().0.iter().zip(rgba.as_chunks::<4>().0) {
         for (x, y) in [(a[2], b[0]), (a[1], b[1]), (a[0], b[2])] {
             let d = f64::from(x) - f64::from(y);
             sse += d * d;

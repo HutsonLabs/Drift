@@ -84,7 +84,8 @@ pub fn compare(expected: &GoldenImage, actual: &GoldenImage, tolerance: u8) -> R
     let mut count = 0usize;
     let mut first = None;
     let mut max_diff = 0u8;
-    for (i, (e, a)) in expected.bgra.chunks_exact(4).zip(actual.bgra.chunks_exact(4)).enumerate() {
+    for (i, (e, a)) in expected.bgra.as_chunks::<4>().0.iter().zip(actual.bgra.as_chunks::<4>().0).enumerate()
+    {
         let d = e.iter().zip(a).map(|(x, y)| x.abs_diff(*y)).max().unwrap_or(0);
         if d > tolerance {
             count += 1;
@@ -112,8 +113,10 @@ pub fn load_png(path: &Path) -> Result<GoldenImage, String> {
     let info = reader.next_frame(&mut buf).map_err(|e| format!("png decode {}: {e}", path.display()))?;
     let src = &buf[..info.buffer_size()];
     let bgra = match info.color_type {
-        png::ColorType::Rgba => src.chunks_exact(4).flat_map(|p| [p[2], p[1], p[0], p[3]]).collect(),
-        png::ColorType::Rgb => src.chunks_exact(3).flat_map(|p| [p[2], p[1], p[0], 255]).collect(),
+        png::ColorType::Rgba => {
+            src.as_chunks::<4>().0.iter().flat_map(|p| [p[2], p[1], p[0], p[3]]).collect()
+        }
+        png::ColorType::Rgb => src.as_chunks::<3>().0.iter().flat_map(|p| [p[2], p[1], p[0], 255]).collect(),
         other => return Err(format!("unsupported png colour type {other:?} in {}", path.display())),
     };
     Ok(GoldenImage { width: info.width, height: info.height, bgra })
@@ -129,7 +132,7 @@ pub fn save_png(path: &Path, image: &GoldenImage) -> Result<(), String> {
     enc.set_color(png::ColorType::Rgba);
     enc.set_depth(png::BitDepth::Eight);
     let mut w = enc.write_header().map_err(|e| format!("png header: {e}"))?;
-    let rgba: Vec<u8> = image.bgra.chunks_exact(4).flat_map(|p| [p[2], p[1], p[0], p[3]]).collect();
+    let rgba: Vec<u8> = image.bgra.as_chunks::<4>().0.iter().flat_map(|p| [p[2], p[1], p[0], p[3]]).collect();
     w.write_image_data(&rgba).map_err(|e| format!("png write: {e}"))?;
     w.finish().map_err(|e| format!("png finish: {e}"))
 }

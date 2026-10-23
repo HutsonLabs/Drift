@@ -336,7 +336,7 @@ fn visible_rects(clipping: &Region, x_idx: u16, y_idx: u16, width: u16, height: 
 fn render_bgra(state: &TileState) -> Vec<u8> {
     let mut px = vec![0u8; TILE_BYTES];
     state.reconstruct_to_rgba(&mut px);
-    for p in px.chunks_exact_mut(BPP) {
+    for p in px.as_chunks_mut::<BPP>().0 {
         p.swap(0, 2);
     }
     px
@@ -664,7 +664,7 @@ mod tests {
                 .map(|t| BgraTile {
                     origin: Point::new(u32::from(t.x_idx) * 64, u32::from(t.y_idx) * 64),
                     size: Size::new(64, 64),
-                    data: t.pixels.chunks_exact(4).flat_map(|p| [p[2], p[1], p[0], p[3]]).collect(),
+                    data: t.pixels.as_chunks::<4>().0.iter().flat_map(|p| [p[2], p[1], p[0], p[3]]).collect(),
                     update_rects: t
                         .update_rectangles
                         .iter()

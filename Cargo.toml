@@ -21,9 +21,9 @@ members = [
 exclude = ["third_party"]
 
 [workspace.package]
-version = "26.10.0"
+version = "26.10.10"
 edition = "2024"
-rust-version = "1.97"
+rust-version = "1.99.1"
 license = "MIT"
 repository = "https://github.com/HutsonLabs/drift"
 publish = false

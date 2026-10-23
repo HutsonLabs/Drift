@@ -35,7 +35,7 @@ pub fn decode_uncompressed(
     }
     let mut px = data.to_vec();
     if format == UncompressedFormat::Xrgb {
-        for p in px.chunks_exact_mut(BPP) {
+        for p in px.as_chunks_mut::<BPP>().0 {
             p[3] = 0xFF;
         }
     }

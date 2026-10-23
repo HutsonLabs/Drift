@@ -75,7 +75,9 @@ impl CursorImage {
         }
         let bgra: Vec<u8> = decoded
             .bitmap_data
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .flat_map(|p| {
                 let a = u32::from(p[3]);
                 // (c * a + 127) / 255 <= a <= 255, so the cast is exact.

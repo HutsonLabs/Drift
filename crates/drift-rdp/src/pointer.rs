@@ -33,7 +33,11 @@ pub fn cursor_update(output: &ActiveStageOutput, scale: u32) -> Option<CursorUpd
 /// Straight-alpha RGBA → premultiplied BGRA (same length; a trailing partial pixel is dropped).
 pub fn rgba_to_premultiplied_bgra(rgba: &[u8]) -> Vec<u8> {
     let mul = |c: u8, a: u8| u8::try_from((u16::from(c) * u16::from(a) + 127) / 255).unwrap_or(u8::MAX);
-    rgba.chunks_exact(4).flat_map(|p| [mul(p[2], p[3]), mul(p[1], p[3]), mul(p[0], p[3]), p[3]]).collect()
+    rgba.as_chunks::<4>()
+        .0
+        .iter()
+        .flat_map(|p| [mul(p[2], p[3]), mul(p[1], p[3]), mul(p[0], p[3]), p[3]])
+        .collect()
 }
 
 #[cfg(test)]

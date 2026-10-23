@@ -44,7 +44,7 @@ fn bitmap_rep(width: usize, height: usize, bgra: &[u8]) -> Option<Retained<NSBit
         // SAFETY: AppKit allocated `row_bytes * height` bytes; row `y < height` starts inside it
         // and we write `width * 4 <= row_bytes` bytes.
         let dst_row = unsafe { std::slice::from_raw_parts_mut(dst.add(y * row_bytes), width * 4) };
-        for (d, s) in dst_row.chunks_exact_mut(4).zip(src_row.chunks_exact(4)) {
+        for (d, s) in dst_row.as_chunks_mut::<4>().0.iter_mut().zip(src_row.as_chunks::<4>().0) {
             d.copy_from_slice(&[s[2], s[1], s[0], s[3]]);
         }
     }

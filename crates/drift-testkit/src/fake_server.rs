@@ -933,7 +933,7 @@ async fn read_rdstls_auth_request<S: tokio::io::AsyncRead + Unpin>(s: &mut S) ->
         Ok(v)
     }
     fn utf16(b: &[u8]) -> String {
-        let units: Vec<u16> = b.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        let units: Vec<u16> = b.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
         String::from_utf16_lossy(&units).trim_end_matches('\0').to_owned()
     }
     let (version, pdu_type, data_type) = (u16le(s).await?, u16le(s).await?, u16le(s).await?);

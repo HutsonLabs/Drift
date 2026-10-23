@@ -46,7 +46,9 @@ fn to_golden(image: &drift_render::BgraImage) -> GoldenImage {
 fn coloured_fraction(image: &drift_render::BgraImage) -> f64 {
     let coloured = image
         .data
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .filter(|p| {
             let (b, g, r) = (i32::from(p[0]), i32::from(p[1]), i32::from(p[2]));
             let max = b.max(g).max(r);

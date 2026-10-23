@@ -130,7 +130,7 @@ fn pointer_and_clipboard_fixtures_have_the_expected_shape() {
     let png = fixtures::read(names::CLIP_REMOTE_PNG);
     assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
     let text = fixtures::read(names::CLIP_REMOTE_UNICODETEXT);
-    let units: Vec<u16> = text.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+    let units: Vec<u16> = text.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
     let s = String::from_utf16_lossy(&units);
     assert!(s.contains("héllo 世界 🚀"), "{s:?}");
     assert!(s.ends_with('\0'), "CF_UNICODETEXT is NUL-terminated");

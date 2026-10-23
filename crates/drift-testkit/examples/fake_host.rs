@@ -133,7 +133,11 @@ async fn main() {
             .flatten()
             .map(|d| {
                 String::from_utf16_lossy(
-                    &d.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect::<Vec<_>>(),
+                    &d.as_chunks::<2>()
+                        .0
+                        .iter()
+                        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                        .collect::<Vec<_>>(),
                 )
             })
             .collect();

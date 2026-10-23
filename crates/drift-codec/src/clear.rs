@@ -65,7 +65,8 @@ mod tests {
         let mut codec = ClearCodec::new();
         assert!(format!("{codec:?}").contains("allocated: false"));
         let tile = codec.decode(Rect::new(1, 2, 6, 4), &stream).ok();
-        let expected: Vec<u8> = bgra.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2], 255]).collect();
+        let expected: Vec<u8> =
+            bgra.as_chunks::<4>().0.iter().flat_map(|p| [p[0], p[1], p[2], 255]).collect();
         assert_eq!(tile.as_ref().map(|t| &t.data), Some(&expected));
         assert_eq!(tile.map(|t| t.update_rects), Some(vec![Rect::new(1, 2, 6, 4)]));
         assert!(format!("{codec:?}").contains("allocated: true"));

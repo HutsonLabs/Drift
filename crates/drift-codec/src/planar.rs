@@ -27,7 +27,7 @@ pub fn decode_planar(dest: Rect, data: &[u8]) -> Result<BgraTile, CodecError> {
             "decoded plane size does not match the rectangle",
         ));
     }
-    let bgra = rgb.chunks_exact(3).flat_map(|p| [p[2], p[1], p[0], 0xFF]).collect();
+    let bgra = rgb.as_chunks::<3>().0.iter().flat_map(|p| [p[2], p[1], p[0], 0xFF]).collect();
     Ok(BgraTile::full(dest, bgra))
 }
 
@@ -52,7 +52,8 @@ mod tests {
             let rgb: Vec<u8> = (0..w * h).flat_map(|i| [i as u8 * 10, 100, 255 - i as u8]).collect();
             let tile = decode_planar(Rect::new(7, 9, 5, 3), &encode(w, h, &rgb, rle));
             let tile = tile.ok();
-            let expected: Vec<u8> = rgb.chunks_exact(3).flat_map(|p| [p[2], p[1], p[0], 255]).collect();
+            let expected: Vec<u8> =
+                rgb.as_chunks::<3>().0.iter().flat_map(|p| [p[2], p[1], p[0], 255]).collect();
             assert_eq!(tile.as_ref().map(|t| &t.data), Some(&expected), "rle={rle}");
             assert_eq!(tile.map(|t| t.update_rects), Some(vec![Rect::new(7, 9, 5, 3)]));
         }

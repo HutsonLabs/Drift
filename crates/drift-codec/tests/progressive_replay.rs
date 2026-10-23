@@ -59,7 +59,8 @@ fn fixture_payloads_decode_bit_identically_to_ironrdp() {
             assert_eq!(a.len(), b.len(), "payload {i}: tile count");
             for (x, y) in a.iter().zip(&b) {
                 assert_eq!((x.origin.x, x.origin.y), (u32::from(y.x_idx) * 64, u32::from(y.y_idx) * 64));
-                let rgba: Vec<u8> = x.data.chunks_exact(4).flat_map(|p| [p[2], p[1], p[0], p[3]]).collect();
+                let rgba: Vec<u8> =
+                    x.data.as_chunks::<4>().0.iter().flat_map(|p| [p[2], p[1], p[0], p[3]]).collect();
                 assert!(rgba == y.pixels, "payload {i}: pixels of tile ({}, {})", y.x_idx, y.y_idx);
                 assert_eq!(x.update_rects.len(), y.update_rectangles.len());
             }

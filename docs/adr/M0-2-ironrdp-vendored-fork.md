@@ -20,7 +20,7 @@ owner's public GitHub presence and must not be taken without the owner's explici
      LICENSE-APACHE kept, per crate too);
    - commit `chore(M0-2): trim vendored IronRDP …` removes `web-client/`, `ffi/`, `fuzz/`,
      `xtask/`, `benches/`, `.github/`, `.agents/`, `.cargo/` and its `rust-toolchain.toml`
-     (Drift's 1.97.1 toolchain applies). All of `crates/` is kept so path dependencies resolve and
+     (Drift's `rust-toolchain.toml` applies). All of `crates/` is kept so path dependencies resolve and
      the fork's own test suite (`ironrdp-testsuite-core`) still runs.
 2. The vendored tree is **its own cargo workspace** (`members = ["crates/*"]`). The root
    workspace lists `exclude = ["third_party"]` and consumes crates through

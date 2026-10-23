@@ -105,7 +105,7 @@ fn colour_accuracy_matches_grd_encoder_within_2() {
     gpu.wait_idle();
     let out = gpu.read_surface(1).unwrap();
     let mut worst = 0u8;
-    for (o, e) in out.data.chunks_exact(4).zip(bgra.chunks_exact(4)) {
+    for (o, e) in out.data.as_chunks::<4>().0.iter().zip(bgra.as_chunks::<4>().0) {
         for c in 0..3 {
             worst = worst.max(o[c].abs_diff(e[c]));
         }

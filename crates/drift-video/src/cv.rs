@@ -220,7 +220,7 @@ pub fn fill_bgra(pb: &CVPixelBuffer, f: impl Fn(u32, u32) -> [u8; 4]) -> Result<
     for y in 0..size.height {
         // SAFETY: the buffer is locked for writing; row `y < rows` spans `stride >= 4 * w` bytes.
         let line = unsafe { std::slice::from_raw_parts_mut(base.as_ptr().add(y as usize * stride), w * 4) };
-        for (x, px) in line.chunks_exact_mut(4).enumerate() {
+        for (x, px) in line.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             px.copy_from_slice(&f(x as u32, y));
         }
     }

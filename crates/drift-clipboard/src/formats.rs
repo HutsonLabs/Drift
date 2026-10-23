@@ -149,7 +149,8 @@ pub fn encode_unicode_text(text: &str) -> Vec<u8> {
 /// `CF_UNICODETEXT` bytes → local text: stops at the first NUL, CRLF becomes LF, unpaired
 /// surrogates become U+FFFD, a trailing odd byte is ignored.
 pub fn decode_unicode_text(bytes: &[u8]) -> String {
-    let units = bytes.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).take_while(|&u| u != 0);
+    let units =
+        bytes.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes([c[0], c[1]])).take_while(|&u| u != 0);
     let text: String = char::decode_utf16(units).map(|r| r.unwrap_or(char::REPLACEMENT_CHARACTER)).collect();
     crlf_to_lf(&text)
 }

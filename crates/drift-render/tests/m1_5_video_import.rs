@@ -49,5 +49,5 @@ fn decoded_pictures_render_like_their_cpu_planes() {
     let zero_copy = render(Nv12Frame::new(picture));
     let uploaded = render(Nv12Frame::new(planes));
     assert_eq!(zero_copy, uploaded);
-    assert!(zero_copy.data.chunks_exact(4).any(|p| p[..3] != [0, 0, 0]), "picture was not drawn");
+    assert!(zero_copy.data.as_chunks::<4>().0.iter().any(|p| p[..3] != [0, 0, 0]), "picture was not drawn");
 }

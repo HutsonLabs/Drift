@@ -45,7 +45,7 @@ jobs:
         run: rustup toolchain install nightly --profile minimal
 
       - name: cargo-fuzz
-        run: command -v cargo-fuzz || cargo install --locked cargo-fuzz
+        run: command -v cargo-fuzz || { command -v cargo-binstall || brew install cargo-binstall; cargo binstall --no-confirm cargo-fuzz; }
 
       - name: Fuzz for 5 minutes
         run: cargo +nightly fuzz run --fuzz-dir "$FUZZ_DIR" "$FUZZ_TARGET" -- -max_total_time=300 -rss_limit_mb=4096

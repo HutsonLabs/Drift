@@ -7,7 +7,7 @@
 
 1. **Workspace.** Members are listed explicitly in the root `Cargo.toml` (`crates/*`,
    `src-tauri` = package `drift-app`, `tests/e2e` = `drift-e2e`, `xtask`). Edition 2024,
-   resolver 3, toolchain 1.97.1 (`rust-toolchain.toml`, with the `aarch64-apple-darwin` target only — macOS 27 is
+   resolver 3, toolchain 1.99.1 (`rust-toolchain.toml`, with the `aarch64-apple-darwin` target only — macOS 27 is
    Apple silicon only — and `llvm-tools-preview`). `MACOSX_DEPLOYMENT_TARGET=27.0` (raised from 14.0 with the glass redesign) via `.cargo/config.toml [env]`.
    Shared dependency versions live in `[workspace.dependencies]`; crates use `dep.workspace = true`.
 2. **Lints** (`[workspace.lints]`, every crate opts in with `[lints] workspace = true`):

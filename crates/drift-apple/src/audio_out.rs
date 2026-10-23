@@ -136,7 +136,7 @@ impl Player {
             self.queued.fetch_add(frames as u64, Ordering::Relaxed);
             let queued = Arc::clone(&self.queued);
             let done = RcBlock::new(move || {
-                let _ = queued.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |q| {
+                let _ = queued.try_update(Ordering::Relaxed, Ordering::Relaxed, |q| {
                     Some(q.saturating_sub(frames as u64))
                 });
             });
