@@ -2,6 +2,7 @@
 **/target/
 ui/node_modules/
 ui/dist/
+.worktrees
 .claude/worktrees/
 *.dmg
 .DS_Store
