@@ -21,6 +21,9 @@ use crate::connections::{Connections, ConnectionsIntent, WindowIdentity};
 use crate::frames::{FrameStore, profile_key};
 use crate::manager::SessionManager;
 use crate::profiles::{CommandError, ProfileEntry, ProfileService, SecretsUpdate};
+use crate::setup_wizard::{SetupError, SetupLineEmitted, SetupResult, SetupService, SignIn};
+use drift_core::setup::{RunMode, SetupIssue, SetupOptions};
+use drift_ssh::{Target, Trust};
 
 /// Shared state managed by Tauri.
 #[derive(Debug)]
@@ -397,6 +400,96 @@ pub fn set_touch_mode(
 #[specta::specta]
 pub fn focus_content(app: tauri::AppHandle, window: tauri::Window) -> Result<(), CommandError> {
     crate::windows::focus_content(&app, window.label())
+}
+
+// ---- Set Up a Linux Machine… (GNOME-WIZARD) ------------------------------------------------
+
+fn storage(e: impl std::fmt::Display) -> CommandError {
+    CommandError::Storage { message: e.to_string() }
+}
+
+/// The wizard's options for `account` on `host`, with a generated RDP password.
+#[tauri::command]
+#[specta::specta]
+pub fn setup_defaults(setup: State<'_, SetupService>, host: String, account: String) -> SetupOptions {
+    setup.defaults(&host, &account)
+}
+
+/// What is wrong with `options` (empty when they are fine).
+#[tauri::command]
+#[specta::specta]
+pub fn setup_validate(options: SetupOptions) -> Vec<SetupIssue> {
+    options.validate().err().unwrap_or_default()
+}
+
+/// Drift's public SSH key, for "Copy Public Key".
+#[tauri::command]
+#[specta::specta]
+pub fn setup_public_key(setup: State<'_, SetupService>) -> Result<String, CommandError> {
+    setup.public_key().map_err(storage)
+}
+
+/// Forgets the recorded SSH host key of `host:port` (after the user confirmed a changed key).
+#[tauri::command]
+#[specta::specta]
+pub fn setup_forget_host(setup: State<'_, SetupService>, host: String, port: u16) -> Result<(), CommandError> {
+    setup.forget_host(&host, port).map_err(storage)
+}
+
+/// Signs in to `target` with Drift's key.
+#[tauri::command]
+#[specta::specta]
+pub async fn setup_connect(
+    setup: State<'_, SetupService>,
+    target: Target,
+    trust: Trust,
+) -> Result<SignIn, CommandError> {
+    Ok(setup.connect(target, trust).await)
+}
+
+/// Adds Drift's key to the account with its password (used once, not kept), then signs in.
+#[tauri::command]
+#[specta::specta]
+pub async fn setup_install_key(
+    setup: State<'_, SetupService>,
+    target: Target,
+    password: String,
+) -> Result<SignIn, CommandError> {
+    let password = zeroize::Zeroizing::new(password);
+    Ok(setup.install_key(target, &password).await)
+}
+
+/// Runs the setup in `mode`; every output line goes to the calling window as
+/// [`SetupLineEmitted`].
+#[tauri::command]
+#[specta::specta]
+pub async fn setup_run(
+    app: tauri::AppHandle,
+    window: tauri::Window,
+    setup: State<'_, SetupService>,
+    options: SetupOptions,
+    mode: RunMode,
+    sudo_password: Option<String>,
+) -> Result<SetupResult, SetupError> {
+    use tauri_specta::Event as _;
+    let sudo_password = sudo_password.map(zeroize::Zeroizing::new);
+    let label = window.label().to_owned();
+    let result = setup
+        .run(&options, mode, sudo_password.as_deref().map(String::as_str), &mut |line| {
+            let _ = SetupLineEmitted { line }.emit_to(&app, tauri::EventTarget::webview_window(&label));
+        })
+        .await;
+    // The options carry the RDP password; do not leave it in this frame's copy.
+    drop(zeroize::Zeroizing::new(options.rdp_password.unwrap_or_default()));
+    result
+}
+
+/// Ends the wizard's SSH session.
+#[tauri::command]
+#[specta::specta]
+pub async fn setup_disconnect(setup: State<'_, SetupService>) -> Result<(), CommandError> {
+    setup.disconnect().await;
+    Ok(())
 }
 
 #[cfg(test)]

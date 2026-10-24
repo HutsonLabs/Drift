@@ -74,6 +74,18 @@ pub struct SetupResult {
     pub profiles: Vec<ConnectionProfile>,
 }
 
+/// One line of the running setup's output, sent to the window that started it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type, tauri_specta::Event)]
+pub struct SetupLineEmitted {
+    /// The parsed line.
+    pub line: SetupLine,
+}
+
+/// The label Drift's key carries in a machine's `authorized_keys`.
+pub const fn device_comment() -> &'static str {
+    if cfg!(target_os = "ios") { "drift@ios" } else { "drift@mac" }
+}
+
 /// The machine the wizard is signed in to.
 struct Signed {
     target: Target,
