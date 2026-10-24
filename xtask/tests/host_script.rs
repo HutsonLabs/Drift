@@ -143,3 +143,15 @@ fn setup_script_rejects_a_bad_allow_from() {
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("bad --allow-from"), "{out:?}");
 }
+
+/// GNOME-WIZARD: g-r-d streams the screen through PipeWire. A user manager that was already
+/// running when GNOME was installed never starts `pipewire.socket`, and every RDP login then
+/// ends with "Couldn't connect pipewire context" (seen on 10.1.2.5, 2026-10-24).
+#[test]
+fn setup_script_starts_pipewire_before_remote_desktop() {
+    let s = read("drift-host-setup.sh");
+    let pipewire = s.find("ensure_user_unit \"$user\" pipewire.socket").expect("pipewire.socket ensured");
+    let grd =
+        s.find("ensure_user_unit \"$user\" gnome-remote-desktop-headless.service").expect("g-r-d ensured");
+    assert!(pipewire < grd, "PipeWire must be up before the headless daemon");
+}
