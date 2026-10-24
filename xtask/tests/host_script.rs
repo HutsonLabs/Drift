@@ -182,7 +182,7 @@ fn gnome_setup_installs_the_desktop_and_passes_allow_from() {
     let out = gnome_setup_with_fake_ssh(dir.path(), &["--check", "--allow-from", "10.1.0.0/21", "me@box.local"]);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let log = std::fs::read_to_string(dir.path().join("log")).expect("fake ssh log");
-    let run = log.lines().find(|l| l.contains("setup.sh")).expect("setup.sh run");
+    let run = log.lines().find(|l| l.contains("--headless")).expect("setup.sh run");
     assert!(run.contains(" --desktop "), "{run}");
     assert!(run.contains(" --firewall --allow-from 10.1.0.0/21 "), "{run}");
 }

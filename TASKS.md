@@ -27,7 +27,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
 
 ADR `GNOME-WIZARD-headless-setup`.
 
-- [~] **WIZ-1 Host script fixes.** Root drop-in (polkit refuses `User=gdm` on Ubuntu 26.04),
+- [✓] **WIZ-1 Host script fixes.** Root drop-in (polkit refuses `User=gdm` on Ubuntu 26.04),
   `--desktop` minimal GNOME without NetworkManager, GDM enabled and `graphical.target` default,
   `idle-delay 0`, `--allow-from CIDR`.
 - [ ] **WIZ-2 `drift_core::setup`.** Options → script arguments and environment, validation,

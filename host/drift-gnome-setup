@@ -5,7 +5,8 @@
 #
 # Over SSH (you are asked for your sudo password on the machine) it runs
 # host/drift-host-setup.sh, which:
-#   - installs gnome-remote-desktop and openssl when missing (apt, dnf, zypper or pacman);
+#   - installs the smallest GNOME that runs a headless session when it is missing (GNOME
+#     Shell, GDM, gnome-remote-desktop; apt, dnf, zypper or pacman; no NetworkManager);
 #   - gives the account a persistent headless GNOME session on a fixed RDP port, with a TLS
 #     certificate and RDP credentials, that keeps running without anyone logged in;
 #   - turns off idle suspend and the screen lock for that session;
@@ -25,6 +26,7 @@
 #   --keep-password   keep the RDP credentials already set; Drift asks for the password
 #   --remote-login    also set up Remote Login: GNOME's login screen on port 3389, for any
 #                     account (adds a second connection)
+#   --allow-from NET  open the firewall only to this network, e.g. 10.1.0.0/21
 #   --check           show what would change on the machine; change nothing
 #   --no-open         print the link instead of opening Drift
 #   --print-link      only print the drift-connect: link for the options and MACHINE (no SSH;
@@ -49,6 +51,7 @@ CHECK=0
 OPEN=1
 PRINT_LINK=0
 PIN=""
+ALLOW_FROM=""
 TARGET=""
 
 usage() {
@@ -126,6 +129,7 @@ main() {
     --name) NAME=${2:?--name needs a name}; shift ;;
     --rdp-user) RDP_USER=${2:?--rdp-user needs a name}; shift ;;
     --pin) PIN=${2:?--pin needs a fingerprint}; shift ;;
+    --allow-from) ALLOW_FROM=${2:?--allow-from needs a network}; shift ;;
     --keep-password) KEEP_PASSWORD=1 ;;
     --remote-login) REMOTE_LOGIN=1 ;;
     --check) CHECK=1 ;;
@@ -143,6 +147,9 @@ main() {
   [[ -n "$TARGET" ]] || die "name the machine: drift-gnome-setup [user@]machine (see --help)"
   [[ "$PORT" =~ ^[0-9]+$ && "$PORT" -gt 0 && "$PORT" -lt 65536 ]] || die "bad port $PORT"
   [[ "$PORT" -ne 3389 || $REMOTE_LOGIN -eq 0 ]] || die "port 3389 belongs to Remote Login; pick another --port"
+  # It becomes part of a remote command line; drift-host-setup.sh checks the address itself.
+  [[ -z "$ALLOW_FROM" || "$ALLOW_FROM" =~ ^[0-9A-Fa-f:.]+(/[0-9]{1,3})?$ ]] ||
+    die "--allow-from '$ALLOW_FROM' is not a network (e.g. 10.1.0.0/21)"
 
   if [[ $PRINT_LINK -eq 1 ]]; then
     local host=${TARGET#*@} account=$USER_NAME
@@ -187,7 +194,9 @@ main() {
 
   local mode=--apply args
   [[ $CHECK -eq 1 ]] && mode=--check
-  args="$mode --install --firewall --headless $USER_NAME:$PORT:persistent"
+  args="$mode --desktop --install --firewall"
+  [[ -n "$ALLOW_FROM" ]] && args+=" --allow-from $ALLOW_FROM"
+  args+=" --headless $USER_NAME:$PORT:persistent"
   [[ $REMOTE_LOGIN -eq 1 ]] && args+=" --system"
   local log status=0
   log=$(mktemp)

@@ -4,14 +4,15 @@ How to set up a Linux machine with GNOME for Drift from a Mac (ADR `GNOME-only`)
 prepare a GNOME Remote Desktop (g-r-d) 50 host for Drift, and how the homelab test
 host (`homelab@10.1.2.40`, plan §5.2) is kept in that state. The homelab sections were verified
 on AnduinOS 2.0.3 (Ubuntu 26.04 base, GNOME Shell 50.1, gdm3 50.1, gnome-remote-desktop 50.2).
-`host/drift-gnome-setup` has not yet been run against a fresh machine (the homelab host was
-unreachable on 2026-10-20); its manual checks are in `docs/acceptance.md` (GNOME-only).
+`host/drift-gnome-setup` was first run on 2026-10-24 against 10.1.2.5 (Ubuntu 26.04.1 server,
+GDM 50.1), which is where the root drop-in, `--desktop` and the PipeWire step come from (ADR
+`GNOME-WIZARD-headless-setup`); its manual checks are in `docs/acceptance.md` (GNOME-only).
 
 | File | Purpose |
 |---|---|
 | `host/drift-gnome-setup` | Runs on the Mac: sets up one machine over SSH and opens the prefilled connection in Drift. |
 | `host/drift-host-setup.sh` | Idempotent setup script (`--check` by default, `--apply` to change). |
-| `host/gnome-headless-session-dropin.conf` | The systemd drop-in that makes `gnome-headless-session@.service` work on AnduinOS 2.0.3. |
+| `host/gnome-headless-session-dropin.conf` | The systemd drop-in that makes `gnome-headless-session@.service` start (runs its launcher as root). |
 | `host/drift-host-report.sh` | Read-only state report used by `cargo xtask host-setup-check`. |
 
 ## Setting up a machine from your Mac
@@ -59,6 +60,7 @@ Requirements:
 | `--rdp-user NAME` | The RDP user name (default: the account name). |
 | `--keep-password` | Keep the RDP credentials already set; Drift asks for the password when connecting. |
 | `--remote-login` | Also set up Remote Login: GNOME's login screen on port 3389, for any account, with the same RDP user and password. Adds a second link (`<name> login`) with its own pin. |
+| `--allow-from NET` | Open the firewall only to one network (an address with a prefix, e.g. `10.1.0.0/21`). |
 | `--check` | Show what would change on the machine; change nothing, set no password, open nothing. |
 | `--no-open` | Print the link instead of opening Drift. |
 | `--print-link` | Only print the `drift-connect:` link for the options and machine (no SSH; pass the fingerprint with `--pin`). |
@@ -96,7 +98,17 @@ cargo xtask host-setup-check
 Each step reads the current state first and acts only when it differs, so re-running
 `--apply` reports `0 change(s) applied`. The steps:
 
-**`--install`** (first, before anything else): `gnome-remote-desktop` and `openssl` are installed
+**`--desktop`** (first; `drift-gnome-setup` always passes it): when GNOME Shell or GDM is
+missing, the smallest GNOME that runs a headless session is installed, without recommends —
+apt `gdm3 ubuntu-session gnome-remote-desktop ptyxis openssl fonts-cantarell` (`gnome-session`
+instead of `ubuntu-session` on Debian; 623 packages on a bare Ubuntu 26.04 image), dnf `gdm
+gnome-shell gnome-remote-desktop ptyxis openssl` without weak dependencies, zypper and pacman
+the same names. The desktop metapackages are avoided on purpose: they pull in NetworkManager,
+which would compete with systemd-networkd for the NIC of a machine reached only over the
+network. Then `gdm.service` is enabled and started (`gnome-headless-session@.service` has
+`Requires=gdm.service`) and `graphical.target` is made the default.
+
+**`--install`**: `gnome-remote-desktop` and `openssl` are installed
 when `grdctl` or `openssl` is missing, with apt, dnf, zypper or pacman. With none of those it is
 an error that names the packages to install by hand.
 
@@ -114,12 +126,14 @@ or later) and stops with an error otherwise.
 3. `grdctl --system rdp enable`, then `systemctl enable --now gnome-remote-desktop.service`.
 
 **`--headless USER:PORT[:persistent]`**
-1. With `persistent`: the drop-in (`DynamicUser=no`, `User=gdm`) is installed as
+1. With `persistent`: the drop-in (`DynamicUser=no`, `User=root`, `Group=root`) is installed as
    `/etc/systemd/system/gnome-headless-session@.service.d/drift.conf` unless
-   `systemctl show` already reports those values (the homelab host has an identical
-   `drift-test.conf` from the spike, which satisfies the check), then
-   `systemctl enable --now gnome-headless-session@USER.service`. Without the drop-in the
-   shipped unit fails with "Failed: The connection is closed" (exit 70, plan §1.9).
+   `systemctl show` already reports those values, then
+   `systemctl enable --now gnome-headless-session@USER.service`. Without a drop-in the
+   shipped unit fails with "Failed: The connection is closed" (exit 70, plan §1.9). The
+   earlier `User=gdm` drop-in works on AnduinOS but not on Ubuntu 26.04, where polkit refuses
+   it ("Not authorized for action org.gnome.displaymanager.displayfactory.manage-user-displays");
+   root passes on both.
 2. The remaining steps run as USER on the user's session bus (`/run/user/UID/bus`); a
    non-persistent user must already have a session.
 3. TLS certificate and key, as for the system daemon, under
@@ -131,18 +145,23 @@ or later) and stops with an error otherwise.
    moves to another port (with negotiation on, the port depends on start order). g-r-d reads the
    port when the RDP server starts, so this takes effect at the next daemon start and does not
    drop live connections.
-6. `grdctl --headless rdp enable`; `systemctl --user enable --now gnome-remote-desktop-headless.service`.
+6. `grdctl --headless rdp enable`; `systemctl --user enable --now pipewire.socket`, then
+   `gnome-remote-desktop-headless.service`. g-r-d streams the screen through PipeWire; a user
+   manager that was already running when GNOME was installed never starts the socket, and every
+   login then ends with "Couldn't connect pipewire context".
 7. Automatic suspend off for the user
    (`org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'`): an idle
    headless session otherwise shows "Suspending soon because of inactivity".
-8. Screen lock off for the user (`org.gnome.desktop.screensaver lock-enabled false`): nobody
+8. Screen blanking off (`org.gnome.desktop.session idle-delay 0`).
+9. Screen lock off for the user (`org.gnome.desktop.screensaver lock-enabled false`): nobody
    sits at a headless session, a locked one swallows input (see the E2E section below), and
    the RDP credentials already guard it.
 
 **`--firewall`**: after each daemon is set up, its port (3389 for `--system`, PORT for each
 `--headless`) is allowed as TCP in ufw or firewalld, whichever is active (`ufw allow PORT/tcp`;
-`firewall-cmd --add-port` for the running and the permanent configuration). With neither
-active it does nothing.
+`firewall-cmd --add-port` for the running and the permanent configuration). With
+`--allow-from NET` the rule only admits that network (`ufw allow from NET to any port PORT
+proto tcp`; a firewalld rich rule). With neither firewall active it does nothing.
 
 **Fingerprints.** For every daemon whose certificate is known, the script prints a
 machine-readable line
@@ -171,7 +190,7 @@ the report and checks:
   and negotiation off), TLS certificate valid, credentials set, a `--headless` g-r-d
   process owned by that user listening on the port, and the user unit enabled and active;
 - for persistent users: `gnome-headless-session@USER.service` enabled and active, with
-  `DynamicUser=no` and `User=gdm`.
+  `DynamicUser=no` and `User=root` (or the older `User=gdm`, which works on AnduinOS).
 
 The system daemon stops listening for a moment while it hands a connection over, so a
 failing live check is retried up to three times. `--report FILE` evaluates a saved report
