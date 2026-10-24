@@ -22,7 +22,7 @@ members = [
 exclude = ["third_party"]
 
 [workspace.package]
-version = "26.10.10"
+version = "26.10.0"
 edition = "2024"
 rust-version = "1.99.1"
 license = "MIT"
