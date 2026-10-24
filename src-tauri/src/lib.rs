@@ -26,6 +26,7 @@ pub mod profiles;
 pub mod recording;
 pub mod secrets;
 pub mod services;
+pub mod setup_wizard;
 pub mod smoke;
 pub mod switcher;
 pub mod view;
@@ -75,6 +76,14 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::type_text,
             commands::set_touch_mode,
             commands::phone_controls,
+            commands::setup_defaults,
+            commands::setup_validate,
+            commands::setup_public_key,
+            commands::setup_forget_host,
+            commands::setup_connect,
+            commands::setup_install_key,
+            commands::setup_run,
+            commands::setup_disconnect,
         ])
         .events(tauri_specta::collect_events![
             view::SessionViewChanged,
@@ -83,6 +92,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             connections::ConnectionsIntentRequested,
             connections::WindowIdentityChanged,
             phone::PhoneControlsChanged,
+            setup_wizard::SetupLineEmitted,
         ])
         .typ::<drift_core::ConnectionProfile>()
         .typ::<drift_core::SessionState>()
@@ -144,6 +154,13 @@ pub fn run_with(options: RunOptions) {
             app.manage(services::PlatformServices::start(&handle, sessions.clone()));
             let frames = frames::FrameStore::in_dir(&dir);
             app.manage(commands::AppState::new(profiles.clone(), sessions, frames));
+            // Set Up a Linux Machine… (GNOME-WIZARD): Drift's SSH key and known hosts live in
+            // the app's own (sandboxed) directory, never in ~/.ssh.
+            app.manage(setup_wizard::SetupService::new(
+                dir.join("ssh"),
+                setup_wizard::device_comment(),
+                setup_wizard::SETUP_SCRIPT,
+            )?);
             // iOS has no menu bar and no Dock (IOS-5).
             #[cfg(target_os = "macos")]
             {

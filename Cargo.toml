@@ -10,6 +10,7 @@ members = [
   "crates/drift-render",
   "crates/drift-rdp",
   "crates/drift-apple",
+  "crates/drift-ssh",
   "crates/drift-macos",
   "crates/drift-ios",
   "crates/drift-testkit",
@@ -39,6 +40,7 @@ drift-video = { path = "crates/drift-video" }
 drift-render = { path = "crates/drift-render" }
 drift-rdp = { path = "crates/drift-rdp" }
 drift-apple = { path = "crates/drift-apple" }
+drift-ssh = { path = "crates/drift-ssh" }
 drift-macos = { path = "crates/drift-macos" }
 drift-ios = { path = "crates/drift-ios" }
 drift-testkit = { path = "crates/drift-testkit" }
@@ -72,6 +74,10 @@ toml = "0.9"
 tracing = "0.1"
 uuid = { version = "1", features = ["serde", "v4"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }
+# In-app SSH for the setup wizard (ADR GNOME-WIZARD-headless-setup): ring like the RDP TLS,
+# no rsa (its advisory; ed25519/ECDSA host keys cover current servers).
+russh = { version = "0.64", default-features = false, features = ["ring"] }
+getrandom = "0.3"
 sha2 = "0.10"
 rayon = "1"
 # TLS for the RDP transport (M1-1): rustls with the ring provider, selected explicitly per config.

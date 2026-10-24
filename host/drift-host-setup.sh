@@ -8,12 +8,17 @@
 #                               A headless g-r-d daemon for USER on a fixed PORT (port
 #                               negotiation off) with a TLS certificate and credentials.
 #                               "persistent" also enables gnome-headless-session@USER with
-#                               the systemd drop-in that fixes it on AnduinOS 2.0.3
-#                               (DynamicUser=no, User=gdm; plan §1.9).
+#                               the systemd drop-in that makes it start (DynamicUser=no,
+#                               User=root: as gdm, polkit refuses it on Ubuntu 26.04; ADR
+#                               GNOME-WIZARD-headless-setup).
 #   --install                   Install gnome-remote-desktop and openssl first when missing
 #                               (apt, dnf, zypper or pacman).
+#   --desktop                   Install the smallest GNOME that runs a headless session when
+#                               GNOME Shell or GDM is missing (no recommends, so no
+#                               NetworkManager), keep GDM enabled and boot graphical.target.
 #   --firewall                  Open every configured port (TCP) in ufw or firewalld, when
 #                               one of them is active.
+#   --allow-from CIDR           With --firewall: allow the ports only from this network.
 #
 # For every configured daemon whose certificate is known, a machine-readable line
 #   fingerprint: <system|USER> <sha256, grdctl format>
@@ -46,13 +51,16 @@ readonly DROPIN_NAME=drift.conf
 # Keep identical to host/gnome-headless-session-dropin.conf (an xtask test enforces it).
 readonly DROPIN_CONTENT='[Service]
 DynamicUser=no
-User=gdm'
+User=root
+Group=root'
 readonly SYSTEM_CERT_DIR=/var/lib/gnome-remote-desktop/.local/share/gnome-remote-desktop/certificates
 
 MODE=check
 SYSTEM=0
 INSTALL=0
+DESKTOP=0
 FIREWALL=0
+ALLOW_FROM=
 HEADLESS=()
 CHANGES=0
 ERRORS=0
@@ -168,6 +176,49 @@ ensure_packages() {
   fi
 }
 
+# install_desktop: the smallest GNOME that runs a headless session (ADR GNOME-WIZARD-headless-setup).
+# Without recommends: the desktop metapackages pull in NetworkManager, which would compete with
+# systemd-networkd for the NIC of a machine that is only reached over the network.
+install_desktop() {
+  if command -v apt-get >/dev/null; then
+    apt-get update -q
+    if apt-cache show ubuntu-session >/dev/null 2>&1; then
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        gdm3 ubuntu-session gnome-remote-desktop ptyxis openssl fonts-cantarell
+    else
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        gdm3 gnome-session gnome-remote-desktop ptyxis openssl fonts-cantarell
+    fi
+  elif command -v dnf >/dev/null; then
+    dnf install -y --setopt=install_weak_deps=False gdm gnome-shell gnome-remote-desktop ptyxis openssl
+  elif command -v zypper >/dev/null; then
+    zypper --non-interactive install --no-recommends gdm gnome-shell gnome-remote-desktop ptyxis openssl
+  elif command -v pacman >/dev/null; then
+    pacman -S --needed --noconfirm gdm gnome-shell gnome-remote-desktop ptyxis openssl
+  else
+    return 1
+  fi
+}
+
+ensure_desktop() {
+  if command -v gnome-shell >/dev/null && systemctl cat gdm.service >/dev/null 2>&1; then
+    ok "GNOME Shell and GDM are installed"
+  elif command -v apt-get >/dev/null || command -v dnf >/dev/null ||
+    command -v zypper >/dev/null || command -v pacman >/dev/null; then
+    change "install a minimal GNOME (GNOME Shell, GDM, gnome-remote-desktop)" install_desktop
+  else
+    err "install GNOME Shell and GDM with this system's package manager, then run again"
+    return
+  fi
+  # gnome-headless-session@.service has Requires=gdm.service.
+  ensure_unit gdm.service
+  if [[ "$(systemctl get-default 2>/dev/null)" == "graphical.target" ]]; then
+    ok "boots into graphical.target"
+  else
+    change "boot into graphical.target" systemctl set-default graphical.target
+  fi
+}
+
 # Headless sessions need gnome-remote-desktop 46 or later (grdctl --headless).
 check_headless_support() {
   if ! command -v grdctl >/dev/null; then
@@ -185,9 +236,13 @@ check_headless_support() {
   fi
 }
 
-# open_port PORT: allows PORT/tcp in an active ufw or firewalld.
+# open_port PORT: allows PORT/tcp in an active ufw or firewalld (only from ALLOW_FROM when set).
 open_port() {
   local port=$1
+  if [[ -n "$ALLOW_FROM" ]]; then
+    open_port_from "$port"
+    return
+  fi
   if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
     if ufw status 2>/dev/null | grep -Eq "^${port}/tcp[[:space:]]+ALLOW"; then
       ok "ufw allows ${port}/tcp"
@@ -203,6 +258,40 @@ open_port() {
   else
     ok "no active ufw or firewalld; ${port}/tcp is not filtered here"
   fi
+}
+
+# The firewalld rich rule that allows PORT/tcp from ALLOW_FROM.
+rich_rule() {
+  local family=ipv4
+  [[ "$ALLOW_FROM" == *:* ]] && family=ipv6
+  printf 'rule family="%s" source address="%s" port port="%s" protocol="tcp" accept' \
+    "$family" "$ALLOW_FROM" "$1"
+}
+
+open_port_from() {
+  local port=$1
+  if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
+    if ufw status 2>/dev/null |
+      awk -v p="${port}/tcp" -v f="$ALLOW_FROM" '$1 == p && $2 == "ALLOW" && $3 == f { m = 1 } END { exit !m }'; then
+      ok "ufw allows ${port}/tcp from $ALLOW_FROM"
+    else
+      change "allow ${port}/tcp from $ALLOW_FROM in ufw" \
+        ufw allow from "$ALLOW_FROM" to any port "$port" proto tcp
+    fi
+  elif command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then
+    if firewall-cmd --query-rich-rule="$(rich_rule "$port")" >/dev/null 2>&1; then
+      ok "firewalld allows ${port}/tcp from $ALLOW_FROM"
+    else
+      change "allow ${port}/tcp from $ALLOW_FROM in firewalld" firewalld_add_from "$port"
+    fi
+  else
+    ok "no active ufw or firewalld; ${port}/tcp is not filtered here"
+  fi
+}
+
+firewalld_add_from() {
+  firewall-cmd --add-rich-rule="$(rich_rule "$1")" &&
+    firewall-cmd --permanent --add-rich-rule="$(rich_rule "$1")"
 }
 
 firewalld_add() {
@@ -287,10 +376,10 @@ setup_system() {
 ensure_dropin() {
   local user=$1 props
   props=$(systemctl show "gnome-headless-session@$user.service" -p DynamicUser -p User 2>/dev/null || true)
-  if grep -qx 'DynamicUser=no' <<<"$props" && grep -qx 'User=gdm' <<<"$props"; then
-    ok "gnome-headless-session@.service runs with DynamicUser=no, User=gdm"
+  if grep -qx 'DynamicUser=no' <<<"$props" && grep -qx 'User=root' <<<"$props"; then
+    ok "gnome-headless-session@.service runs with DynamicUser=no, User=root"
   else
-    change "install $DROPIN_DIR/$DROPIN_NAME (DynamicUser=no, User=gdm)" write_dropin
+    change "install $DROPIN_DIR/$DROPIN_NAME (DynamicUser=no, User=root)" write_dropin
   fi
 }
 
@@ -370,6 +459,10 @@ setup_headless() {
     change "$user: enable headless RDP" as_user "$user" grdctl --headless rdp enable
   fi
 
+  # g-r-d streams the screen through PipeWire. A user manager that was already running when
+  # GNOME was installed never starts the socket, and every login then fails with "Couldn't
+  # connect pipewire context".
+  ensure_user_unit "$user" pipewire.socket
   ensure_user_unit "$user" gnome-remote-desktop-headless.service
 
   # A headless session must not suspend the host because nobody touches it.
@@ -383,12 +476,39 @@ setup_headless() {
 
   # Nobody sits at a headless session: a locked one only swallows input (docs/gnome-host-setup.md),
   # and RDP credentials already guard it.
+  # …nor blank its screen.
+  current=$(as_user "$user" gsettings get org.gnome.desktop.session idle-delay 2>/dev/null || true)
+  if [[ "$current" == "uint32 0" ]]; then
+    ok "$user: screen blanking disabled"
+  else
+    change "$user: disable screen blanking" \
+      as_user "$user" gsettings set org.gnome.desktop.session idle-delay 0
+  fi
+
   current=$(as_user "$user" gsettings get org.gnome.desktop.screensaver lock-enabled 2>/dev/null || true)
   if [[ "$current" == "false" ]]; then
     ok "$user: screen lock disabled"
   else
     change "$user: disable the screen lock" \
       as_user "$user" gsettings set org.gnome.desktop.screensaver lock-enabled false
+  fi
+}
+
+# valid_cidr NET: an IPv4 or IPv6 address with an optional prefix length.
+valid_cidr() {
+  local net=$1 addr prefix o
+  addr=${net%%/*}
+  prefix=
+  [[ "$net" == */* ]] && prefix=${net#*/}
+  if [[ "$addr" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]]; then
+    for o in "${BASH_REMATCH[@]:1}"; do
+      ((10#$o <= 255)) || return 1
+    done
+    [[ -z "$prefix" ]] || { [[ "$prefix" =~ ^[0-9]{1,2}$ ]] && ((10#$prefix <= 32)); }
+  elif [[ "$addr" == *:* && "$addr" =~ ^[0-9A-Fa-f:]+$ ]]; then
+    [[ -z "$prefix" ]] || { [[ "$prefix" =~ ^[0-9]{1,3}$ ]] && ((10#$prefix <= 128)); }
+  else
+    return 1
   fi
 }
 
@@ -399,7 +519,16 @@ main() {
     --apply) MODE=apply ;;
     --system) SYSTEM=1 ;;
     --install) INSTALL=1 ;;
+    --desktop) DESKTOP=1 ;;
     --firewall) FIREWALL=1 ;;
+    --allow-from)
+      if [[ $# -lt 2 ]] || ! valid_cidr "$2"; then
+        echo "bad --allow-from '${2:-}' (want a network such as 10.1.0.0/21 or fd00::/64)" >&2
+        exit 1
+      fi
+      ALLOW_FROM=$2
+      shift
+      ;;
     --headless)
       [[ $# -ge 2 ]] || {
         echo "--headless needs USER:PORT[:persistent]" >&2
@@ -430,6 +559,9 @@ main() {
   fi
 
   printf 'drift-host-setup: mode=%s\n' "$MODE"
+  if [[ $DESKTOP -eq 1 ]]; then
+    ensure_desktop
+  fi
   if [[ $INSTALL -eq 1 ]]; then
     ensure_packages
   fi

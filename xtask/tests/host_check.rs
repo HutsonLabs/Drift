@@ -189,6 +189,12 @@ fn broken_hosts_are_detected() {
     let dynamic = AFTER.replace("DynamicUser=no", "DynamicUser=yes");
     assert!(failing(&dynamic).iter().any(|n| n.contains("drop-in")));
 
+    // GNOME-WIZARD: a root drop-in (what the setup installs now) passes as well as User=gdm.
+    let root = AFTER.replace("User=gdm", "User=root");
+    assert!(!failing(&root).iter().any(|n| n.contains("drop-in")), "{:?}", failing(&root));
+    let other = AFTER.replace("User=gdm", "User=nobody");
+    assert!(failing(&other).iter().any(|n| n.contains("drop-in")));
+
     // A truncated report fails as a whole.
     assert!(failing(&AFTER.replace("### end", "")).iter().any(|n| n.contains("report complete")));
 }

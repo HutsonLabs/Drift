@@ -8,7 +8,16 @@ import type {
   OpenConnection,
   ProfileEntry_Serialize,
   ProfileIssue,
+  RunMode,
   SecretsUpdate,
+  SetupError,
+  SetupIssue,
+  SetupLine,
+  SetupOptions,
+  SetupResult_Serialize,
+  SignIn,
+  Target,
+  Trust,
 } from "../src/bindings";
 import { type ConnectionsApi, ConnectionsApp } from "../src/connectionsApp";
 import { entry, flush, profile } from "./helpers";
@@ -25,6 +34,28 @@ export function fakeValidate(p: ConnectionProfile_Deserialize): ProfileIssue[] {
   return issues;
 }
 
+/** One scripted `setup_run`: the lines it streams, then its result. */
+export interface FakeRun {
+  lines: SetupLine[];
+  result: { status: "ok"; data: SetupResult_Serialize } | { status: "error"; error: SetupError };
+}
+
+/** What the Rust side's `SetupOptions::defaults` plus a generated password give. */
+export function fakeDefaults(host: string, account: string): SetupOptions {
+  const name = /^[0-9.:]+$/.test(host) ? host : (host.split(".")[0] ?? host);
+  return {
+    name,
+    account,
+    port: 3390,
+    rdp_username: account,
+    rdp_password: "GeneratedPassword1234567",
+    remote_login: false,
+    install_desktop: true,
+    open_firewall: true,
+    allow_from: null,
+  };
+}
+
 export class FakeConnectionsApi {
   calls: unknown[][] = [];
   /** The unsaved profile of a `drift-connect:` link that launched the app (`take_connect_link`). */
@@ -33,6 +64,15 @@ export class FakeConnectionsApi {
   open: OpenConnection[] = [];
   saveIssues: ProfileIssue[] | null = null;
   commandError: CommandError | null = null;
+  /** `setup_connect` answers in order; the last one repeats. */
+  signIns: SignIn[] = [{ kind: "ready", sudo: "passwordless" }];
+  /** `setup_install_key`'s answer. */
+  installAnswer: SignIn = { kind: "ready", sudo: "passwordless" };
+  /** `setup_run` answers in order; the last one repeats. */
+  runs: FakeRun[] = [];
+  /** Where `setup_run` sends its lines (the test wires it to the page's event handler). */
+  emit: ((line: SetupLine) => void) | null = null;
+  publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFake drift@mac";
 
   names(): string[] {
     return this.calls.map((c) => String(c[0]));
@@ -73,6 +113,31 @@ export class FakeConnectionsApi {
       showWindow: (id: string) => (log("showWindow", id), done()),
       disconnectProfile: (id: string) => (log("disconnectProfile", id), done()),
       connections: () => (log("connections"), ok({ open: [...this.open] })),
+      setupDefaults: (host: string, account: string) => (log("setupDefaults", host, account), Promise.resolve(fakeDefaults(host, account))),
+      setupValidate: (o: SetupOptions) => {
+        log("setupValidate", o);
+        const issues: SetupIssue[] = [];
+        if (o.name.trim() === "") issues.push("name");
+        if (o.port === 0) issues.push("port");
+        return Promise.resolve(issues);
+      },
+      setupPublicKey: () => (log("setupPublicKey"), ok(this.publicKey)),
+      setupForgetHost: (host: string, port: number) => (log("setupForgetHost", host, port), ok(null)),
+      setupConnect: (t: Target, trust: Trust) => {
+        log("setupConnect", t, trust);
+        const answer = this.signIns.length > 1 ? this.signIns.shift()! : this.signIns[0]!;
+        return ok(answer);
+      },
+      setupInstallKey: (t: Target, password: string) => (log("setupInstallKey", t, password), ok(this.installAnswer)),
+      setupRun: async (o: SetupOptions, mode: RunMode, sudo: string | null) => {
+        log("setupRun", o, mode, sudo);
+        const run = this.runs.length > 1 ? this.runs.shift()! : this.runs[0];
+        if (!run) throw new Error("no scripted setup run");
+        for (const line of run.lines) this.emit?.(line);
+        await Promise.resolve();
+        return run.result;
+      },
+      setupDisconnect: () => (log("setupDisconnect"), ok(null)),
       takeConnectLink: () => {
         log("takeConnectLink");
         const link = this.pendingLink;
@@ -84,11 +149,15 @@ export class FakeConnectionsApi {
 }
 
 /** Starts a Connections page against `fake`; `clock.now` drives pills and countdowns. */
-export async function startConnections(fake = new FakeConnectionsApi(), clock = { now: 1_000_000 }) {
+export async function startConnections(fake = new FakeConnectionsApi(), clock = { now: 1_000_000 }, copied: string[] = []) {
   const root = document.createElement("main");
   root.id = "app";
   document.body.replaceChildren(root);
-  const app = new ConnectionsApp(root, fake.api(), () => clock.now);
+  const app = new ConnectionsApp(root, fake.api(), () => clock.now, (t) => {
+    copied.push(t);
+    return Promise.resolve();
+  });
+  fake.emit = (line) => app.onSetupLine({ line });
   await app.start();
   await flush();
   return { root, app, fake, clock };

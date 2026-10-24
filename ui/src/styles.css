@@ -856,3 +856,20 @@ body.session[data-controls="keys"] {
   height: 1px;
   opacity: 0;
 }
+
+/* Set Up a Linux Machine (GNOME-WIZARD) */
+.setup .lead { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.setup .fingerprint { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; user-select: all; }
+.setup .warning { display: flex; gap: 8px; color: var(--danger); }
+.setup-lines { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+.setup-lines li { display: flex; align-items: center; gap: 6px; }
+.setup-lines li.ok { color: var(--secondary); }
+.setup-lines li.would, .setup-lines li.change { color: inherit; }
+.setup-lines li.error { color: var(--danger); }
+.setup-lines li.note { color: var(--secondary); font-style: italic; }
+.setup-output pre { font-family: var(--mono); font-size: 11px; max-height: 180px; overflow: auto; white-space: pre-wrap; color: var(--secondary); }
+.setup-result { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+.setup-result .grow { flex: 1; }
+.setup .spinner { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--accent-soft); border-top-color: var(--accent); animation: setup-spin 0.9s linear infinite; }
+@keyframes setup-spin { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) { .setup .spinner { animation: none; } }

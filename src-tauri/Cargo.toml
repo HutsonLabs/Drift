@@ -39,6 +39,8 @@ drift-clipboard.workspace = true
 drift-gfx.workspace = true
 drift-input.workspace = true
 drift-rdp.workspace = true
+drift-ssh = { workspace = true, features = ["specta"] }
+getrandom.workspace = true
 drift-render.workspace = true
 drift-video.workspace = true
 objc2.workspace = true
@@ -72,6 +74,7 @@ drift-ios.workspace = true
 objc2-ui-kit.workspace = true
 
 [dev-dependencies]
+drift-testkit.workspace = true
 muda = { version = "0.19", default-features = false }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }

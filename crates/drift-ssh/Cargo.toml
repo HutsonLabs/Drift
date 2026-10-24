@@ -1,0 +1,30 @@
+[package]
+name = "drift-ssh"
+description = "In-app SSH for the setup wizard: device key, app known_hosts, password-once key install, exec with stdin and streamed output."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+## Derive `specta::Type` on IPC-facing types (enabled by drift-app for tauri-specta bindings).
+specta = ["dep:specta"]
+
+[dependencies]
+getrandom.workspace = true
+russh.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+specta = { workspace = true, optional = true }
+
+[dev-dependencies]
+drift-testkit.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["process", "rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

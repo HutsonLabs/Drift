@@ -10,6 +10,7 @@ import type {
   ConnectionsIntent,
   OpenConnection,
   ProfileEntry_Serialize,
+  SetupLineEmitted,
   Thumbnail,
   commands,
 } from "./bindings";
@@ -22,6 +23,7 @@ import { type Filter, renderGallery } from "./views/gallery";
 import { openMenu } from "./views/menu";
 import { type FormDraft, type FormModel, formModel, isDirty, toSecretsUpdate } from "./views/profileForm";
 import { renderSheet, type SheetHandle } from "./views/sheet";
+import { type SetupApi, SetupWizard } from "./views/setupWizard";
 
 /** The IPC commands the Connections page uses. */
 export type ConnectionsApi = Pick<
@@ -38,7 +40,8 @@ export type ConnectionsApi = Pick<
   | "disconnectProfile"
   | "connections"
   | "takeConnectLink"
->;
+> &
+  SetupApi;
 
 /** The Connections page controller. */
 export class ConnectionsApp {
@@ -51,6 +54,8 @@ export class ConnectionsApp {
   private query = "";
   private focusId: string | null = null;
   private sheet: { model: FormModel; handle: SheetHandle } | null = null;
+  /** "Set Up a Linux Machine", while open (GNOME-WIZARD). */
+  private wizard: SetupWizard | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
 
   private readonly page: HTMLElement;
@@ -66,6 +71,7 @@ export class ConnectionsApp {
     root: HTMLElement,
     private readonly api: ConnectionsApi,
     private readonly now: () => number = () => Date.now(),
+    private readonly copyText: (text: string) => Promise<void> = (text) => navigator.clipboard.writeText(text),
   ) {
     const seg = (f: Filter, label: string) =>
       h("button", { type: "button", "aria-pressed": String(f === this.filter), onclick: () => this.setFilter(f) }, label);
@@ -119,6 +125,7 @@ export class ConnectionsApp {
       h("div", { class: "seg", role: "group", "aria-label": "Show" }, Object.values(this.filterButtons)),
       searchToggle,
       h("div", { class: "search" }, icon("search"), search),
+      h("button", { type: "button", class: "tb-btn", "aria-label": "Set Up a Linux Machine", title: "Set up a Linux machine over SSH", onclick: () => this.openWizard() }, icon("server")),
       h("button", { type: "button", class: "tb-btn", "aria-label": "New Connection", title: "Add a GNOME computer (⌘N)", onclick: () => void this.openNew() }, icon("plus")),
     );
     this.noticeSlot = h("div", { class: "notice-slot" });
@@ -179,6 +186,24 @@ export class ConnectionsApp {
       this.renderGallery();
       this.openEdit(intent.profile_id);
     }
+  }
+
+  /** A line of the running machine setup (the `setupLineEmitted` event). */
+  onSetupLine(e: SetupLineEmitted): void {
+    this.wizard?.line(e.line);
+  }
+
+  /** The toolbar's "Set Up a Linux Machine" (GNOME-WIZARD). */
+  private openWizard(): void {
+    if (this.wizard) return;
+    if (this.sheet) this.closeSheet();
+    this.wizard = new SetupWizard(this.sheetLayer, this.api, {
+      copy: (t) => this.copyText(t),
+      closed: () => {
+        this.wizard = null;
+      },
+      finish: (profile, rdpPassword) => this.openPrefilled(profile, rdpPassword),
+    });
   }
 
   /** Re-reads the clock into the uptime and countdown pills. */
@@ -327,9 +352,9 @@ export class ConnectionsApp {
    * The New Connection sheet filled from a `drift-connect:` link (`host/drift-gnome-setup`): an
    * unsaved profile, possibly with its certificate already pinned. Nothing is saved until Add.
    */
-  private openPrefilled(profile: ConnectionProfile_Serialize): void {
+  private openPrefilled(profile: ConnectionProfile_Serialize, rdpPassword = ""): void {
     if (this.sheet) this.closeSheet();
-    this.showSheet(formModel(profile, { isNew: true, hasRdpPassword: false, hasLinuxPassword: false }));
+    this.showSheet({ ...formModel(profile, { isNew: true, hasRdpPassword: false, hasLinuxPassword: false }), rdpPassword });
   }
 
   private openEdit(id: string): void {

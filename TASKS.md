@@ -23,6 +23,22 @@ Legend: `[ ]` pending · `[~]` in progress · `[✓]` landed
   Drift, with a QR code for iPhone and iPad (`docs/gnome-host-setup.md`). *The run against a
   real machine is a manual step in `docs/acceptance.md`.*
 
+## GNOME-WIZARD — Set up a machine from inside Drift
+
+ADR `GNOME-WIZARD-headless-setup`.
+
+- [✓] **WIZ-1 Host script fixes.** Root drop-in (polkit refuses `User=gdm` on Ubuntu 26.04),
+  `--desktop` minimal GNOME without NetworkManager, GDM enabled and `graphical.target` default,
+  `idle-delay 0`, `--allow-from CIDR`.
+- [✓] **WIZ-2 `drift_core::setup`.** Options → script arguments and environment, validation,
+  output line parser, summary and prefilled profile.
+- [✓] **WIZ-3 `drift-ssh`.** russh client: device key, app known_hosts, trust, password-once key
+  install, exec with stdin and streamed output, sudo.
+- [~] **WIZ-4 Wizard.** Tauri commands and the five-step "Set Up a Linux Machine…" view.
+  *Service, commands and view landed and tested (in-process SSH server, bun); the real script's
+  `--check` ran through the service on 10.1.2.5 with 0 changes. Clicking through it in the app
+  (Local Network prompt, a fresh server, password sudo, iPad) is in `docs/acceptance.md`.*
+
 ## IOS-0 — Decision
 
 - [✓] **IOS-0 ADR.** Write and accept `IOS-0-ios-client-mac-host-app-store`; add it to the ADR

@@ -128,6 +128,25 @@ export const commands = {
 	/**  The session's touch mode (resolved: `trackpad` or `direct`). */
 	touch: TouchMode,
 } | null>("phone_controls"),
+	/**  The wizard's options for `account` on `host`, with a generated RDP password. */
+	setupDefaults: (host: string, account: string) => __TAURI_INVOKE<SetupOptions>("setup_defaults", { host, account }),
+	/**  What is wrong with `options` (empty when they are fine). */
+	setupValidate: (options: SetupOptions) => __TAURI_INVOKE<SetupIssue[]>("setup_validate", { options }),
+	/**  Drift's public SSH key, for "Copy Public Key". */
+	setupPublicKey: () => typedError<string, CommandError>(__TAURI_INVOKE("setup_public_key")),
+	/**  Forgets the recorded SSH host key of `host:port` (after the user confirmed a changed key). */
+	setupForgetHost: (host: string, port: number) => typedError<null, CommandError>(__TAURI_INVOKE("setup_forget_host", { host, port })),
+	/**  Signs in to `target` with Drift's key. */
+	setupConnect: (target: Target, trust: Trust) => typedError<SignIn, CommandError>(__TAURI_INVOKE("setup_connect", { target, trust })),
+	/**  Adds Drift's key to the account with its password (used once, not kept), then signs in. */
+	setupInstallKey: (target: Target, password: string) => typedError<SignIn, CommandError>(__TAURI_INVOKE("setup_install_key", { target, password })),
+	/**
+	 *  Runs the setup in `mode`; every output line goes to the calling window as
+	 *  [`SetupLineEmitted`].
+	 */
+	setupRun: (options: SetupOptions, mode: RunMode, sudoPassword: string | null) => typedError<SetupResult_Serialize, SetupError>(__TAURI_INVOKE("setup_run", { options, mode, sudoPassword })),
+	/**  Ends the wizard's SSH session. */
+	setupDisconnect: () => typedError<null, CommandError>(__TAURI_INVOKE("setup_disconnect")),
 };
 
 /** Events */
@@ -136,6 +155,7 @@ export const events = {
 	connectionsIntentRequested: makeEvent<ConnectionsIntentRequested_Deserialize>("connections-intent-requested"),
 	phoneControlsChanged: makeEvent<PhoneControlsChanged>("phone-controls-changed"),
 	sessionViewChanged: makeEvent<SessionViewChanged_Deserialize>("session-view-changed"),
+	setupLineEmitted: makeEvent<SetupLineEmitted>("setup-line-emitted"),
 	thumbnailUpdated: makeEvent<ThumbnailUpdated>("thumbnail-updated"),
 	windowIdentityChanged: makeEvent<WindowIdentityChanged>("window-identity-changed"),
 };
@@ -365,6 +385,37 @@ profile_id: string }) & { profile?: never } |
 /**  The unsaved connection. */
 profile: ConnectionProfile_Serialize }) & { profile_id?: never };
 
+/**  Why connecting, signing in or running a command failed, with the one fix the wizard offers. */
+export type Diagnosis = 
+/**  No TCP connection (refused, no route, name not found). */
+{ kind: "unreachable"; 
+/**  The system's reason. */
+detail: string } | 
+/**  Connecting or signing in took longer than [`CONNECT_TIMEOUT`]. */
+{ kind: "timed-out" } | 
+/**  The host key is not recorded yet. */
+{ kind: "host-key-unknown"; 
+/**  `SHA256:…`. */
+fingerprint: string } | 
+/**  The host key differs from the recorded one. */
+{ kind: "host-key-changed"; 
+/**  `SHA256:…` of the new key. */
+fingerprint: string } | 
+/**  The account does not accept the device key. */
+{ kind: "key-not-authorized"; 
+/**  Whether a password login is offered (to install the key with). */
+offers_password: boolean } | 
+/**  The password was wrong. */
+{ kind: "password-rejected" } | 
+/**  The server does not take passwords. */
+{ kind: "password-not-offered" } | 
+/**  The connection ended before the command did. */
+{ kind: "connection-lost" } | 
+/**  Anything else. */
+{ kind: "failed"; 
+/**  What happened. */
+detail: string };
+
 /**  Why a session stopped (plan §3). */
 export type DisconnectReason = 
 /**  Transport-level failure (reset, unreachable, DNS). Retryable. */
@@ -456,6 +507,17 @@ export type OpenConnection = {
 	attempt: number | null,
 };
 
+/**  How a run ended. */
+export type Outcome = 
+/**  `--check`: nothing would change. */
+"converged" | 
+/**  `--check`: changes are pending. */
+"changes-pending" | 
+/**  `--apply` succeeded. */
+"applied" | 
+/**  The script reported errors, or the command did not finish. */
+"failed";
+
 /**  What the session page shows of the iPhone controls (the `PhoneControlsChanged` event). */
 export type PhoneControls = {
 	/**  The key row is on screen (the page is laid out as its strip). */
@@ -533,6 +595,13 @@ export type ProfileProblem =
 "invalid-port" | 
 /**  The field does not apply to the profile's mode. */
 "not-applicable";
+
+/**  Whether a run only reports (`--check`) or changes the machine (`--apply`). */
+export type RunMode = 
+/**  Change nothing; list what would change. */
+"check" | 
+/**  Make the changes. */
+"apply";
 
 /**  Which screen the webview shows for a session window. */
 export type Screen = 
@@ -708,6 +777,157 @@ export type SessionView_Serialize = {
 	stats: StatsView | null,
 };
 
+/**  Why a run did not start or did not finish. */
+export type SetupError = 
+/**  Sign in first. */
+{ kind: "not-signed-in" } | 
+/**  The options need fixing. */
+{ kind: "invalid"; 
+/**  The fields to fix. */
+issues: SetupIssue[] } | 
+/**  The account needs its password for sudo. */
+{ kind: "sudo-password-needed" } | 
+/**  sudo did not accept the password. */
+{ kind: "sudo-password-rejected" } | 
+/**  The connection failed. */
+{ kind: "ssh"; 
+/**  What went wrong. */
+diagnosis: Diagnosis };
+
+/**  A setup option the wizard must ask about again. */
+export type SetupIssue = 
+/**  The connection needs a name. */
+"name" | 
+/**  Not a Linux account name. */
+"account" | 
+/**  Not a TCP port. */
+"port" | 
+/**  The headless port is Remote Login's. */
+"port-taken-by-remote-login" | 
+/**  The RDP user name is empty or has control characters. */
+"rdp-username" | 
+/**  The RDP password is shorter than 8 characters or has control characters. */
+"rdp-password" | 
+/**  Not a network address with an optional prefix length. */
+"allow-from";
+
+/**  One line of `drift-host-setup.sh` output. */
+export type SetupLine = 
+/**  `drift-host-setup: mode=…`. */
+{ kind: "mode"; 
+/**  The run's mode. */
+mode: RunMode } | 
+/**  `ok:` — already as wanted. */
+{ kind: "ok"; 
+/**  What is fine. */
+text: string } | 
+/**  `would:` — `--check` would change this. */
+{ kind: "would"; 
+/**  What would change. */
+text: string } | 
+/**  The `$ command` line under a `would:`. */
+{ kind: "command"; 
+/**  The command. */
+text: string } | 
+/**  `change:` — `--apply` is changing this. */
+{ kind: "change"; 
+/**  What changes. */
+text: string } | 
+/**  `skip:` — not checked yet. */
+{ kind: "skip"; 
+/**  What was skipped. */
+text: string } | 
+/**  `wait:` — waiting for something to start. */
+{ kind: "wait"; 
+/**  What it waits for. */
+text: string } | 
+/**  `error:`. */
+{ kind: "error"; 
+/**  The error. */
+text: string } | 
+/**  `fingerprint: OWNER aa:bb:…` — a daemon's certificate. */
+{ kind: "fingerprint"; 
+/**  `system` or the headless account. */
+owner: string; 
+/**  The certificate's SHA-256. */
+fingerprint: CertFingerprint } | 
+/**  `drift-host-setup: N change(s) …, M error(s)`. */
+{ kind: "summary"; 
+/**  Changes pending or applied. */
+changes: number; 
+/**  Errors. */
+errors: number } | 
+/**  Anything else (package manager output). */
+{ kind: "output"; 
+/**  The line. */
+text: string };
+
+/**  One line of the running setup's output, sent to the window that started it. */
+export type SetupLineEmitted = {
+	/**  The parsed line. */
+	line: SetupLine,
+};
+
+/**  What the wizard sets up on one machine. */
+export type SetupOptions = {
+	/**  The connection's name in Drift. */
+	name: string,
+	/**  The Linux account that gets the persistent headless session. */
+	account: string,
+	/**  The headless session's RDP port. */
+	port: number,
+	/**  The RDP user name. */
+	rdp_username: string,
+	/**  The RDP password to set; `None` keeps the credentials already on the machine. */
+	rdp_password: string | null,
+	/**  Also set up Remote Login (GNOME's login screen on port 3389). */
+	remote_login: boolean,
+	/**  Install a minimal GNOME when GNOME Shell or GDM is missing. */
+	install_desktop: boolean,
+	/**  Open the ports in ufw or firewalld. */
+	open_firewall: boolean,
+	/**  Open them only to this network (`10.1.0.0/21`, `fd00::/64`). */
+	allow_from: string | null,
+};
+
+/**  What a finished run reported. */
+export type SetupResult = SetupResult_Serialize | SetupResult_Deserialize;
+
+/**  What a finished run reported. */
+export type SetupResult_Deserialize = {
+	/**  How it ended. */
+	outcome: Outcome,
+	/**  The script's `error:` lines. */
+	errors: string[],
+	/**  Changes pending (check) or applied (apply), from the summary line. */
+	changes: number | null,
+	/**  After a successful apply: the unsaved connections, certificates pinned. */
+	profiles: ConnectionProfile_Deserialize[],
+};
+
+/**  What a finished run reported. */
+export type SetupResult_Serialize = {
+	/**  How it ended. */
+	outcome: Outcome,
+	/**  The script's `error:` lines. */
+	errors: string[],
+	/**  Changes pending (check) or applied (apply), from the summary line. */
+	changes: number | null,
+	/**  After a successful apply: the unsaved connections, certificates pinned. */
+	profiles: ConnectionProfile_Serialize[],
+};
+
+/**  Where signing in got to. */
+export type SignIn = 
+/**  Signed in; `sudo` says whether the run needs the account's password. */
+{ kind: "ready"; 
+/**  How the run gets root. */
+sudo: Sudo } | 
+/**  Not signed in, and why (the wizard offers the fix). */
+{ kind: "problem"; 
+/**  What went wrong. */
+diagnosis: Diagnosis };
+
 /**  A 2-D size. `Size<u32>` is used for pixels, `Size<f64>` for AppKit points. */
 export type Size<T> = {
 	/**  Horizontal extent. */
@@ -734,6 +954,23 @@ export type StatsView = {
 	unacked_frames: number,
 };
 
+/**  How the run gets root on the machine. */
+export type Sudo = 
+/**  The account has passwordless sudo (`sudo -n`). */
+"passwordless" | 
+/**  sudo reads the account's password from the first line of stdin (`sudo -S`). */
+"password";
+
+/**  The machine and account to sign in to. */
+export type Target = {
+	/**  Host name or address. */
+	host: string,
+	/**  SSH port. */
+	port: number,
+	/**  Account. */
+	user: string,
+};
+
 /**
  *  A live session's preview for its gallery card, as a `data:image/png;base64,…` URL.
  *  `image: None` drops the preview (the session ended). Never logged, never written to disk.
@@ -756,6 +993,13 @@ export type TouchMode =
 "trackpad" | 
 /**  Tap where you touch. */
 "direct";
+
+/**  What to do with a host key that is not recorded yet. */
+export type Trust = 
+/**  Stop and report it. */
+"known-only" | 
+/**  Record it (the wizard's "Trust and Connect"). */
+"trust-new";
 
 /**  A session window's title bar: the identity capsule and the buttons. */
 export type WindowIdentity = {

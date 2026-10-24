@@ -441,8 +441,9 @@ pub fn evaluate(report: &HostReport, exp: &Expectations) -> Vec<Check> {
             let props = r.unit_props.iter().find(|(n, _)| *n == name).map(|(_, p)| p);
             let has = |k: &str, v: &str| props.is_some_and(|p| p.iter().any(|(pk, pv)| pk == k && pv == v));
             out.push(check(
-                format!("{u}: headless session drop-in (DynamicUser=no, User=gdm)"),
-                has("DynamicUser", "no") && has("User", "gdm"),
+                // User=gdm passes on AnduinOS; the setup installs User=root since GNOME-WIZARD.
+                format!("{u}: headless session drop-in (DynamicUser=no, User=root or gdm)"),
+                has("DynamicUser", "no") && (has("User", "root") || has("User", "gdm")),
                 format!("{props:?}"),
             ));
         }

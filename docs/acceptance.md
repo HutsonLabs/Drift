@@ -454,6 +454,31 @@ Mac").
       Drift opens (warm and cold launch) with the same form prefilled; paste the password (from
       the Mac via Universal Clipboard, or typed), Save and connect.
 
+## GNOME-WIZARD — Set Up a Linux Machine from inside Drift (ADR `GNOME-WIZARD-headless-setup`)
+
+Done on 2026-10-24 against 10.1.2.5 (Ubuntu 26.04.1 server, GDM 50.1), from the dev Mac:
+`host/drift-host-setup.sh --check` by hand and through the wizard's service (`setup_live`, over
+Tailscale) reports 0 changes after the fixes; a 20 s FreeRDP session to :3390 streamed (RDPGFX)
+once PipeWire ran; `drift-ssh`'s live test passed against OpenSSH. Still to do in the app:
+
+- [ ] **Mac, first run:** Connections → toolbar "Set Up a Linux Machine" → a LAN machine. macOS
+      asks for Local Network access (M9-3) the first time; allow it. The host key's `SHA256:`
+      fingerprint matches `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the machine.
+- [ ] **Password once:** an account without Drift's key and with password logins: the account
+      password adds the key (`drift@mac` in `~/.ssh/authorized_keys`); the next sign-in asks for
+      nothing. Without password logins, "Copy Public Key" puts the line on the clipboard.
+- [ ] **Password sudo:** an account whose sudo asks for a password: the options step asks for it;
+      a wrong one says "sudo did not accept that password."; the right one runs the check and
+      the setup, and the password appears in no output line.
+- [ ] **Fresh server:** a minimal Ubuntu 26.04 server without GNOME: "Install GNOME if missing"
+      installs the minimal set (no NetworkManager; the machine stays reachable), the setup ends
+      in "… is ready", "Add to Drift" opens New Connection with the RDP password filled in and
+      the certificate pinned; Save and connect without a certificate prompt; reboot the machine
+      and connect again.
+- [ ] **Fedora / Arch:** the same on Fedora 44 and Arch (the package sets were only resolved in
+      containers).
+- [ ] **iPad:** the same wizard from Drift on iPad (device key `drift@ios`).
+
 ## RESP — Mobile responsiveness on a device (`docs/responsive/tasks.md`)
 
 The layout is checked in WebKit by `bun run responsive` (RESP-1, in the gate); these need a real
