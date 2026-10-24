@@ -37,7 +37,7 @@ export function fakeValidate(p: ConnectionProfile_Deserialize): ProfileIssue[] {
 /** One scripted `setup_run`: the lines it streams, then its result. */
 export interface FakeRun {
   lines: SetupLine[];
-  result: Result<SetupResult_Serialize, SetupError>;
+  result: { status: "ok"; data: SetupResult_Serialize } | { status: "error"; error: SetupError };
 }
 
 /** What the Rust side's `SetupOptions::defaults` plus a generated password give. */

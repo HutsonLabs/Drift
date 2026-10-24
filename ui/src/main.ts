@@ -14,5 +14,7 @@ if (root) {
   void events.connectionsChanged(here).listen((e) => app.onConnections(e.payload));
   void events.thumbnailUpdated(here).listen((e) => app.onThumbnail(e.payload));
   void events.connectionsIntentRequested(here).listen((e) => void app.onIntent(e.payload));
+  // Set Up a Linux Machine (GNOME-WIZARD): the running setup's lines, to the window that runs it.
+  void events.setupLineEmitted(here).listen((e) => app.onSetupLine(e.payload));
   void app.start();
 }
