@@ -34,7 +34,10 @@ ADR `GNOME-WIZARD-headless-setup`.
   output line parser, summary and prefilled profile.
 - [✓] **WIZ-3 `drift-ssh`.** russh client: device key, app known_hosts, trust, password-once key
   install, exec with stdin and streamed output, sudo.
-- [ ] **WIZ-4 Wizard.** Tauri commands and the five-step "Set Up a Linux Machine…" view.
+- [~] **WIZ-4 Wizard.** Tauri commands and the five-step "Set Up a Linux Machine…" view.
+  *Service, commands and view landed and tested (in-process SSH server, bun); the real script's
+  `--check` ran through the service on 10.1.2.5 with 0 changes. Clicking through it in the app
+  (Local Network prompt, a fresh server, password sudo, iPad) is in `docs/acceptance.md`.*
 
 ## IOS-0 — Decision
 

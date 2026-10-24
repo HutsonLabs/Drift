@@ -8,6 +8,12 @@ on AnduinOS 2.0.3 (Ubuntu 26.04 base, GNOME Shell 50.1, gdm3 50.1, gnome-remote-
 GDM 50.1), which is where the root drop-in, `--desktop` and the PipeWire step come from (ADR
 `GNOME-WIZARD-headless-setup`); its manual checks are in `docs/acceptance.md` (GNOME-only).
 
+Drift itself can do the same from inside the app, on Mac, iPhone and iPad: Connections →
+"Set Up a Linux Machine" signs in over SSH with Drift's own key (kept in the app; the host key
+is trusted only when you click "Trust and Continue"), adds that key with the account password
+once, runs `host/drift-host-setup.sh` (`--check`, then `--apply`) and opens the prefilled New
+Connection form with the RDP password filled in (ADR `GNOME-WIZARD-headless-setup`).
+
 | File | Purpose |
 |---|---|
 | `host/drift-gnome-setup` | Runs on the Mac: sets up one machine over SSH and opens the prefilled connection in Drift. |
