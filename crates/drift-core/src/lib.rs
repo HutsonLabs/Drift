@@ -31,6 +31,7 @@ pub mod menus;
 pub mod messages;
 pub mod profile;
 pub mod reconnect;
+pub mod setup;
 pub mod state;
 pub mod store;
 pub mod triggers;
