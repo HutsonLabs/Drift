@@ -459,6 +459,10 @@ setup_headless() {
     change "$user: enable headless RDP" as_user "$user" grdctl --headless rdp enable
   fi
 
+  # g-r-d streams the screen through PipeWire. A user manager that was already running when
+  # GNOME was installed never starts the socket, and every login then fails with "Couldn't
+  # connect pipewire context".
+  ensure_user_unit "$user" pipewire.socket
   ensure_user_unit "$user" gnome-remote-desktop-headless.service
 
   # A headless session must not suspend the host because nobody touches it.
