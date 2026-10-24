@@ -157,7 +157,9 @@ fn remote_command_never_carries_a_secret() {
         "sudo -n bash -s -- '--check' '--desktop' '--install' '--firewall' '--headless' 'hutsonphd:3390:persistent'"
     );
     let with_password = remote_command(Sudo::Password, &args);
-    assert!(with_password.starts_with("sudo -S -p '' bash -s -- '--check'"), "{with_password}");
+    // -k: with a cached sudo timestamp, `sudo -S` would not read the password line, and bash
+    // would run the password as a command (and print it in "command not found").
+    assert!(with_password.starts_with("sudo -k -S -p '' bash -s -- '--check'"), "{with_password}");
     assert!(!with_password.contains("Secret-pass1"));
 
     let script = "#!/usr/bin/env bash\necho hi\n";
