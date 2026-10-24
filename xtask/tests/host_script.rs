@@ -144,6 +144,59 @@ fn setup_script_rejects_a_bad_allow_from() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("bad --allow-from"), "{out:?}");
 }
 
+/// A fake `ssh` that answers `ssh -G` and records every other remote command in `log`.
+fn fake_ssh(dir: &std::path::Path) -> PathBuf {
+    let bin = dir.join("bin");
+    std::fs::create_dir_all(&bin).expect("fake bin dir");
+    let ssh = bin.join("ssh");
+    std::fs::write(
+        &ssh,
+        format!(
+            "#!/usr/bin/env bash\nif [[ $1 == -G ]]; then printf 'user me\\nhostname box.local\\n'; exit 0; fi\n\
+             printf '%s\\n' \"${{@: -1}}\" >> '{}'\ncat >/dev/null\n[[ ${{@: -1}} == mktemp* ]] && echo /tmp/drift-setup.X\nexit 0\n",
+            dir.join("log").display()
+        ),
+    )
+    .expect("write fake ssh");
+    let mut perms = std::fs::metadata(&ssh).expect("fake ssh").permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
+    std::fs::set_permissions(&ssh, perms).expect("chmod fake ssh");
+    bin
+}
+
+fn gnome_setup_with_fake_ssh(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
+    let bin = fake_ssh(dir);
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap_or_default());
+    Command::new(host("drift-gnome-setup"))
+        .args(args)
+        .env("PATH", path)
+        .output()
+        .expect("run host/drift-gnome-setup")
+}
+
+/// GNOME-WIZARD: the Mac-side command always asks for the minimal desktop (check-first, so a
+/// machine that has GNOME is not touched) and passes `--allow-from` through.
+#[test]
+fn gnome_setup_installs_the_desktop_and_passes_allow_from() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let out = gnome_setup_with_fake_ssh(dir.path(), &["--check", "--allow-from", "10.1.0.0/21", "me@box.local"]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let log = std::fs::read_to_string(dir.path().join("log")).expect("fake ssh log");
+    let run = log.lines().find(|l| l.contains("setup.sh")).expect("setup.sh run");
+    assert!(run.contains(" --desktop "), "{run}");
+    assert!(run.contains(" --firewall --allow-from 10.1.0.0/21 "), "{run}");
+}
+
+/// `--allow-from` lands in a remote command line, so anything but a network is refused locally.
+#[test]
+fn gnome_setup_refuses_an_allow_from_that_is_not_a_network() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let out = gnome_setup_with_fake_ssh(dir.path(), &["--check", "--allow-from", "1.2.3.4;reboot", "me@box.local"]);
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("not a network"), "{out:?}");
+    assert!(!dir.path().join("log").exists(), "nothing ran over SSH");
+}
+
 /// GNOME-WIZARD: g-r-d streams the screen through PipeWire. A user manager that was already
 /// running when GNOME was installed never starts `pipewire.socket`, and every RDP login then
 /// ends with "Couldn't connect pipewire context" (seen on 10.1.2.5, 2026-10-24).
