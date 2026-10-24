@@ -42,6 +42,9 @@ async fn the_real_setup_script_checks_a_real_machine() {
         .expect("check");
     assert_ne!(result.outcome, Outcome::Failed, "{:?}", result.errors);
     assert_eq!(lines.first(), Some(&SetupLine::Mode { mode: RunMode::Check }));
-    assert!(lines.iter().any(|l| matches!(l, SetupLine::Fingerprint { owner, .. } if owner == user)), "{lines:?}");
+    assert!(
+        lines.iter().any(|l| matches!(l, SetupLine::Fingerprint { owner, .. } if owner == user)),
+        "{lines:?}"
+    );
     service.disconnect().await;
 }

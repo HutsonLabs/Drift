@@ -432,7 +432,11 @@ pub fn setup_public_key(setup: State<'_, SetupService>) -> Result<String, Comman
 /// Forgets the recorded SSH host key of `host:port` (after the user confirmed a changed key).
 #[tauri::command]
 #[specta::specta]
-pub fn setup_forget_host(setup: State<'_, SetupService>, host: String, port: u16) -> Result<(), CommandError> {
+pub fn setup_forget_host(
+    setup: State<'_, SetupService>,
+    host: String,
+    port: u16,
+) -> Result<(), CommandError> {
     setup.forget_host(&host, port).map_err(storage)
 }
 
