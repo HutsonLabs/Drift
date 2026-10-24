@@ -16,6 +16,7 @@ applying all of them to the pristine vendored tree reproduces `third_party/ironr
 | `0007-fix-never-log-credentials.patch` | connector, pdu | Stop logging credentials at DEBUG: the RDSTLS request no longer names the one-time user, and `Credentials`'s `Debug` prints the user name's length instead of its value (M9-3) |
 | `0008-feat-ironrdp-server-per-connection-dvc-factories.patch` | server | `RdpServer::add_dvc_factory`: an embedder attaches its own dynamic virtual channels to each connection (Drift Host offers `Drift::Mac::v1`, HOST-2; covered by `drift-host`'s loopback test) |
 | `0009-feat-ironrdp-egfx-drift-hevc-codec.patch` | egfx, testsuite-core | `Codec1Type::DriftHevc` (0xD001, outside MS-RDPEGFX's range) and `GraphicsPipelineServer::send_drift_hevc_frame`: Drift Host's HEVC frames for a Drift client that negotiated them on `Drift::Mac::v1` (EXT-5); never sent to other clients, so not for upstream as is |
+| `0010-fix-ironrdp-sspi-0.23-and-picky-7.0.0-rc.26.patch` | connector, acceptor, mstsgu, vmconnect, ironrdp | sspi 0.21 → 0.23 and picky rc.25 → rc.26, so russh (Drift's in-app SSH, GNOME-WIZARD) can share the RustCrypto releases; `TsRequest::buffer_len` now returns a `Result` |
 
 Each patch squashes the Red test commit and the implementation commit of one change; the tests
 live in `ironrdp-testsuite-core`. Regenerate them after changing a commit pair:
