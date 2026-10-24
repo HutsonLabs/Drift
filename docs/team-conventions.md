@@ -63,6 +63,7 @@ Current ADRs:
 | `APP-icon` | Icon Composer `AppIcon.icon` is the one icon source: Mac bundle (`Assets.car` via Tauri), iOS target resource, no PNG appiconset; flat `icns`/PNGs rendered from it |
 | `RESP-2-touch-platform` | `data-platform` (ios/macos), touch sizing under `pointer: coarse`, `cfg`/`sheet` containers and compact breakpoints, safe areas left to WKWebView, the WebKit breakpoint harness as the layout test |
 | `GNOME-only` | Drift Host retired; GNOME targets only; `drift-connect:` links; `host/drift-gnome-setup` |
+| `GNOME-WIZARD-headless-setup` | in-app SSH (russh, device key, strict host keys), setup wizard, script fixes (root drop-in, `--desktop`, `--allow-from`) |
 
 ## Commands
 
