@@ -11,7 +11,8 @@ use drift_core::setup::{Outcome, PASSWORD_LEN, RunMode, SetupLine, Sudo};
 use drift_ssh::{Diagnosis, Target, Trust};
 use drift_testkit::ssh_server::{ServerOptions, TestServer};
 
-const FP: &str = "48:a5:ff:8e:c8:3f:b3:06:d9:69:cc:22:9d:ea:86:76:88:54:57:11:7c:b3:dc:52:a5:22:b3:52:cf:e2:8e:2a";
+const FP: &str =
+    "48:a5:ff:8e:c8:3f:b3:06:d9:69:cc:22:9d:ea:86:76:88:54:57:11:7c:b3:dc:52:a5:22:b3:52:cf:e2:8e:2a";
 
 /// Stands in for drift-host-setup.sh: reports its mode, what reached it, and one change.
 const FAKE_SCRIPT: &str = r#"mode=${1#--}
@@ -84,7 +85,11 @@ async fn signed_in(m: &Machine) -> SignIn {
     m.service.install_key(m.target(), "hunter22").await
 }
 
-async fn run(m: &Machine, mode: RunMode, sudo: Option<&str>) -> (Vec<SetupLine>, Result<drift_app::setup_wizard::SetupResult, SetupError>) {
+async fn run(
+    m: &Machine,
+    mode: RunMode,
+    sudo: Option<&str>,
+) -> (Vec<SetupLine>, Result<drift_app::setup_wizard::SetupResult, SetupError>) {
     let mut options = m.service.defaults("127.0.0.1", "tester");
     options.rdp_password = Some("Secret-pass1".into());
     let mut lines = Vec::new();
@@ -101,7 +106,9 @@ async fn signing_in_goes_trust_then_password_once_then_ready() {
     let m = machine(false).await;
     assert_eq!(
         m.service.connect(m.target(), Trust::KnownOnly).await,
-        SignIn::Problem { diagnosis: Diagnosis::HostKeyUnknown { fingerprint: m.server.fingerprint.clone() } }
+        SignIn::Problem {
+            diagnosis: Diagnosis::HostKeyUnknown { fingerprint: m.server.fingerprint.clone() }
+        }
     );
     assert_eq!(
         m.service.connect(m.target(), Trust::TrustNew).await,
@@ -111,9 +118,15 @@ async fn signing_in_goes_trust_then_password_once_then_ready() {
         m.service.install_key(m.target(), "wrong").await,
         SignIn::Problem { diagnosis: Diagnosis::PasswordRejected }
     );
-    assert_eq!(m.service.install_key(m.target(), "hunter22").await, SignIn::Ready { sudo: Sudo::Passwordless });
+    assert_eq!(
+        m.service.install_key(m.target(), "hunter22").await,
+        SignIn::Ready { sudo: Sudo::Passwordless }
+    );
     // The key is installed now: the next sign-in needs no password.
-    assert_eq!(m.service.connect(m.target(), Trust::KnownOnly).await, SignIn::Ready { sudo: Sudo::Passwordless });
+    assert_eq!(
+        m.service.connect(m.target(), Trust::KnownOnly).await,
+        SignIn::Ready { sudo: Sudo::Passwordless }
+    );
     let key = m.service.public_key().expect("public key");
     assert!(key.starts_with("ssh-ed25519 ") && key.ends_with(" drift@test"), "{key}");
 }
@@ -134,7 +147,10 @@ async fn check_then_apply_streams_lines_and_leaves_pinned_connections() {
         SetupLine::Output { text } if text.starts_with("args: ") => Some(text.clone()),
         _ => None,
     });
-    assert_eq!(args.as_deref(), Some("args: --check --desktop --install --firewall --headless tester:3390:persistent"));
+    assert_eq!(
+        args.as_deref(),
+        Some("args: --check --desktop --install --firewall --headless tester:3390:persistent")
+    );
 
     let (_, result) = run(&m, RunMode::Apply, None).await;
     let result = result.expect("apply");

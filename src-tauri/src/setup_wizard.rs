@@ -7,9 +7,13 @@
 use std::path::PathBuf;
 
 use drift_core::ConnectionProfile;
-use drift_core::setup::{Outcome, RunMode, SetupIssue, SetupLine, SetupOptions, Sudo};
-use drift_ssh::{Diagnosis, KeyStore, SshError, Target, Trust};
+use drift_core::setup::{
+    Outcome, RunMode, SetupIssue, SetupLine, SetupOptions, SetupReport, Sudo, connection_profiles,
+    generate_password, outcome, remote_command, remote_stdin,
+};
+use drift_ssh::{Connection, Diagnosis, KeyStore, SshError, Target, Trust};
 use serde::{Deserialize, Serialize};
+use zeroize::{Zeroize as _, Zeroizing};
 
 /// The setup script the app runs on the machine (the same file `host/drift-gnome-setup` uploads).
 pub const SETUP_SCRIPT: &str = include_str!("../../host/drift-host-setup.sh");
@@ -70,11 +74,19 @@ pub struct SetupResult {
     pub profiles: Vec<ConnectionProfile>,
 }
 
+/// The machine the wizard is signed in to.
+struct Signed {
+    target: Target,
+    conn: Connection,
+    sudo: Sudo,
+}
+
 /// The wizard's SSH session and key store.
 pub struct SetupService {
     keys: KeyStore,
     comment: String,
     script: String,
+    current: tokio::sync::Mutex<Option<Signed>>,
 }
 
 impl std::fmt::Debug for SetupService {
@@ -87,25 +99,52 @@ impl SetupService {
     /// A service keeping its SSH files in `dir`, labelling the device key `comment`, and
     /// running `script` (normally [`SETUP_SCRIPT`]).
     pub fn new(dir: impl Into<PathBuf>, comment: &str, script: &str) -> Result<Self, SshError> {
-        Ok(Self { keys: KeyStore::open(dir)?, comment: comment.to_owned(), script: script.to_owned() })
+        Ok(Self {
+            keys: KeyStore::open(dir)?,
+            comment: comment.to_owned(),
+            script: script.to_owned(),
+            current: tokio::sync::Mutex::new(None),
+        })
     }
 
     /// The wizard's defaults for `account` on `host`, with a freshly generated RDP password.
     pub fn defaults(&self, host: &str, account: &str) -> SetupOptions {
-        SetupOptions::defaults(host, account)
+        let mut options = SetupOptions::defaults(host, account);
+        let mut random = [0u8; 64];
+        // 64 bytes give 24 accepted ones but for a chance far below 1e-20; draw again then.
+        while options.rdp_password.is_none() {
+            if getrandom::fill(&mut random).is_err() {
+                break;
+            }
+            options.rdp_password = generate_password(&random);
+        }
+        random.zeroize();
+        options
     }
 
     /// Signs in to `target` with the device key, trusting a new host key only with
-    /// [`Trust::TrustNew`].
+    /// [`Trust::TrustNew`], and finds out whether sudo needs the account's password.
     pub async fn connect(&self, target: Target, trust: Trust) -> SignIn {
-        let _ = (target, trust);
-        SignIn::Problem { diagnosis: Diagnosis::Failed { detail: "not implemented".into() } }
+        self.disconnect().await;
+        let conn = match drift_ssh::connect(&self.keys, &target, trust, &self.comment).await {
+            Ok(conn) => conn,
+            Err(diagnosis) => return SignIn::Problem { diagnosis },
+        };
+        let sudo = match conn.sudo_without_password().await {
+            Ok(true) => Sudo::Passwordless,
+            Ok(false) => Sudo::Password,
+            Err(diagnosis) => return SignIn::Problem { diagnosis },
+        };
+        *self.current.lock().await = Some(Signed { target, conn, sudo });
+        SignIn::Ready { sudo }
     }
 
     /// Installs the device key with the account `password` (used once), then signs in.
     pub async fn install_key(&self, target: Target, password: &str) -> SignIn {
-        let _ = (target, password);
-        SignIn::Problem { diagnosis: Diagnosis::Failed { detail: "not implemented".into() } }
+        match drift_ssh::install_device_key(&self.keys, &target, password, &self.comment).await {
+            Ok(()) => self.connect(target, Trust::KnownOnly).await,
+            Err(diagnosis) => SignIn::Problem { diagnosis },
+        }
     }
 
     /// Forgets the recorded host key of `host:port`.
@@ -127,10 +166,59 @@ impl SetupService {
         sudo_password: Option<&str>,
         on_line: &mut (dyn FnMut(SetupLine) + Send),
     ) -> Result<SetupResult, SetupError> {
-        let _ = (options, mode, sudo_password, on_line, &self.script);
-        Err(SetupError::NotSignedIn)
+        options.validate().map_err(|issues| SetupError::Invalid { issues })?;
+        let current = self.current.lock().await;
+        let signed = current.as_ref().ok_or(SetupError::NotSignedIn)?;
+        let sudo_password = match signed.sudo {
+            Sudo::Passwordless => None,
+            Sudo::Password => {
+                Some(sudo_password.filter(|p| !p.is_empty()).ok_or(SetupError::SudoPasswordNeeded)?)
+            }
+        };
+        let command = remote_command(signed.sudo, &options.script_args(mode));
+        let stdin = Zeroizing::new(remote_stdin(sudo_password, options, &self.script));
+
+        let mut report = SetupReport::default();
+        let (mut started, mut sudo_refused) = (false, false);
+        let status = signed
+            .conn
+            .run(&command, stdin.as_bytes(), &mut |line| {
+                let parsed = report.feed(line);
+                if matches!(parsed, SetupLine::Mode { .. }) {
+                    started = true;
+                }
+                // sudo's own complaints come before the script says anything.
+                if !started
+                    && (line.contains("incorrect password attempt") || line.starts_with("Sorry, try again"))
+                {
+                    sudo_refused = true;
+                    return;
+                }
+                on_line(parsed);
+            })
+            .await
+            .map_err(|diagnosis| SetupError::Ssh { diagnosis })?;
+        if sudo_refused && !started {
+            return Err(SetupError::SudoPasswordRejected);
+        }
+        let outcome = outcome(mode, status);
+        let profiles = if outcome == Outcome::Applied {
+            connection_profiles(options, &signed.target.host, &report)
+        } else {
+            Vec::new()
+        };
+        Ok(SetupResult {
+            outcome,
+            errors: report.errors.clone(),
+            changes: report.summary.map(|(c, _)| c),
+            profiles,
+        })
     }
 
     /// Ends the SSH session.
-    pub async fn disconnect(&self) {}
+    pub async fn disconnect(&self) {
+        if let Some(signed) = self.current.lock().await.take() {
+            signed.conn.close().await;
+        }
+    }
 }

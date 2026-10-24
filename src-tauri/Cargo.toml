@@ -40,6 +40,7 @@ drift-gfx.workspace = true
 drift-input.workspace = true
 drift-rdp.workspace = true
 drift-ssh = { workspace = true, features = ["specta"] }
+getrandom.workspace = true
 drift-render.workspace = true
 drift-video.workspace = true
 objc2.workspace = true

@@ -1496,6 +1496,7 @@ dependencies = [
  "drift-ssh",
  "drift-testkit",
  "drift-video",
+ "getrandom 0.3.4",
  "muda",
  "objc2",
  "objc2-app-kit",
