@@ -1424,7 +1424,7 @@ dependencies = [
 
 [[package]]
 name = "drift-app"
-version = "26.10.0"
+version = "26.10.10"
 dependencies = [
  "dispatch2",
  "drift-apple",
@@ -1462,7 +1462,7 @@ dependencies = [
 
 [[package]]
 name = "drift-apple"
-version = "26.10.0"
+version = "26.10.10"
 dependencies = [
  "block2",
  "dispatch2",
@@ -1484,7 +1484,7 @@ dependencies = [
 
 [[package]]
 name = "drift-clipboard"
-version = "26.10.0"
+version = "26.10.10"
 dependencies = [
  "drift-core",
  "drift-testkit",
@@ -1500,7 +1500,7 @@ dependencies = [
 
 [[package]]
 name = "drift-codec"
-version = "26.10.0"
+version = "26.10.10"
 dependencies = [
  "criterion",
  "drift-core",
@@ -1516,7 +1516,7 @@ dependencies = [
 
 [[package]]
 name = "drift-core"
-version = "26.10.0"
+version = "26.10.10"
 dependencies = [
  "proptest",
  "serde",
@@ -1529,7 +1529,7 @@ dependencies = [
 
 [[package]]
 name = "drift-e2e"
-version = "26.10.0"
+version = "26.10.10"
 dependencies = [
  "drift-clipboard",
  "drift-core",
@@ -1545,7 +1545,7 @@ dependencies = [
 
 [[package]]
 name = "drift-gfx"
-version = "26.10.0"
+version = "26.10.10"
 dependencies = [
  "drift-codec",
  "drift-core",
@@ -1564,7 +1564,7 @@ dependencies = [
 
 [[package]]
 name = "drift-input"
-version = "26.10.0"
+version = "26.10.10"
 dependencies = [
  "drift-core",
  "proptest",
@@ -1572,7 +1572,7 @@ dependencies = [
 
 [[package]]
 name = "drift-ios"
-version = "26.10.0"
+version = "26.10.10"
 dependencies = [
  "block2",
  "dispatch2",
@@ -1591,7 +1591,7 @@ dependencies = [
 
 [[package]]
 name = "drift-macos"
-version = "26.10.0"
+version = "26.10.10"
 dependencies = [
  "block2",
  "dispatch2",
@@ -1614,7 +1614,7 @@ dependencies = [
 
 [[package]]
 name = "drift-rdp"
-version = "26.10.0"
+version = "26.10.10"
 dependencies = [
  "drift-clipboard",
  "drift-codec",
@@ -1648,7 +1648,7 @@ dependencies = [
 
 [[package]]
 name = "drift-render"
-version = "26.10.0"
+version = "26.10.10"
 dependencies = [
  "block2",
  "drift-core",
@@ -1670,7 +1670,7 @@ dependencies = [
 
 [[package]]
 name = "drift-testkit"
-version = "26.10.0"
+version = "26.10.10"
 dependencies = [
  "async-trait",
  "drift-core",
@@ -1698,7 +1698,7 @@ dependencies = [
 
 [[package]]
 name = "drift-video"
-version = "26.10.0"
+version = "26.10.10"
 dependencies = [
  "block2",
  "drift-core",
@@ -7538,7 +7538,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "26.10.0"
+version = "26.10.10"
 dependencies = [
  "anyhow",
  "clap",
