@@ -164,9 +164,11 @@ fn check(name: &str, c: Check) -> Step {
 /// `docs/adr/M0-6-ci-gate-coverage.md`.
 ///
 /// `ironrdp-server` joined with HOST-2's patch (`RdpServer::add_dvc_factory`), `ironrdp-egfx`
-/// with EXT-5's (`Codec1Type::DriftHevc`, `send_drift_hevc_frame`).
+/// with EXT-5's (`Codec1Type::DriftHevc`, `send_drift_hevc_frame`), `ironrdp-acceptor` with
+/// GNOME-WIZARD's (sspi 0.23: `TsRequest::buffer_len` returns a `Result`).
 pub const VENDORED_TEST_PACKAGES: &[&str] = &[
     "ironrdp-testsuite-core",
+    "ironrdp-acceptor",
     "ironrdp-cliprdr",
     "ironrdp-connector",
     "ironrdp-pdu",
