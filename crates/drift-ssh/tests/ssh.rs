@@ -1,14 +1,12 @@
-//! WIZ-3 Red: `drift-ssh` against an in-process SSH server (`support`): device key, strict host
+//! WIZ-3 Red: `drift-ssh` against an in-process SSH server (`drift_testkit::ssh_server`): device key, strict host
 //! keys with an explicit trust, password-once key install, and commands with stdin, streamed
 //! output and exit status (ADR `GNOME-WIZARD-headless-setup`).
-
-mod support;
 
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 
 use drift_ssh::{Diagnosis, KeyStore, Target, Trust, connect, install_device_key};
-use support::{ServerOptions, TestServer};
+use drift_testkit::ssh_server::{ServerOptions, TestServer};
 
 const COMMENT: &str = "drift@test";
 

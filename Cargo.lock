@@ -1729,6 +1729,7 @@ dependencies = [
 name = "drift-ssh"
 version = "26.10.10"
 dependencies = [
+ "drift-testkit",
  "getrandom 0.3.4",
  "russh",
  "serde",
@@ -1760,6 +1761,7 @@ dependencies = [
  "ironrdp-tokio",
  "png 0.18.1",
  "rcgen",
+ "russh",
  "serde",
  "sha2 0.10.9",
  "thiserror 2.0.20",

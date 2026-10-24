@@ -23,7 +23,8 @@ ironrdp-egfx.workspace = true
 ironrdp-graphics.workspace = true
 ironrdp-svc.workspace = true
 ironrdp-tokio.workspace = true
-tokio = { workspace = true, features = ["net", "io-util", "time", "rt", "sync", "macros"] }
+tokio = { workspace = true, features = ["net", "io-util", "time", "rt", "sync", "macros", "process"] }
+russh.workspace = true
 tokio-rustls.workspace = true
 rcgen.workspace = true
 thiserror.workspace = true

@@ -1,5 +1,5 @@
-//! An in-process SSH server for `drift-ssh`'s tests (term.hut's `test_server`, one step closer
-//! to sshd): public keys are checked against `$HOME/.ssh/authorized_keys`, and `exec` runs the
+//! An in-process SSH server for tests of `drift-ssh` and the setup wizard (GNOME-WIZARD;
+//! term.hut's `test_server`, one step closer to sshd): public keys are checked against `$HOME/.ssh/authorized_keys`, and `exec` runs the
 //! command with `sh -c` under that HOME, with stdin, stdout, stderr and the exit status wired
 //! through the channel.
 
@@ -30,23 +30,36 @@ pub struct ServerOptions {
 }
 
 impl ServerOptions {
+    /// Public keys only, host key seed 1, commands run under `home`.
     pub fn new(home: &Path) -> Self {
         Self { home: home.to_owned(), password: None, path_prefix: None, host_key_seed: 1 }
     }
 }
 
+/// A running server on `127.0.0.1:port` (it stops with the test's runtime).
 pub struct TestServer {
+    /// The listening port.
     pub port: u16,
     /// `SHA256:…` of the host key.
     pub fingerprint: String,
 }
 
+/// The deterministic ed25519 host key for `seed`.
+///
+/// # Panics
+/// Never for an ed25519 key (`PrivateKey::new` only fails on mismatched key data).
+#[expect(clippy::expect_used, reason = "test helper; an ed25519 keypair always makes a key")]
 pub fn host_key(seed: u8) -> PrivateKey {
     let pair = Ed25519Keypair::from_seed(&[seed; 32]);
     PrivateKey::new(KeypairData::Ed25519(pair), "").expect("host key")
 }
 
 impl TestServer {
+    /// Starts a server with `options`.
+    ///
+    /// # Panics
+    /// When it cannot listen on a loopback port.
+    #[expect(clippy::expect_used, reason = "test helper; a loopback bind only fails on a broken host")]
     pub async fn start(options: ServerOptions) -> TestServer {
         let key = host_key(options.host_key_seed);
         let fingerprint = key.public_key().fingerprint(HashAlg::Sha256).to_string();
@@ -195,6 +208,7 @@ impl server::Handler for Conn {
         Ok(())
     }
 
+    #[expect(clippy::expect_used, reason = "test helper; a poisoned lock is a failed test already")]
     async fn channel_eof(&mut self, channel: ChannelId, _session: &mut Session) -> Result<(), Self::Error> {
         // Dropping the pipe is the child's EOF.
         drop(self.stdin.lock().expect("stdin map").remove(&channel));
