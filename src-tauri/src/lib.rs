@@ -26,6 +26,7 @@ pub mod profiles;
 pub mod recording;
 pub mod secrets;
 pub mod services;
+pub mod setup_wizard;
 pub mod smoke;
 pub mod switcher;
 pub mod view;

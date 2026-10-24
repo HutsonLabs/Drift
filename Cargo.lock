@@ -1493,6 +1493,8 @@ dependencies = [
  "drift-macos",
  "drift-rdp",
  "drift-render",
+ "drift-ssh",
+ "drift-testkit",
  "drift-video",
  "muda",
  "objc2",
