@@ -66,8 +66,10 @@ showed four gaps in `host/drift-host-setup.sh`:
    - RDP port: 3390; Remote Login (system daemon on 3389): off;
    - RDP user name: the account; RDP password: generated (24 characters), or typed;
    - install a minimal GNOME when missing: on;
-   - open the port in the firewall: on, optionally only from one network (CIDR);
-   - keep the session awake (no suspend, no screen blanking, no lock): on.
+   - open the port in the firewall: on, optionally only from one network (CIDR).
+
+   Keeping the session awake (no suspend, no screen blanking, no lock) is not an option: nobody
+   sits at a headless session, a locked one swallows input, and the RDP credentials guard it.
 8. **Script fixes.** The drop-in becomes `DynamicUser=no`, `User=root`, `Group=root` (root passes
    the polkit check on Ubuntu and AnduinOS alike). New `--desktop` installs the smallest GNOME
    that runs a headless session — apt `gdm3 ubuntu-session gnome-remote-desktop ptyxis openssl

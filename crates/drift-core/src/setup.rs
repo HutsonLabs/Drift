@@ -3,9 +3,11 @@
 //! output lines, and the connections the setup leaves behind. Pure; the SSH transport is
 //! `drift-ssh`.
 
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
 use serde::{Deserialize, Serialize};
 
-use crate::profile::{CertFingerprint, ConnectionProfile};
+use crate::profile::{CertFingerprint, ConnectMode, ConnectionProfile};
 
 /// The headless session's RDP port unless the user picks another (as `host/drift-gnome-setup`).
 pub const DEFAULT_HEADLESS_PORT: u16 = 3390;
@@ -83,62 +85,176 @@ pub enum Sudo {
 
 impl SetupOptions {
     /// The wizard's defaults for `account` on `host`.
+    /// An IP address is its own name; a host name's first label is the name otherwise.
     pub fn defaults(host: &str, account: &str) -> Self {
-        let _ = (host, account);
+        let host = host.trim();
+        let name = if host.parse::<IpAddr>().is_ok() {
+            host.to_owned()
+        } else {
+            host.split('.').next().unwrap_or(host).to_owned()
+        };
         Self {
-            name: String::new(),
-            account: String::new(),
-            port: 0,
-            rdp_username: String::new(),
+            name,
+            account: account.to_owned(),
+            port: DEFAULT_HEADLESS_PORT,
+            rdp_username: account.to_owned(),
             rdp_password: None,
             remote_login: false,
-            install_desktop: false,
-            open_firewall: false,
+            install_desktop: true,
+            open_firewall: true,
             allow_from: None,
         }
     }
 
     /// Every problem with the options, in field order.
     pub fn validate(&self) -> Result<(), Vec<SetupIssue>> {
-        Ok(())
+        let mut issues = Vec::new();
+        if self.name.trim().is_empty() {
+            issues.push(SetupIssue::Name);
+        }
+        if !is_account_name(&self.account) {
+            issues.push(SetupIssue::Account);
+        }
+        if self.port == 0 {
+            issues.push(SetupIssue::Port);
+        } else if self.remote_login && self.port == REMOTE_LOGIN_PORT {
+            issues.push(SetupIssue::PortTakenByRemoteLogin);
+        }
+        if self.rdp_username.trim().is_empty() || self.rdp_username.chars().any(char::is_control) {
+            issues.push(SetupIssue::RdpUsername);
+        }
+        if let Some(password) = &self.rdp_password
+            && (password.chars().count() < 8 || password.chars().any(char::is_control))
+        {
+            issues.push(SetupIssue::RdpPassword);
+        }
+        if self.allow_from.as_deref().is_some_and(|net| !is_network(net)) {
+            issues.push(SetupIssue::AllowFrom);
+        }
+        if issues.is_empty() { Ok(()) } else { Err(issues) }
     }
 
     /// The arguments for `drift-host-setup.sh`.
     pub fn script_args(&self, mode: RunMode) -> Vec<String> {
-        let _ = mode;
-        Vec::new()
+        let mut args = vec![match mode {
+            RunMode::Check => "--check".to_owned(),
+            RunMode::Apply => "--apply".to_owned(),
+        }];
+        if self.install_desktop {
+            args.push("--desktop".into());
+        }
+        args.push("--install".into());
+        if self.open_firewall {
+            args.push("--firewall".into());
+            if let Some(net) = &self.allow_from {
+                args.push("--allow-from".into());
+                args.push(net.clone());
+            }
+        }
+        args.push("--headless".into());
+        args.push(format!("{}:{}:persistent", self.account, self.port));
+        if self.remote_login {
+            args.push("--system".into());
+        }
+        args
     }
 
     /// The `export NAME='value'` lines that hand the credentials to the script; empty when the
     /// password is kept.
     pub fn env_exports(&self) -> String {
-        String::new()
+        let Some(password) = &self.rdp_password else {
+            return String::new();
+        };
+        let suffix = env_suffix(&self.account);
+        let user = shell_quote(&self.rdp_username);
+        let password = shell_quote(password);
+        let mut out = format!(
+            "export DRIFT_HEADLESS_RDP_USER_{suffix}={user}\nexport DRIFT_HEADLESS_RDP_PASS_{suffix}={password}\n"
+        );
+        if self.remote_login {
+            out.push_str(&format!(
+                "export DRIFT_SYSTEM_RDP_USER={user}\nexport DRIFT_SYSTEM_RDP_PASS={password}\n"
+            ));
+        }
+        out
     }
+}
+
+/// A Linux account name as `useradd` accepts it by default (`[a-z_][a-z0-9_-]*`, at most 32).
+fn is_account_name(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    name.len() <= 32
+        && bytes.next().is_some_and(|b| b.is_ascii_lowercase() || b == b'_')
+        && bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
+}
+
+/// An IPv4 or IPv6 address with an optional prefix length (what `--allow-from` accepts).
+fn is_network(net: &str) -> bool {
+    let (addr, prefix) = match net.split_once('/') {
+        Some((addr, prefix)) => (addr, Some(prefix)),
+        None => (net, None),
+    };
+    let max = if addr.parse::<Ipv4Addr>().is_ok() {
+        32
+    } else if addr.parse::<Ipv6Addr>().is_ok() {
+        128
+    } else {
+        return false;
+    };
+    prefix.is_none_or(|p| !p.is_empty() && p.len() <= 3 && p.parse::<u8>().is_ok_and(|p| p <= max))
+}
+
+/// The script's environment variable suffix for an account (`drift-test2` → `DRIFT_TEST2`).
+fn env_suffix(account: &str) -> String {
+    account.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' }).collect()
 }
 
 /// `s` as one single-quoted shell word.
 pub fn shell_quote(s: &str) -> String {
-    s.to_owned()
+    format!("'{}'", s.replace('\'', "'\\''"))
 }
 
 /// The command run over SSH: `sudo` (as `how`) running bash on the script from stdin.
 pub fn remote_command(how: Sudo, args: &[String]) -> String {
-    let _ = (how, args);
-    String::new()
+    let sudo = match how {
+        Sudo::Passwordless => "sudo -n",
+        Sudo::Password => "sudo -S -p ''",
+    };
+    let mut command = format!("{sudo} bash -s --");
+    for arg in args {
+        command.push(' ');
+        command.push_str(&shell_quote(arg));
+    }
+    command
 }
 
 /// What the command reads on stdin: the sudo password line (with [`Sudo::Password`]), the
 /// credential exports, then the script.
 pub fn remote_stdin(sudo_password: Option<&str>, options: &SetupOptions, script: &str) -> String {
-    let _ = (sudo_password, options, script);
-    String::new()
+    let mut out = String::new();
+    if let Some(password) = sudo_password {
+        out.push_str(password);
+        out.push('\n');
+    }
+    out.push_str(&options.env_exports());
+    out.push_str(script);
+    out
 }
+
+/// The characters of a generated password, in byte order.
+const PASSWORD_ALPHABET: &[u8; 62] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
 /// A password of [`PASSWORD_LEN`] letters and digits from `random` bytes (unbiased: bytes that
 /// would favour some characters are skipped). `None` when `random` runs out first.
 pub fn generate_password(random: &[u8]) -> Option<String> {
-    let _ = random;
-    None
+    // 248 = 4 × 62: bytes below it map evenly onto the alphabet.
+    let password: String = random
+        .iter()
+        .filter(|&&b| b < 248)
+        .take(PASSWORD_LEN)
+        .map(|&b| char::from(PASSWORD_ALPHABET[usize::from(b) % PASSWORD_ALPHABET.len()]))
+        .collect();
+    (password.len() == PASSWORD_LEN).then_some(password)
 }
 
 /// One line of `drift-host-setup.sh` output.
@@ -209,7 +325,50 @@ pub enum SetupLine {
 
 /// Parses one output line (a trailing `\r` from a PTY is ignored).
 pub fn parse_line(line: &str) -> SetupLine {
-    SetupLine::Output { text: line.to_owned() }
+    let line = line.strip_suffix('\r').unwrap_or(line);
+    let output = || SetupLine::Output { text: line.to_owned() };
+    if let Some(rest) = line.strip_prefix("drift-host-setup: ") {
+        return match rest {
+            "mode=check" => SetupLine::Mode { mode: RunMode::Check },
+            "mode=apply" => SetupLine::Mode { mode: RunMode::Apply },
+            _ => parse_summary(rest).unwrap_or_else(output),
+        };
+    }
+    if let Some(rest) = line.strip_prefix("fingerprint: ") {
+        let mut words = rest.split_whitespace();
+        return match (words.next(), words.next().map(str::parse::<CertFingerprint>), words.next()) {
+            (Some(owner), Some(Ok(fingerprint)), None) => {
+                SetupLine::Fingerprint { owner: owner.to_owned(), fingerprint }
+            }
+            _ => output(),
+        };
+    }
+    if let Some((tag, rest)) = line.split_once(':') {
+        let text = rest.trim_start().to_owned();
+        match tag {
+            "ok" => return SetupLine::Ok { text },
+            "would" => return SetupLine::Would { text },
+            "change" => return SetupLine::Change { text },
+            "skip" => return SetupLine::Skip { text },
+            "wait" => return SetupLine::Wait { text },
+            "error" => return SetupLine::Error { text },
+            _ => {}
+        }
+    }
+    if line.starts_with(char::is_whitespace)
+        && let Some(command) = line.trim_start().strip_prefix("$ ")
+    {
+        return SetupLine::Command { text: command.to_owned() };
+    }
+    output()
+}
+
+/// `N change(s) pending|applied, M error(s)`.
+fn parse_summary(rest: &str) -> Option<SetupLine> {
+    let (changes, rest) = rest.split_once(" change(s) ")?;
+    let rest = rest.strip_prefix("pending, ").or_else(|| rest.strip_prefix("applied, "))?;
+    let errors = rest.strip_suffix(" error(s)")?;
+    Some(SetupLine::Summary { changes: changes.parse().ok()?, errors: errors.parse().ok()? })
 }
 
 /// Everything a run reported, fed line by line.
@@ -226,13 +385,22 @@ pub struct SetupReport {
 impl SetupReport {
     /// Parses and records one line, and returns it parsed.
     pub fn feed(&mut self, line: &str) -> SetupLine {
-        parse_line(line)
+        let parsed = parse_line(line);
+        match &parsed {
+            SetupLine::Fingerprint { owner, fingerprint } => {
+                self.fingerprints.retain(|(o, _)| o != owner);
+                self.fingerprints.push((owner.clone(), *fingerprint));
+            }
+            SetupLine::Error { text } => self.errors.push(text.clone()),
+            SetupLine::Summary { changes, errors } => self.summary = Some((*changes, *errors)),
+            _ => {}
+        }
+        parsed
     }
 
     /// The certificate reported for `owner` (`system` or an account).
     pub fn fingerprint(&self, owner: &str) -> Option<CertFingerprint> {
-        let _ = owner;
-        None
+        self.fingerprints.iter().find(|(o, _)| o == owner).map(|(_, fp)| *fp)
     }
 }
 
@@ -253,13 +421,33 @@ pub enum Outcome {
 
 /// The outcome of a run in `mode` that exited with `exit` (`None`: no exit status).
 pub fn outcome(mode: RunMode, exit: Option<u32>) -> Outcome {
-    let _ = (mode, exit);
-    Outcome::Failed
+    match (mode, exit) {
+        (RunMode::Check, Some(0)) => Outcome::Converged,
+        (RunMode::Check, Some(2)) => Outcome::ChangesPending,
+        (RunMode::Apply, Some(0)) => Outcome::Applied,
+        _ => Outcome::Failed,
+    }
 }
 
 /// The unsaved connections a finished setup leaves: the headless session, and Remote Login
 /// when it was set up, each with the certificate the run reported pinned.
-pub fn connection_profiles(options: &SetupOptions, host: &str, report: &SetupReport) -> Vec<ConnectionProfile> {
-    let _ = (options, host, report);
-    Vec::new()
+pub fn connection_profiles(
+    options: &SetupOptions,
+    host: &str,
+    report: &SetupReport,
+) -> Vec<ConnectionProfile> {
+    let mut headless = ConnectionProfile::new(options.name.trim(), host, ConnectMode::Headless);
+    headless.port = options.port;
+    headless.rdp_username.clone_from(&options.rdp_username);
+    headless.cert_pin = report.fingerprint(&options.account);
+    let mut profiles = vec![headless];
+    if options.remote_login {
+        let mut login =
+            ConnectionProfile::new(format!("{} login", options.name.trim()), host, ConnectMode::RemoteLogin);
+        login.port = REMOTE_LOGIN_PORT;
+        login.rdp_username.clone_from(&options.rdp_username);
+        login.cert_pin = report.fingerprint("system");
+        profiles.push(login);
+    }
+    profiles
 }

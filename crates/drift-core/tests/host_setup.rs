@@ -10,7 +10,8 @@ use drift_core::setup::{
     shell_quote,
 };
 
-const FP: &str = "48:a5:ff:8e:c8:3f:b3:06:d9:69:cc:22:9d:ea:86:76:88:54:57:11:7c:b3:dc:52:a5:22:b3:52:cf:e2:8e:2a";
+const FP: &str =
+    "48:a5:ff:8e:c8:3f:b3:06:d9:69:cc:22:9d:ea:86:76:88:54:57:11:7c:b3:dc:52:a5:22:b3:52:cf:e2:8e:2a";
 const SYSTEM_FP: &str =
     "f3:e7:a2:00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff:01:02:03:04:05:06:07:08:09:0a:0b:0c:0d";
 
@@ -122,7 +123,9 @@ fn script_args_match_the_script_flags() {
     let mut o = options();
     o.open_firewall = false;
     o.allow_from = Some("10.1.0.0/21".into());
-    assert!(!o.script_args(RunMode::Apply).iter().any(|a| a.starts_with("--firewall") || a == "--allow-from"));
+    assert!(
+        !o.script_args(RunMode::Apply).iter().any(|a| a.starts_with("--firewall") || a == "--allow-from")
+    );
 }
 
 #[test]
@@ -293,7 +296,9 @@ fn a_finished_setup_leaves_prefilled_connections() {
     assert_eq!(profiles[1].mode, ConnectMode::RemoteLogin);
     assert_eq!(
         link::format(&profiles[1]),
-        format!("drift-connect:?name=dev%20login&host=dev.lan&port=3389&mode=remote-login&user=hutsonphd&pin={SYSTEM_FP}")
+        format!(
+            "drift-connect:?name=dev%20login&host=dev.lan&port=3389&mode=remote-login&user=hutsonphd&pin={SYSTEM_FP}"
+        )
     );
 
     // No fingerprint reported: Drift asks to trust the certificate on first connect.

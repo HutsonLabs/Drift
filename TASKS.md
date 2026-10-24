@@ -30,7 +30,7 @@ ADR `GNOME-WIZARD-headless-setup`.
 - [✓] **WIZ-1 Host script fixes.** Root drop-in (polkit refuses `User=gdm` on Ubuntu 26.04),
   `--desktop` minimal GNOME without NetworkManager, GDM enabled and `graphical.target` default,
   `idle-delay 0`, `--allow-from CIDR`.
-- [ ] **WIZ-2 `drift_core::setup`.** Options → script arguments and environment, validation,
+- [✓] **WIZ-2 `drift_core::setup`.** Options → script arguments and environment, validation,
   output line parser, summary and prefilled profile.
 - [ ] **WIZ-3 `drift-ssh`.** russh client: device key, app known_hosts, trust, password-once key
   install, exec with stdin and streamed output, sudo.
