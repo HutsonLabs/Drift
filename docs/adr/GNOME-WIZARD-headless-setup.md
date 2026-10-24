@@ -36,7 +36,11 @@ showed four gaps in `host/drift-host-setup.sh`:
 1. **SSH runs inside the app, the term.hut way.** A new crate `drift-ssh` wraps russh 0.64
    (`default-features = false`, `ring`, like the RDP TLS in M1-1; no `rsa`: the `rsa` crate's
    advisory, and ed25519/ECDSA host keys cover current servers). Nothing calls a system tool or
-   reads `~/.ssh`, on macOS as on iOS. The M9-3 entitlements do not change.
+   reads `~/.ssh`, on macOS as on iOS. The M9-3 entitlements do not change. russh needs the
+   final RustCrypto releases, which the vendored IronRDP's `picky` rc.25 pinned to prereleases;
+   patch `0010` moves the fork to sspi 0.23 / picky rc.26 (fork tests and Drift's NLA tests
+   pass). Reaching a LAN address needs the Local Network permission Drift already asks for
+   (M9-3): an unpermitted process gets "No route to host".
 2. **One device key.** `drift-ssh` generates an ed25519 key in-process on first use and keeps it
    in the app's data directory (`ssh/id_ed25519`, mode 0600, written to a temp file and renamed),
    unencrypted: the app sandbox is its lock, as in term.hut. Keychain or Secure Enclave storage

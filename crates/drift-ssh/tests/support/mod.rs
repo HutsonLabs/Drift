@@ -85,20 +85,37 @@ struct Conn {
     stdin: Arc<Mutex<HashMap<ChannelId, ChildStdin>>>,
 }
 
+impl Conn {
+    /// Like sshd: a failed attempt leaves every method on offer (russh's default drops the one
+    /// that failed, so a wrong password would read as "no password logins").
+    fn reject(&self) -> Auth {
+        let mut methods = vec![MethodKind::PublicKey];
+        if self.options.password.is_some() {
+            methods.push(MethodKind::Password);
+        }
+        Auth::Reject {
+            proceed_with_methods: Some(MethodSet::from(methods.as_slice())),
+            partial_success: false,
+        }
+    }
+}
+
 fn authorized(home: &Path, key: &PublicKey) -> bool {
     let Ok(text) = std::fs::read_to_string(home.join(".ssh/authorized_keys")) else { return false };
-    text.lines().filter_map(|l| PublicKey::from_openssh(l.trim()).ok()).any(|k| k.key_data() == key.key_data())
+    text.lines()
+        .filter_map(|l| PublicKey::from_openssh(l.trim()).ok())
+        .any(|k| k.key_data() == key.key_data())
 }
 
 impl server::Handler for Conn {
     type Error = russh::Error;
 
     async fn auth_password(&mut self, _user: &str, password: &str) -> Result<Auth, Self::Error> {
-        Ok(if self.options.password.as_deref() == Some(password) { Auth::Accept } else { Auth::reject() })
+        Ok(if self.options.password.as_deref() == Some(password) { Auth::Accept } else { self.reject() })
     }
 
     async fn auth_publickey(&mut self, _user: &str, key: &PublicKey) -> Result<Auth, Self::Error> {
-        Ok(if authorized(&self.options.home, key) { Auth::Accept } else { Auth::reject() })
+        Ok(if authorized(&self.options.home, key) { Auth::Accept } else { self.reject() })
     }
 
     async fn channel_open_session(
@@ -111,7 +128,12 @@ impl server::Handler for Conn {
         Ok(())
     }
 
-    async fn exec_request(&mut self, channel: ChannelId, data: &[u8], session: &mut Session) -> Result<(), Self::Error> {
+    async fn exec_request(
+        &mut self,
+        channel: ChannelId,
+        data: &[u8],
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
         let command = String::from_utf8_lossy(data).into_owned();
         let mut path = std::env::var("PATH").unwrap_or_default();
         if let Some(prefix) = &self.options.path_prefix {
@@ -159,7 +181,12 @@ impl server::Handler for Conn {
         Ok(())
     }
 
-    async fn data(&mut self, channel: ChannelId, data: &[u8], _session: &mut Session) -> Result<(), Self::Error> {
+    async fn data(
+        &mut self,
+        channel: ChannelId,
+        data: &[u8],
+        _session: &mut Session,
+    ) -> Result<(), Self::Error> {
         let stdin = self.stdin.lock().expect("stdin map").remove(&channel);
         if let Some(mut stdin) = stdin {
             let _ = stdin.write_all(data).await;

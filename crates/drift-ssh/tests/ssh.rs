@@ -143,7 +143,8 @@ async fn the_password_installs_the_key_once() {
     let key = m.keys.public_key(COMMENT).unwrap_or_else(|e| panic!("{e}"));
     let authorized = std::fs::read_to_string(m.home.join(".ssh/authorized_keys")).expect("authorized_keys");
     assert_eq!(authorized.lines().filter(|l| *l == key).count(), 1, "{authorized}");
-    let mode = std::fs::metadata(m.home.join(".ssh/authorized_keys")).map(|md| md.permissions().mode() & 0o077);
+    let mode =
+        std::fs::metadata(m.home.join(".ssh/authorized_keys")).map(|md| md.permissions().mode() & 0o077);
     assert_eq!(mode.ok(), Some(0), "authorized_keys is private");
 
     let conn = connect(&m.keys, &t, Trust::KnownOnly, COMMENT).await;
@@ -180,7 +181,8 @@ async fn commands_get_stdin_and_stream_lines_and_their_exit_status() {
     let m = machine();
     authorize(&m.keys, &m.home);
     let server = TestServer::start(ServerOptions::new(&m.home)).await;
-    let conn = connect(&m.keys, &target(&server), Trust::TrustNew, COMMENT).await.unwrap_or_else(|e| panic!("{e}"));
+    let conn =
+        connect(&m.keys, &target(&server), Trust::TrustNew, COMMENT).await.unwrap_or_else(|e| panic!("{e}"));
 
     let (lines, status) = run(&conn, "cat; echo oops >&2; printf tail; exit 3", "a\nb\n").await;
     assert_eq!(status, Some(3));
@@ -206,13 +208,18 @@ async fn sudo_without_a_password_is_detected() {
         let bin = m.home.join(format!("bin{exit}"));
         std::fs::create_dir_all(&bin).expect("bin");
         let sudo = bin.join("sudo");
-        std::fs::write(&sudo, format!("#!/bin/sh\n[ \"$1\" = -n ] && [ \"$2\" = true ] || exit 9\nexit {exit}\n"))
-            .expect("fake sudo");
+        std::fs::write(
+            &sudo,
+            format!("#!/bin/sh\n[ \"$1\" = -n ] && [ \"$2\" = true ] || exit 9\nexit {exit}\n"),
+        )
+        .expect("fake sudo");
         std::fs::set_permissions(&sudo, std::fs::Permissions::from_mode(0o755)).expect("chmod");
         let mut options = ServerOptions::new(&m.home);
         options.path_prefix = Some(bin);
         let server = TestServer::start(options).await;
-        let conn = connect(&m.keys, &target(&server), Trust::TrustNew, COMMENT).await.unwrap_or_else(|e| panic!("{e}"));
+        let conn = connect(&m.keys, &target(&server), Trust::TrustNew, COMMENT)
+            .await
+            .unwrap_or_else(|e| panic!("{e}"));
         assert_eq!(conn.sudo_without_password().await, Ok(want), "sudo -n exits {exit}");
     }
 }

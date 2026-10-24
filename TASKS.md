@@ -32,7 +32,7 @@ ADR `GNOME-WIZARD-headless-setup`.
   `idle-delay 0`, `--allow-from CIDR`.
 - [✓] **WIZ-2 `drift_core::setup`.** Options → script arguments and environment, validation,
   output line parser, summary and prefilled profile.
-- [ ] **WIZ-3 `drift-ssh`.** russh client: device key, app known_hosts, trust, password-once key
+- [✓] **WIZ-3 `drift-ssh`.** russh client: device key, app known_hosts, trust, password-once key
   install, exec with stdin and streamed output, sudo.
 - [ ] **WIZ-4 Wizard.** Tauri commands and the five-step "Set Up a Linux Machine…" view.
 
