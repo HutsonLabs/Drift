@@ -218,7 +218,9 @@ pub fn shell_quote(s: &str) -> String {
 pub fn remote_command(how: Sudo, args: &[String]) -> String {
     let sudo = match how {
         Sudo::Passwordless => "sudo -n",
-        Sudo::Password => "sudo -S -p ''",
+        // -k: a cached timestamp would make sudo skip the password line, and bash would then
+        // run it as a command.
+        Sudo::Password => "sudo -k -S -p ''",
     };
     let mut command = format!("{sudo} bash -s --");
     for arg in args {
