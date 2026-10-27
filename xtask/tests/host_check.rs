@@ -145,6 +145,7 @@ fn host_before_setup_fails_exactly_the_pending_changes() {
         vec![
             "drifttest2: RDP port pinned to 3392",
             "drifttest2: gnome-headless-session@drifttest2.service enabled and active",
+            "drifttest2: headless session restarts whenever it ends (Restart=always)",
             "drifttest: RDP port pinned to 3391",
         ]
     );
@@ -195,6 +196,33 @@ fn broken_hosts_are_detected() {
     let other = AFTER.replace("User=gdm", "User=nobody");
     assert!(failing(&other).iter().any(|n| n.contains("drop-in")));
 
+    // The shipped Restart=on-failure leaves the session dead once it ends (10.1.2.5, 2026-10-24).
+    let on_failure = AFTER.replace("Restart=always", "Restart=on-failure");
+    assert!(failing(&on_failure).iter().any(|n| n.contains("Restart=always")), "{:?}", failing(&on_failure));
+
     // A truncated report fails as a whole.
     assert!(failing(&AFTER.replace("### end", "")).iter().any(|n| n.contains("report complete")));
+}
+
+/// `--no-system` (a headless-only machine, 10.1.2.5): Remote Login must be off, and the
+/// headless checks still run.
+#[test]
+fn no_system_checks_that_remote_login_is_off() {
+    let exp = Expectations { system: false, ..Expectations::default() };
+    let failing = |report: &str| -> Vec<String> {
+        let r = parse_report(report).unwrap_or_else(|e| panic!("{e:#}"));
+        evaluate(&r, &exp).into_iter().filter(|c| !c.ok).map(|c| c.name).collect()
+    };
+    // AFTER has Remote Login on: exactly the two "off" checks fail.
+    let mut on = failing(AFTER);
+    on.sort();
+    assert_eq!(
+        on,
+        vec![
+            "system: RDP disabled (Remote Login off)",
+            "system: gnome-remote-desktop.service disabled and stopped (Remote Login off)",
+        ]
+    );
+    let r = parse_report(AFTER).unwrap_or_else(|e| panic!("{e:#}"));
+    assert!(evaluate(&r, &exp).iter().any(|c| c.name.contains("Restart=always")), "headless checks still run");
 }

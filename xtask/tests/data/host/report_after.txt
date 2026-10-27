@@ -85,4 +85,5 @@ enabled
 ### unit-props gnome-headless-session@drifttest2.service
 User=gdm
 DynamicUser=no
+Restart=always
 ### end

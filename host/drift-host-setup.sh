@@ -9,8 +9,12 @@
 #                               negotiation off) with a TLS certificate and credentials.
 #                               "persistent" also enables gnome-headless-session@USER with
 #                               the systemd drop-in that makes it start (DynamicUser=no,
-#                               User=root: as gdm, polkit refuses it on Ubuntu 26.04; ADR
-#                               GNOME-WIZARD-headless-setup).
+#                               User=root: as gdm, polkit refuses it on Ubuntu 26.04) and
+#                               brings it back whenever it ends (Restart=always), marks GNOME
+#                               Initial Setup done for USER, and repairs a failed
+#                               polkit-agent-helper.socket (ADR GNOME-WIZARD-headless-setup).
+#   --no-system                 Turn Remote Login off: disable system RDP and stop
+#                               gnome-remote-desktop.service (for a headless-only machine).
 #   --install                   Install gnome-remote-desktop and openssl first when missing
 #                               (apt, dnf, zypper or pacman).
 #   --desktop                   Install the smallest GNOME that runs a headless session when
@@ -49,14 +53,22 @@ set -euo pipefail
 readonly DROPIN_DIR=/etc/systemd/system/gnome-headless-session@.service.d
 readonly DROPIN_NAME=drift.conf
 # Keep identical to host/gnome-headless-session-dropin.conf (an xtask test enforces it).
-readonly DROPIN_CONTENT='[Service]
+# gdm-new-session exits 0 whenever the session ends (log out, gnome-shell crash, a restart that
+# races the old session's teardown), so the shipped Restart=on-failure leaves it dead for good.
+readonly DROPIN_CONTENT='[Unit]
+StartLimitIntervalSec=0
+
+[Service]
 DynamicUser=no
 User=root
-Group=root'
+Group=root
+Restart=always
+RestartSec=5'
 readonly SYSTEM_CERT_DIR=/var/lib/gnome-remote-desktop/.local/share/gnome-remote-desktop/certificates
 
 MODE=check
 SYSTEM=0
+NO_SYSTEM=0
 INSTALL=0
 DESKTOP=0
 FIREWALL=0
@@ -373,13 +385,69 @@ setup_system() {
   ensure_unit gnome-remote-desktop.service
 }
 
+# disable_system: Remote Login off (--no-system).
+disable_system() {
+  local st
+  if ! command -v grdctl >/dev/null; then
+    ok "gnome-remote-desktop is not installed; Remote Login is off"
+    return
+  fi
+  st=$(grdctl --system status 2>/dev/null || true)
+  if [[ "$(field "$st" Status)" == "enabled" ]]; then
+    change "disable system RDP (Remote Login)" grdctl --system rdp disable
+  else
+    ok "system RDP (Remote Login) disabled"
+  fi
+  if systemctl is-enabled --quiet gnome-remote-desktop.service 2>/dev/null ||
+    systemctl is-active --quiet gnome-remote-desktop.service; then
+    change "disable and stop gnome-remote-desktop.service" systemctl disable --now gnome-remote-desktop.service
+  else
+    ok "gnome-remote-desktop.service disabled and stopped"
+  fi
+}
+
 ensure_dropin() {
   local user=$1 props
-  props=$(systemctl show "gnome-headless-session@$user.service" -p DynamicUser -p User 2>/dev/null || true)
-  if grep -qx 'DynamicUser=no' <<<"$props" && grep -qx 'User=root' <<<"$props"; then
-    ok "gnome-headless-session@.service runs with DynamicUser=no, User=root"
+  props=$(systemctl show "gnome-headless-session@$user.service" -p DynamicUser -p User -p Restart 2>/dev/null || true)
+  if grep -qx 'DynamicUser=no' <<<"$props" && grep -qx 'User=root' <<<"$props" &&
+    grep -qx 'Restart=always' <<<"$props" && cmp -s <(printf '%s\n' "$DROPIN_CONTENT") "$DROPIN_DIR/$DROPIN_NAME"; then
+    ok "gnome-headless-session@.service runs with DynamicUser=no, User=root, Restart=always"
   else
-    change "install $DROPIN_DIR/$DROPIN_NAME (DynamicUser=no, User=root)" write_dropin
+    change "install $DROPIN_DIR/$DROPIN_NAME (DynamicUser=no, User=root, Restart=always)" write_dropin
+  fi
+}
+
+# GNOME 50's polkit agent runs polkit-agent-helper-1 through a socket unit. Once that socket hits
+# its trigger limit it stays failed, and gnome-shell then logs "polkit-agent-helper-1: needs to be
+# setuid root" in a tight loop (millions of lines on 10.1.2.5) and no authentication dialog works.
+ensure_polkit_agent_helper() {
+  local unit=polkit-agent-helper.socket
+  systemctl cat "$unit" >/dev/null 2>&1 || return 0
+  if systemctl is-failed --quiet "$unit"; then
+    change "reset and restart the failed $unit" restart_failed_unit "$unit"
+  else
+    ok "$unit is not failed"
+  fi
+}
+
+restart_failed_unit() {
+  systemctl reset-failed "$1" && systemctl restart "$1"
+}
+
+mark_initial_setup_done() {
+  runuser -u "$1" -- mkdir -p "$2/.config" &&
+    printf 'yes\n' | runuser -u "$1" -- tee "$2/.config/gnome-initial-setup-done" >/dev/null
+}
+
+# A persistent session otherwise opens GNOME Initial Setup ("--existing-user") over the desktop,
+# and nobody sits at the machine to finish it.
+ensure_initial_setup_done() {
+  local user=$1 home
+  home=$(getent passwd "$user" | cut -d: -f6)
+  if [[ "$(cat "$home/.config/gnome-initial-setup-done" 2>/dev/null)" == "yes" ]]; then
+    ok "$user: GNOME Initial Setup marked done"
+  else
+    change "$user: mark GNOME Initial Setup done" mark_initial_setup_done "$user" "$home"
   fi
 }
 
@@ -391,6 +459,7 @@ setup_headless() {
   fi
 
   if [[ "$persistent" == "persistent" ]]; then
+    ensure_initial_setup_done "$user"
     ensure_dropin "$user"
     ensure_unit "gnome-headless-session@$user.service"
     wait_for_bus "$user" "$uid"
@@ -518,6 +587,7 @@ main() {
     --check | --dry-run) MODE=check ;;
     --apply) MODE=apply ;;
     --system) SYSTEM=1 ;;
+    --no-system) NO_SYSTEM=1 ;;
     --install) INSTALL=1 ;;
     --desktop) DESKTOP=1 ;;
     --firewall) FIREWALL=1 ;;
@@ -549,8 +619,12 @@ main() {
     shift
   done
 
-  if [[ $SYSTEM -eq 0 && ${#HEADLESS[@]} -eq 0 ]]; then
-    echo "nothing to do: pass --system and/or --headless USER:PORT[:persistent]" >&2
+  if [[ $SYSTEM -eq 1 && $NO_SYSTEM -eq 1 ]]; then
+    echo "--system and --no-system contradict each other" >&2
+    exit 1
+  fi
+  if [[ $SYSTEM -eq 0 && $NO_SYSTEM -eq 0 && ${#HEADLESS[@]} -eq 0 ]]; then
+    echo "nothing to do: pass --system, --no-system and/or --headless USER:PORT[:persistent]" >&2
     exit 1
   fi
   if [[ $EUID -ne 0 ]]; then
@@ -567,6 +641,10 @@ main() {
   fi
   if [[ ${#HEADLESS[@]} -gt 0 ]]; then
     check_headless_support
+    ensure_polkit_agent_helper
+  fi
+  if [[ $NO_SYSTEM -eq 1 ]]; then
+    disable_system
   fi
   if [[ $SYSTEM -eq 1 ]]; then
     setup_system

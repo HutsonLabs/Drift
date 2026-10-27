@@ -126,6 +126,9 @@ enum Cmd {
         /// Headless daemons as USER:PORT[:persistent] (default: the homelab test users).
         #[arg(long = "headless")]
         headless: Vec<String>,
+        /// Check that Remote Login is off (`drift-host-setup.sh --no-system`) instead of on.
+        #[arg(long)]
+        no_system: bool,
         /// Evaluate a saved report instead of connecting.
         #[arg(long)]
         report: Option<PathBuf>,
@@ -190,8 +193,8 @@ fn run(cmd: Cmd) -> Result<()> {
                 )
             }
         }
-        Cmd::HostSetupCheck { host, headless, report, save_report } => {
-            host_setup_check(host, &headless, report.as_deref(), save_report.as_deref())
+        Cmd::HostSetupCheck { host, headless, no_system, report, save_report } => {
+            host_setup_check(host, &headless, no_system, report.as_deref(), save_report.as_deref())
         }
         Cmd::ImportFixtures { staging, secrets } => import_fixtures(&root, staging, secrets),
     }
@@ -385,10 +388,11 @@ fn import_fixtures(root: &Path, staging: Option<PathBuf>, secrets: Option<PathBu
 fn host_setup_check(
     host: Option<String>,
     headless: &[String],
+    no_system: bool,
     report: Option<&Path>,
     save: Option<&Path>,
 ) -> Result<()> {
-    let mut exp = host_check::Expectations::default();
+    let mut exp = host_check::Expectations { system: !no_system, ..Default::default() };
     if !headless.is_empty() {
         exp.headless = headless.iter().map(|s| s.parse()).collect::<Result<_>>()?;
     }

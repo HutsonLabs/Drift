@@ -74,7 +74,7 @@ for spec in "$@"; do
     systemctl is-active "gnome-headless-session@$user.service" 2>&1 || true
     systemctl is-enabled "gnome-headless-session@$user.service" 2>&1 || true
     section "unit-props gnome-headless-session@$user.service"
-    systemctl show "gnome-headless-session@$user.service" -p DynamicUser -p User 2>&1 || true
+    systemctl show "gnome-headless-session@$user.service" -p DynamicUser -p User -p Restart 2>&1 || true
   fi
 done
 section "end"

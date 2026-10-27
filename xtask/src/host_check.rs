@@ -65,6 +65,9 @@ impl std::fmt::Display for HeadlessSpec {
 pub struct Expectations {
     /// Remote Login (system daemon) port.
     pub system_port: u16,
+    /// Whether Remote Login should be on (`false` checks that it is off: `drift-host-setup.sh
+    /// --no-system`, a headless-only machine).
+    pub system: bool,
     /// Headless daemons.
     pub headless: Vec<HeadlessSpec>,
 }
@@ -74,6 +77,7 @@ impl Default for Expectations {
     fn default() -> Self {
         Self {
             system_port: 3389,
+            system: true,
             headless: vec![
                 HeadlessSpec { user: "drifttest".into(), port: 3391, persistent: false },
                 HeadlessSpec { user: "drifttest2".into(), port: 3392, persistent: true },
@@ -168,7 +172,7 @@ pub struct HostReport {
     pub processes: Vec<Proc>,
     /// System units by name.
     pub units: Vec<(String, UnitState)>,
-    /// `systemctl show -p DynamicUser -p User` per unit.
+    /// `systemctl show -p DynamicUser -p User -p Restart` per unit.
     pub unit_props: Vec<(String, Vec<(String, String)>)>,
     /// User units: (user, unit, state).
     pub user_units: Vec<(String, String, UnitState)>,
@@ -386,22 +390,36 @@ pub fn evaluate(report: &HostReport, exp: &Expectations) -> Vec<Check> {
     let mut out = Vec::new();
     out.push(check("report complete", r.complete, if r.complete { "ok" } else { "report truncated" }));
 
-    // Remote Login: the system daemon.
+    // Remote Login: the system daemon, on (`--system`) or off (`--no-system`).
     let sys_unit = unit(r, "gnome-remote-desktop.service");
-    out.push(check(
-        "system: gnome-remote-desktop.service enabled and active",
-        sys_unit.is_some_and(UnitState::is_up),
-        format!("{sys_unit:?}"),
-    ));
-    status_checks(&mut out, "system", r.system.as_ref(), cert(r, "system"));
-    let sys_port = r.system.as_ref().and_then(|s| s.port);
-    out.push(check(
-        format!("system: RDP port {}", exp.system_port),
-        sys_port == Some(exp.system_port),
-        format!("port={}", show(&sys_port)),
-    ));
-    let (ok, detail) = listening(r, exp.system_port, "gnome-remote-desktop", "--system");
-    out.push(check(format!("system: listening on :{}", exp.system_port), ok, detail));
+    if exp.system {
+        out.push(check(
+            "system: gnome-remote-desktop.service enabled and active",
+            sys_unit.is_some_and(UnitState::is_up),
+            format!("{sys_unit:?}"),
+        ));
+        status_checks(&mut out, "system", r.system.as_ref(), cert(r, "system"));
+        let sys_port = r.system.as_ref().and_then(|s| s.port);
+        out.push(check(
+            format!("system: RDP port {}", exp.system_port),
+            sys_port == Some(exp.system_port),
+            format!("port={}", show(&sys_port)),
+        ));
+        let (ok, detail) = listening(r, exp.system_port, "gnome-remote-desktop", "--system");
+        out.push(check(format!("system: listening on :{}", exp.system_port), ok, detail));
+    } else {
+        out.push(check(
+            "system: gnome-remote-desktop.service disabled and stopped (Remote Login off)",
+            sys_unit.is_none_or(|s| s.active != "active" && s.enabled != "enabled"),
+            format!("{sys_unit:?}"),
+        ));
+        let enabled = r.system.as_ref().and_then(|s| s.enabled);
+        out.push(check(
+            "system: RDP disabled (Remote Login off)",
+            enabled != Some(true),
+            format!("status={}", show(&enabled)),
+        ));
+    }
 
     // Headless daemons.
     for h in &exp.headless {
@@ -444,6 +462,12 @@ pub fn evaluate(report: &HostReport, exp: &Expectations) -> Vec<Check> {
                 // User=gdm passes on AnduinOS; the setup installs User=root since GNOME-WIZARD.
                 format!("{u}: headless session drop-in (DynamicUser=no, User=root or gdm)"),
                 has("DynamicUser", "no") && (has("User", "root") || has("User", "gdm")),
+                format!("{props:?}"),
+            ));
+            out.push(check(
+                // gdm-new-session exits 0 when the session ends; Restart=on-failure leaves it dead.
+                format!("{u}: headless session restarts whenever it ends (Restart=always)"),
+                has("Restart", "always"),
                 format!("{props:?}"),
             ));
         }

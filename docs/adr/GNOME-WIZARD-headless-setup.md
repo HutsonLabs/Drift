@@ -91,3 +91,23 @@ showed four gaps in `host/drift-host-setup.sh`:
   a line in that machine's `authorized_keys`.
 - The Fedora 44 and Arch package sets were resolved in containers, not run on a real machine;
   the openSUSE set was not tried. The manual checks are in `docs/acceptance.md`.
+
+## Addendum (2026-10-26): keeping the persistent session alive
+
+Two days after the first run on 10.1.2.5 the headless session was gone and nothing listened on
+:3390. `gdm-new-session` exits 0 whenever the session ends, so `gnome-headless-session@.service`'s
+`Restart=on-failure` never brought it back, and the per-user g-r-d daemon stopped with
+`gnome-session.target`. The same session was also stuck in `gnome-initial-setup --existing-user`,
+and `polkit-agent-helper.socket` had hit its trigger limit, which made gnome-shell's polkit agent
+loop on "needs to be setuid root".
+
+Decision, all in `host/drift-host-setup.sh` (so the wizard ships it):
+- the drop-in adds `Restart=always`, `RestartSec=5` and `[Unit] StartLimitIntervalSec=0`, and
+  is rewritten whenever its content differs from the committed file;
+- a persistent user gets `~/.config/gnome-initial-setup-done`;
+- a failed `polkit-agent-helper.socket` is reset and restarted;
+- `--no-system` turns Remote Login off for a headless-only machine.
+
+`cargo xtask host-setup-check` checks `Restart=always` and gains `--no-system`. The wizard's
+arguments are unchanged: it already passes `--headless USER:PORT:persistent` and leaves Remote
+Login alone unless asked to turn it on.

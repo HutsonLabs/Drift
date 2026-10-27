@@ -48,7 +48,13 @@ fn setup_script_embeds_the_committed_dropin() {
     let dropin = read("gnome-headless-session-dropin.conf");
     // GNOME-WIZARD: as `gdm`, polkit refuses gdm-new-session on Ubuntu 26.04 / GDM 50
     // ("Not authorized for action …manage-user-displays"); root passes everywhere.
-    assert_eq!(dropin, "[Service]\nDynamicUser=no\nUser=root\nGroup=root\n", "GNOME-WIZARD drop-in");
+    // gdm-new-session exits 0 whenever the session ends, so only Restart=always keeps a persistent
+    // session (and its RDP daemon) alive; no start limit, so it keeps trying after a bad patch.
+    assert_eq!(
+        dropin,
+        "[Unit]\nStartLimitIntervalSec=0\n\n[Service]\nDynamicUser=no\nUser=root\nGroup=root\nRestart=always\nRestartSec=5\n",
+        "GNOME-WIZARD drop-in"
+    );
     let s = read("drift-host-setup.sh");
     let start = s.find("readonly DROPIN_CONTENT='").map(|i| i + "readonly DROPIN_CONTENT='".len());
     let embedded = start.and_then(|i| s[i..].find('\'').map(|j| &s[i..i + j]));
@@ -209,4 +215,31 @@ fn setup_script_starts_pipewire_before_remote_desktop() {
     let grd =
         s.find("ensure_user_unit \"$user\" gnome-remote-desktop-headless.service").expect("g-r-d ensured");
     assert!(pipewire < grd, "PipeWire must be up before the headless daemon");
+}
+
+/// 10.1.2.5, 2026-10-26: a persistent session must not open GNOME Initial Setup over the desktop,
+/// a failed `polkit-agent-helper.socket` is repaired, and `--no-system` turns Remote Login off for a
+/// headless-only machine.
+#[test]
+fn setup_script_finishes_initial_setup_repairs_polkit_and_can_disable_remote_login() {
+    let s = read("drift-host-setup.sh");
+    assert!(s.contains(".config/gnome-initial-setup-done"), "Initial Setup marked done");
+    assert!(s.contains("polkit-agent-helper.socket"), "polkit helper socket checked");
+    assert!(s.contains("systemctl reset-failed"), "failed socket reset");
+    assert!(s.contains("--no-system)"), "--no-system flag");
+    assert!(s.contains("grdctl --system rdp disable"), "system RDP disabled");
+    assert!(s.contains("systemctl disable --now gnome-remote-desktop.service"), "system daemon stopped");
+    assert!(s.contains("-p Restart"), "the drop-in check reads Restart=");
+}
+
+/// `--system` and `--no-system` together are refused before anything runs.
+#[test]
+fn setup_script_rejects_system_and_no_system_together() {
+    let out = Command::new("bash")
+        .arg(host("drift-host-setup.sh"))
+        .args(["--system", "--no-system"])
+        .output()
+        .expect("run host/drift-host-setup.sh");
+    assert_eq!(out.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("contradict"), "{out:?}");
 }

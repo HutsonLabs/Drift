@@ -18,7 +18,7 @@ Connection form with the RDP password filled in (ADR `GNOME-WIZARD-headless-setu
 |---|---|
 | `host/drift-gnome-setup` | Runs on the Mac: sets up one machine over SSH and opens the prefilled connection in Drift. |
 | `host/drift-host-setup.sh` | Idempotent setup script (`--check` by default, `--apply` to change). |
-| `host/gnome-headless-session-dropin.conf` | The systemd drop-in that makes `gnome-headless-session@.service` start (runs its launcher as root). |
+| `host/gnome-headless-session-dropin.conf` | The systemd drop-in that makes `gnome-headless-session@.service` start (runs its launcher as root) and restarts it whenever it ends. |
 | `host/drift-host-report.sh` | Read-only state report used by `cargo xtask host-setup-check`. |
 
 ## Setting up a machine from your Mac
@@ -131,15 +131,51 @@ or later) and stops with an error otherwise.
    without those variables are an error.
 3. `grdctl --system rdp enable`, then `systemctl enable --now gnome-remote-desktop.service`.
 
+**`--no-system`** (a headless-only machine): Remote Login off. `grdctl --system rdp disable`
+when it is enabled, and `systemctl disable --now gnome-remote-desktop.service` when the unit is
+enabled or running. Refused together with `--system`. The Remote Login greeter and a persistent
+headless session for the same account compete for that account's one GNOME session.
+
 **`--headless USER:PORT[:persistent]`**
-1. With `persistent`: the drop-in (`DynamicUser=no`, `User=root`, `Group=root`) is installed as
-   `/etc/systemd/system/gnome-headless-session@.service.d/drift.conf` unless
-   `systemctl show` already reports those values, then
-   `systemctl enable --now gnome-headless-session@USER.service`. Without a drop-in the
-   shipped unit fails with "Failed: The connection is closed" (exit 70, plan §1.9). The
-   earlier `User=gdm` drop-in works on AnduinOS but not on Ubuntu 26.04, where polkit refuses
-   it ("Not authorized for action org.gnome.displaymanager.displayfactory.manage-user-displays");
-   root passes on both.
+
+Before the users: when `polkit-agent-helper.socket` exists and is *failed* (it hits its trigger
+limit and stays down), it is reset and restarted. With it down, gnome-shell's polkit agent logs
+"polkit-agent-helper-1: needs to be setuid root" in a tight loop (over 6 million lines on
+10.1.2.5) and no authentication dialog works.
+
+1. With `persistent`: GNOME Initial Setup is marked done for USER
+   (`~USER/.config/gnome-initial-setup-done` = `yes`); otherwise the session opens
+   `gnome-initial-setup --existing-user` over the desktop and nobody is there to finish it. Then
+   the drop-in is installed as
+   `/etc/systemd/system/gnome-headless-session@.service.d/drift.conf` unless the file already
+   has exactly the committed content and `systemctl show` reports `DynamicUser=no`, `User=root`
+   and `Restart=always`, then `systemctl enable --now gnome-headless-session@USER.service`.
+   The drop-in:
+
+   ```ini
+   [Unit]
+   StartLimitIntervalSec=0
+
+   [Service]
+   DynamicUser=no
+   User=root
+   Group=root
+   Restart=always
+   RestartSec=5
+   ```
+
+   Without `User=root` the shipped unit fails with "Failed: The connection is closed" (exit 70,
+   plan §1.9). The earlier `User=gdm` drop-in works on AnduinOS but not on Ubuntu 26.04, where
+   polkit refuses it ("Not authorized for action
+   org.gnome.displaymanager.displayfactory.manage-user-displays"); root passes on both.
+   `Restart=always` is what makes the session *persistent*: `gdm-new-session` exits 0 whenever
+   the session ends (log out from the desktop, a gnome-shell crash, or a `systemctl restart` that
+   races the old session's teardown and ends at once with "Session finished"), so the shipped
+   `Restart=on-failure` left the unit dead, and the per-user `gnome-remote-desktop-headless`
+   daemon, which belongs to `gnome-session.target`, stopped with it. Nothing listened on the
+   port until the next reboot (10.1.2.5, 2026-10-24). With the drop-in the session and its RDP
+   daemon are back about 7 s after the session ends, and `StartLimitIntervalSec=0` keeps systemd
+   retrying.
 2. The remaining steps run as USER on the user's session bus (`/run/user/UID/bus`); a
    non-persistent user must already have a session.
 3. TLS certificate and key, as for the system daemon, under
@@ -196,7 +232,28 @@ the report and checks:
   and negotiation off), TLS certificate valid, credentials set, a `--headless` g-r-d
   process owned by that user listening on the port, and the user unit enabled and active;
 - for persistent users: `gnome-headless-session@USER.service` enabled and active, with
-  `DynamicUser=no` and `User=root` (or the older `User=gdm`, which works on AnduinOS).
+  `DynamicUser=no` and `User=root` (or the older `User=gdm`, which works on AnduinOS), and
+  `Restart=always`.
+
+With `--no-system` (a machine set up with `drift-host-setup.sh --no-system`) the system daemon
+checks become: `gnome-remote-desktop.service` disabled and stopped, and system RDP disabled.
+
+## 10.1.2.5: a persistent headless session only (2026-10-26)
+
+The dev runner (Ubuntu 26.04.1, GDM 50.1, g-r-d 50.2) has one persistent Wayland headless session
+for `hutsonphd` on :3390 and no Remote Login. It is converged and verified with:
+
+```bash
+ARGS='--no-system --headless hutsonphd:3390:persistent --firewall --allow-from 10.1.0.0/21'
+ssh hutsonphd@10.1.2.5 "sudo -n bash -s -- --check $ARGS" < host/drift-host-setup.sh  # 0 pending
+cargo xtask host-setup-check --host hutsonphd@10.1.2.5 --headless hutsonphd:3390:persistent --no-system
+```
+
+The RDP credentials are set with `DRIFT_HEADLESS_RDP_USER_HUTSONPHD` /
+`DRIFT_HEADLESS_RDP_PASS_HUTSONPHD` on the `--apply` run. Port 3390 is additionally allowed on
+`tailscale0` (`ufw allow in on tailscale0 to any port 3390 proto tcp`), which the script does not
+manage. Ending the session (`loginctl terminate-session`) brings a new Wayland session and the
+:3390 listener back in about 7 s.
 
 The system daemon stops listening for a moment while it hands a connection over, so a
 failing live check is retried up to three times. `--report FILE` evaluates a saved report
