@@ -22,7 +22,7 @@ function entries() {
   const pin = "f3:e7:a2:68:ee:a5:64:38:f8:14:03:12:50:4d:44:97:6c:dc:c3:ae:f2:4a:98:92:da:97:72:fe:b6:e6:fe:81";
   return [
     entry(profile("remote-login", { name: "Homelab workstation (upstairs office)", host: "homelab-workstation.tail1234.ts.net" })),
-    entry(profile("headless", { name: "Build box", host: "10.1.2.41", cert_pin: pin })),
+    entry(profile("headless", { name: "Build box", host: "10.0.2.41", cert_pin: pin })),
     entry(profile("desktop-sharing", { name: "Living room", host: "living-room.local" })),
     entry(profile("remote-login", { name: "Lab", host: "192.168.50.200" })),
   ];

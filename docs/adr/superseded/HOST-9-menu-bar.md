@@ -44,7 +44,7 @@ sandboxed), as its own bundle.
    the pane. Local Network is left to macOS's own prompt.
 7. **Start at Login** uses `SMAppService.mainAppService` (`register`/`unregister`). It needs the
    app bundle; run as a bare binary the item reports the error in the log.
-8. **Bundle.** `crates/drift-host-app/Info.plist` (`com.hutsonlabs.drift.host`, `LSUIElement`,
+8. **Bundle.** `crates/drift-host-app/Info.plist` (`com.example.drift.host`, `LSUIElement`,
    Local Network usage text, `_drift-host._tcp` Bonjour type) and `cargo xtask host-bundle
    [--debug]` build `target/<profile>/bundle/Drift Host.app` with the app and the `drift-host`
    command inside, signed ad hoc. Developer ID signing, notarization and the DMG are STORE-4.

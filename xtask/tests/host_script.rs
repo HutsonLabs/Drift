@@ -143,7 +143,7 @@ fn setup_script_blanks_never_and_can_limit_the_firewall() {
 fn setup_script_rejects_a_bad_allow_from() {
     let out = Command::new("bash")
         .arg(host("drift-host-setup.sh"))
-        .args(["--headless", "me:3390", "--firewall", "--allow-from", "10.1.2.0/99"])
+        .args(["--headless", "me:3390", "--firewall", "--allow-from", "10.0.2.0/99"])
         .output()
         .expect("run host/drift-host-setup.sh");
     assert_eq!(out.status.code(), Some(1));
@@ -186,12 +186,12 @@ fn gnome_setup_with_fake_ssh(dir: &std::path::Path, args: &[&str]) -> std::proce
 fn gnome_setup_installs_the_desktop_and_passes_allow_from() {
     let dir = tempfile::tempdir().expect("tempdir");
     let out =
-        gnome_setup_with_fake_ssh(dir.path(), &["--check", "--allow-from", "10.1.0.0/21", "me@box.local"]);
+        gnome_setup_with_fake_ssh(dir.path(), &["--check", "--allow-from", "10.0.0.0/21", "me@box.local"]);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let log = std::fs::read_to_string(dir.path().join("log")).expect("fake ssh log");
     let run = log.lines().find(|l| l.contains("--headless")).expect("setup.sh run");
     assert!(run.contains(" --desktop "), "{run}");
-    assert!(run.contains(" --firewall --allow-from 10.1.0.0/21 "), "{run}");
+    assert!(run.contains(" --firewall --allow-from 10.0.0.0/21 "), "{run}");
 }
 
 /// `--allow-from` lands in a remote command line, so anything but a network is refused locally.
@@ -207,7 +207,7 @@ fn gnome_setup_refuses_an_allow_from_that_is_not_a_network() {
 
 /// GNOME-WIZARD: g-r-d streams the screen through PipeWire. A user manager that was already
 /// running when GNOME was installed never starts `pipewire.socket`, and every RDP login then
-/// ends with "Couldn't connect pipewire context" (seen on 10.1.2.5, 2026-10-24).
+/// ends with "Couldn't connect pipewire context" (seen on 10.0.2.5, 2026-10-24).
 #[test]
 fn setup_script_starts_pipewire_before_remote_desktop() {
     let s = read("drift-host-setup.sh");
@@ -217,7 +217,7 @@ fn setup_script_starts_pipewire_before_remote_desktop() {
     assert!(pipewire < grd, "PipeWire must be up before the headless daemon");
 }
 
-/// 10.1.2.5, 2026-10-26: a persistent session must not open GNOME Initial Setup over the desktop,
+/// 10.0.2.5, 2026-10-26: a persistent session must not open GNOME Initial Setup over the desktop,
 /// a failed `polkit-agent-helper.socket` is repaired, and `--no-system` turns Remote Login off for a
 /// headless-only machine.
 #[test]

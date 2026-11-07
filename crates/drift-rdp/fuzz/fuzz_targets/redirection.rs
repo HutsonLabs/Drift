@@ -24,7 +24,7 @@ use libfuzzer_sys::fuzz_target;
 
 /// Follows one decoded redirection PDU exactly as `SessionActor::connect_loop` does.
 fn follow(pdu: ServerRedirectionPdu) {
-    let mut loop_state = RedirectLoop::new(ConnectMode::RemoteLogin, "10.1.2.40", 3389);
+    let mut loop_state = RedirectLoop::new(ConnectMode::RemoteLogin, "10.0.2.40", 3389);
     // Up to MAX_REDIRECTS + 1 so the loop protection itself is exercised.
     for _ in 0..6 {
         match loop_state.on_redirect(&mut pdu.clone()) {

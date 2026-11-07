@@ -26,11 +26,11 @@ real-time encoder (HOST-4), injection (HOST-6), pairing (HOST-8) and the menu-ba
    it, loopback only.*
 3. **Authentication for now: one NLA account.** `ironrdp-server` checks CredSSP against one
    preloaded account (HOST-1). The user name is in `host.toml`; the password is in the Keychain
-   (`drift-apple`, service `com.hutsonlabs.drift.host`), set with `drift-host set-password`. The
+   (`drift-apple`, service `com.example.drift.host`), set with `drift-host set-password`. The
    host never stores it in a file. *HOST-8 kept this and added paired device keys on top (ADR
    `HOST-8-pairing`, decision 3).*
 4. **A self-signed certificate created once.** `host-cert.der` and `host-key.der` (mode 0600) in
-   `~/Library/Application Support/com.hutsonlabs.drift.host`. The binary prints the SHA-256
+   `~/Library/Application Support/com.example.drift.host`. The binary prints the SHA-256
    fingerprint Drift pins. The certificate never rotates by itself, because paired devices pin it.
    It is generated with `rcgen`, already a workspace dependency (until now only for tests).
 5. **One session at a time, refused politely.** The host owns its accept loop instead of

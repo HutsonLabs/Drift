@@ -336,7 +336,7 @@ fn certificate_check_table() {
 #[test]
 fn client_name_table() {
     let cases = [
-        ("Hutsons-MacBook-Pro.local", "Hutsons-MacBook"),
+        ("Jordans-MacBook-Pro.local", "Jordans-MacBook"),
         ("mini", "mini"),
         ("my mac.lan", "mymac"),
         ("", "drift"),

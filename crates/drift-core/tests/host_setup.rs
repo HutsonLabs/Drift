@@ -20,25 +20,25 @@ fn fp(s: &str) -> CertFingerprint {
 }
 
 fn options() -> SetupOptions {
-    let mut o = SetupOptions::defaults("dev.lan", "hutsonphd");
+    let mut o = SetupOptions::defaults("dev.lan", "alice");
     o.rdp_password = Some("Secret-pass1".into());
     o
 }
 
 #[test]
 fn defaults_follow_drift_gnome_setup() {
-    let o = SetupOptions::defaults("dev.lan", "hutsonphd");
+    let o = SetupOptions::defaults("dev.lan", "alice");
     assert_eq!(o.name, "dev");
-    assert_eq!(o.account, "hutsonphd");
+    assert_eq!(o.account, "alice");
     assert_eq!(o.port, DEFAULT_HEADLESS_PORT);
-    assert_eq!(o.rdp_username, "hutsonphd");
+    assert_eq!(o.rdp_username, "alice");
     assert_eq!(o.rdp_password, None, "the wizard fills in a generated password");
     assert!(!o.remote_login);
     assert!(o.install_desktop);
     assert!(o.open_firewall);
     assert_eq!(o.allow_from, None);
     // An IP address is its own name.
-    assert_eq!(SetupOptions::defaults("10.1.2.5", "me").name, "10.1.2.5");
+    assert_eq!(SetupOptions::defaults("10.0.2.5", "me").name, "10.0.2.5");
     assert_eq!(options().validate(), Ok(()));
 }
 
@@ -50,7 +50,7 @@ fn validation_names_every_bad_field() {
     o.port = 0;
     o.rdp_username = String::new();
     o.rdp_password = Some("short".into());
-    o.allow_from = Some("10.1.2.0/99".into());
+    o.allow_from = Some("10.0.2.0/99".into());
     assert_eq!(
         o.validate(),
         Err(vec![
@@ -78,12 +78,12 @@ fn validation_names_every_bad_field() {
         o.account = account.into();
         assert_eq!(o.validate(), Err(vec![SetupIssue::Account]), "{account:?}");
     }
-    for net in ["10.1.0.0/21", "10.1.2.5", "fd00::/64", "fe80::1"] {
+    for net in ["10.0.0.0/21", "10.0.2.5", "fd00::/64", "fe80::1"] {
         let mut o = options();
         o.allow_from = Some(net.into());
         assert_eq!(o.validate(), Ok(()), "{net}");
     }
-    for net in ["10.1.2.256", "10.1.2.0/33", "1.2.3.4;reboot", "fd00::/129", "box.lan", ""] {
+    for net in ["10.0.2.256", "10.0.2.0/33", "1.2.3.4;reboot", "fd00::/129", "box.lan", ""] {
         let mut o = options();
         o.allow_from = Some(net.into());
         assert_eq!(o.validate(), Err(vec![SetupIssue::AllowFrom]), "{net:?}");
@@ -100,12 +100,12 @@ fn script_args_match_the_script_flags() {
     let o = options();
     assert_eq!(
         o.script_args(RunMode::Check),
-        ["--check", "--desktop", "--install", "--firewall", "--headless", "hutsonphd:3390:persistent"]
+        ["--check", "--desktop", "--install", "--firewall", "--headless", "alice:3390:persistent"]
     );
     let mut o = options();
     o.install_desktop = false;
     o.open_firewall = true;
-    o.allow_from = Some("10.1.0.0/21".into());
+    o.allow_from = Some("10.0.0.0/21".into());
     o.remote_login = true;
     assert_eq!(
         o.script_args(RunMode::Apply),
@@ -114,15 +114,15 @@ fn script_args_match_the_script_flags() {
             "--install",
             "--firewall",
             "--allow-from",
-            "10.1.0.0/21",
+            "10.0.0.0/21",
             "--headless",
-            "hutsonphd:3390:persistent",
+            "alice:3390:persistent",
             "--system"
         ]
     );
     let mut o = options();
     o.open_firewall = false;
-    o.allow_from = Some("10.1.0.0/21".into());
+    o.allow_from = Some("10.0.0.0/21".into());
     assert!(
         !o.script_args(RunMode::Apply).iter().any(|a| a.starts_with("--firewall") || a == "--allow-from")
     );
@@ -154,7 +154,7 @@ fn remote_command_never_carries_a_secret() {
     let args = o.script_args(RunMode::Check);
     assert_eq!(
         remote_command(Sudo::Passwordless, &args),
-        "sudo -n bash -s -- '--check' '--desktop' '--install' '--firewall' '--headless' 'hutsonphd:3390:persistent'"
+        "sudo -n bash -s -- '--check' '--desktop' '--install' '--firewall' '--headless' 'alice:3390:persistent'"
     );
     let with_password = remote_command(Sudo::Password, &args);
     // -k: with a cached sudo timestamp, `sudo -S` would not read the password line, and bash
@@ -201,12 +201,12 @@ fn output_lines_parse() {
         SetupLine::Ok { text: "gdm.service enabled and active".into() }
     );
     assert_eq!(
-        parse_line("would:  hutsonphd: enable and start pipewire.socket"),
-        SetupLine::Would { text: "hutsonphd: enable and start pipewire.socket".into() }
+        parse_line("would:  alice: enable and start pipewire.socket"),
+        SetupLine::Would { text: "alice: enable and start pipewire.socket".into() }
     );
     assert_eq!(
-        parse_line("        $ as_user hutsonphd systemctl --user enable --now pipewire.socket"),
-        SetupLine::Command { text: "as_user hutsonphd systemctl --user enable --now pipewire.socket".into() }
+        parse_line("        $ as_user alice systemctl --user enable --now pipewire.socket"),
+        SetupLine::Command { text: "as_user alice systemctl --user enable --now pipewire.socket".into() }
     );
     assert_eq!(
         parse_line("change: install a minimal GNOME (GNOME Shell, GDM, gnome-remote-desktop)"),
@@ -225,8 +225,8 @@ fn output_lines_parse() {
         SetupLine::Error { text: "user nobody2 does not exist".into() }
     );
     assert_eq!(
-        parse_line(&format!("fingerprint: hutsonphd {FP}")),
-        SetupLine::Fingerprint { owner: "hutsonphd".into(), fingerprint: fp(FP) }
+        parse_line(&format!("fingerprint: alice {FP}")),
+        SetupLine::Fingerprint { owner: "alice".into(), fingerprint: fp(FP) }
     );
     assert_eq!(
         parse_line("drift-host-setup: 1 change(s) pending, 0 error(s)"),
@@ -241,13 +241,13 @@ fn output_lines_parse() {
     }
 }
 
-/// The run against 10.1.2.5 on 2026-10-24 (`--check`, one change pending).
+/// The run against 10.0.2.5 on 2026-10-24 (`--check`, one change pending).
 const CHECK_RUN: &str = "drift-host-setup: mode=check
 ok:     GNOME Shell and GDM are installed
 ok:     gdm.service enabled and active
-fingerprint: hutsonphd 48:a5:ff:8e:c8:3f:b3:06:d9:69:cc:22:9d:ea:86:76:88:54:57:11:7c:b3:dc:52:a5:22:b3:52:cf:e2:8e:2a
-would:  hutsonphd: enable and start pipewire.socket
-        $ as_user hutsonphd systemctl --user enable --now pipewire.socket
+fingerprint: alice 48:a5:ff:8e:c8:3f:b3:06:d9:69:cc:22:9d:ea:86:76:88:54:57:11:7c:b3:dc:52:a5:22:b3:52:cf:e2:8e:2a
+would:  alice: enable and start pipewire.socket
+        $ as_user alice systemctl --user enable --now pipewire.socket
 drift-host-setup: 1 change(s) pending, 0 error(s)
 ";
 
@@ -256,14 +256,14 @@ fn a_report_collects_fingerprints_errors_and_the_summary() {
     let mut r = SetupReport::default();
     let kinds: Vec<SetupLine> = CHECK_RUN.lines().map(|l| r.feed(l)).collect();
     assert_eq!(kinds.len(), 7);
-    assert_eq!(r.fingerprint("hutsonphd"), Some(fp(FP)));
+    assert_eq!(r.fingerprint("alice"), Some(fp(FP)));
     assert_eq!(r.fingerprint("system"), None);
     assert_eq!(r.summary, Some((1, 0)));
     assert!(r.errors.is_empty());
-    r.feed("error:  hutsonphd: grdctl --headless status failed");
-    r.feed(&format!("fingerprint: hutsonphd {SYSTEM_FP}"));
-    assert_eq!(r.errors, ["hutsonphd: grdctl --headless status failed"]);
-    assert_eq!(r.fingerprint("hutsonphd"), Some(fp(SYSTEM_FP)), "the last fingerprint wins");
+    r.feed("error:  alice: grdctl --headless status failed");
+    r.feed(&format!("fingerprint: alice {SYSTEM_FP}"));
+    assert_eq!(r.errors, ["alice: grdctl --headless status failed"]);
+    assert_eq!(r.fingerprint("alice"), Some(fp(SYSTEM_FP)), "the last fingerprint wins");
 }
 
 #[test]
@@ -279,7 +279,7 @@ fn outcomes_follow_the_exit_codes() {
 #[test]
 fn a_finished_setup_leaves_prefilled_connections() {
     let mut report = SetupReport::default();
-    report.feed(&format!("fingerprint: hutsonphd {FP}"));
+    report.feed(&format!("fingerprint: alice {FP}"));
     report.feed(&format!("fingerprint: system {SYSTEM_FP}"));
 
     let profiles = connection_profiles(&options(), "dev.lan", &report);
@@ -288,7 +288,7 @@ fn a_finished_setup_leaves_prefilled_connections() {
     // The same link drift-gnome-setup prints for this machine.
     assert_eq!(
         link::format(headless),
-        format!("drift-connect:?name=dev&host=dev.lan&port=3390&mode=headless&user=hutsonphd&pin={FP}")
+        format!("drift-connect:?name=dev&host=dev.lan&port=3390&mode=headless&user=alice&pin={FP}")
     );
 
     let mut o = options();
@@ -299,7 +299,7 @@ fn a_finished_setup_leaves_prefilled_connections() {
     assert_eq!(
         link::format(&profiles[1]),
         format!(
-            "drift-connect:?name=dev%20login&host=dev.lan&port=3389&mode=remote-login&user=hutsonphd&pin={SYSTEM_FP}"
+            "drift-connect:?name=dev%20login&host=dev.lan&port=3389&mode=remote-login&user=alice&pin={SYSTEM_FP}"
         )
     );
 

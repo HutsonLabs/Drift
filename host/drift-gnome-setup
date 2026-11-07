@@ -26,7 +26,7 @@
 #   --keep-password   keep the RDP credentials already set; Drift asks for the password
 #   --remote-login    also set up Remote Login: GNOME's login screen on port 3389, for any
 #                     account (adds a second connection)
-#   --allow-from NET  open the firewall only to this network, e.g. 10.1.0.0/21
+#   --allow-from NET  open the firewall only to this network, e.g. 10.0.0.0/21
 #   --check           show what would change on the machine; change nothing
 #   --no-open         print the link instead of opening Drift
 #   --print-link      only print the drift-connect: link for the options and MACHINE (no SSH;
@@ -149,7 +149,7 @@ main() {
   [[ "$PORT" -ne 3389 || $REMOTE_LOGIN -eq 0 ]] || die "port 3389 belongs to Remote Login; pick another --port"
   # It becomes part of a remote command line; drift-host-setup.sh checks the address itself.
   [[ -z "$ALLOW_FROM" || "$ALLOW_FROM" =~ ^[0-9A-Fa-f:.]+(/[0-9]{1,3})?$ ]] ||
-    die "--allow-from '$ALLOW_FROM' is not a network (e.g. 10.1.0.0/21)"
+    die "--allow-from '$ALLOW_FROM' is not a network (e.g. 10.0.0.0/21)"
 
   if [[ $PRINT_LINK -eq 1 ]]; then
     local host=${TARGET#*@} account=$USER_NAME

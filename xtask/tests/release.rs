@@ -126,17 +126,16 @@ fn dry_run_skips_notarization_and_publish_flags_add_steps() {
     assert!(dry.contains(&StepId::Ios) && dry.contains(&StepId::Checksums));
     assert!(dry.contains(&StepId::SyncCheck), "the lockstep check runs in a dry run too");
 
-    let all = release::steps(Options { testflight: true, spaces: true, ..Options::default() }).unwrap();
-    let tail = &all[all.len() - 3..];
-    assert_eq!(tail, [StepId::Testflight, StepId::WhatsNew, StepId::Spaces]);
+    let all = release::steps(Options { testflight: true, ..Options::default() }).unwrap();
+    let tail = &all[all.len() - 2..];
+    assert_eq!(tail, [StepId::Testflight, StepId::WhatsNew]);
 
-    assert!(release::steps(Options { dry_run: true, testflight: true, ..Options::default() }).is_err());
-    assert!(release::steps(Options { dry_run: true, spaces: true, ..Options::default() }).is_err());
+    assert!(release::steps(Options { dry_run: true, testflight: true }).is_err());
 }
 
 #[test]
 fn only_network_and_publish_steps_retry() {
-    for s in [StepId::Notarize, StepId::Testflight, StepId::WhatsNew, StepId::Spaces, StepId::BuildNumber] {
+    for s in [StepId::Notarize, StepId::Testflight, StepId::WhatsNew, StepId::BuildNumber] {
         assert!(s.retries(), "{s:?}");
     }
     for s in [StepId::Clean, StepId::Ios, StepId::Checksums, StepId::Preflight] {
@@ -320,14 +319,8 @@ fn every_artifact_must_embed_the_same_version_and_build() {
 // (GNOME-only: there is no Drift Host DMG any more).
 #[test]
 fn every_run_ships_ios_the_mac_app_store_and_the_dmg_together() {
-    for (dry_run, testflight, spaces) in [
-        (true, false, false),
-        (false, false, false),
-        (false, true, false),
-        (false, true, true),
-        (false, false, true),
-    ] {
-        let steps = release::steps(Options { dry_run, testflight, spaces }).unwrap();
+    for (dry_run, testflight) in [(true, false), (false, false), (false, true)] {
+        let steps = release::steps(Options { dry_run, testflight }).unwrap();
         for step in [StepId::Ios, StepId::MacAppStore, StepId::MacDmg, StepId::SyncCheck] {
             assert!(steps.contains(&step), "{step:?} missing from {steps:?}");
         }
@@ -344,46 +337,6 @@ fn every_run_ships_ios_the_mac_app_store_and_the_dmg_together() {
         let err = release::check_sync(&without, "26.10", 5).unwrap_err().to_string();
         assert!(err.contains(&format!("{missing:?} is missing")), "{err}");
     }
-}
-
-// RELEASE-spaces Red: releases are published on spaces.hutson.cloud (Forgejo), never GitHub, and
-// an existing build can be published without rebuilding it.
-#[test]
-fn releases_publish_on_spaces_hutson_cloud() {
-    assert_eq!(release::SPACES_API, "https://spaces.hutson.cloud/api/v1");
-    assert_eq!(release::SPACES_REPO, "HutsonLabs/drift");
-    let body = release::spaces_release("26.10", 6, "99c04eb0", "# Drift 26.10\n\nHello.\n", "11  a.dmg\n");
-    assert_eq!(body["tag_name"], "v26.10.6");
-    assert_eq!(body["target_commitish"], "99c04eb0");
-    assert_eq!(body["name"], "Drift 26.10 (6)");
-    assert_eq!(body["draft"], false);
-    assert_eq!(body["prerelease"], false);
-    let text = body["body"].as_str().unwrap();
-    assert!(text.starts_with("# Drift 26.10") && text.contains("11  a.dmg"), "{text}");
-    assert_eq!(release::published_files("26.10", 6), ["Drift_26.10.6_aarch64.dmg", "SHA256SUMS"]);
-}
-
-#[test]
-fn only_a_finished_notarized_lockstep_build_can_be_published_later() {
-    let done = |s| record(s, StepStatus::Done, Vec::new());
-    let finished = || {
-        let mut m = manifest(vec![done(StepId::Notarize), done(StepId::Checksums), done(StepId::SyncCheck)]);
-        m.dry_run = false;
-        m
-    };
-    release::publishable(&finished()).unwrap();
-    let mut dry = finished();
-    dry.dry_run = true;
-    assert!(release::publishable(&dry).unwrap_err().to_string().contains("dry run"));
-    for step in [StepId::Notarize, StepId::Checksums, StepId::SyncCheck] {
-        let mut m = finished();
-        m.steps.retain(|r| r.step != step);
-        let err = release::publishable(&m).unwrap_err().to_string();
-        assert!(err.contains(&format!("{step:?}")), "{err}");
-    }
-    let mut failed = finished();
-    failed.steps.push(record(StepId::SyncCheck, StepStatus::Failed, Vec::new()));
-    assert!(release::publishable(&failed).is_err(), "the latest SyncCheck failed");
 }
 
 #[test]
@@ -407,8 +360,6 @@ fn there_is_no_single_platform_publish_path_in_the_docs() {
         !conventions.contains("xtask testflight"),
         "TestFlight goes through `xtask release --testflight`"
     );
-    let skill = std::fs::read_to_string(root.join(".claude/skills/release/SKILL.md")).unwrap();
-    assert!(skill.contains("lockstep"), "the skill states the lockstep rule");
 }
 
 #[test]
@@ -418,22 +369,6 @@ fn builds_may_only_touch_the_generated_xcode_project() {
     let dirty = " M src-tauri/gen/apple/project.yml\n M Cargo.lock\n?? stray.txt\n";
     assert_eq!(release::unexpected_changes(dirty), ["Cargo.lock", "stray.txt"]);
     assert_eq!(release::RESTORED_AFTER_BUILD, ["src-tauri/gen/apple"]);
-}
-
-// RELEASE-spaces-token Red: the spaces.hutson.cloud token is read from one fixed file, never from
-// the environment, so a release publishes the same way from any shell.
-#[test]
-fn the_spaces_token_comes_from_one_fixed_file() {
-    assert_eq!(release::SPACES_TOKEN_FILE, "code/.spaces-tok");
-    assert_eq!(
-        release::spaces_token_path(Path::new("/Users/me")),
-        PathBuf::from("/Users/me/code/.spaces-tok")
-    );
-    assert_eq!(release::parse_spaces_token("abc123\n").unwrap(), "abc123");
-    assert_eq!(release::parse_spaces_token("abc123").unwrap(), "abc123");
-    for bad in ["", "\n", "  \n", "abc\ndef\n", "abc def\n"] {
-        assert!(release::parse_spaces_token(bad).is_err(), "{bad:?} should be rejected");
-    }
 }
 
 #[test]

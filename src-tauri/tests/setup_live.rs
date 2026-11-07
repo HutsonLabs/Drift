@@ -3,7 +3,7 @@
 //! in-app SSH client.
 //!
 //! ```text
-//! DRIFT_SETUP_LIVE=hutsonphd@100.68.152.83 DRIFT_SETUP_LIVE_PORT=3390 \
+//! DRIFT_SETUP_LIVE=alice@100.64.0.83 DRIFT_SETUP_LIVE_PORT=3390 \
 //! DRIFT_SSH_LIVE_STORE=/path/to/store \
 //!     cargo nextest run -p drift-app --test setup_live --run-ignored only --no-capture
 //! ```

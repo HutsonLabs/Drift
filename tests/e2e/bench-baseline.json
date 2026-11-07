@@ -17,7 +17,7 @@
     "host_load": "2.24 1.87 1.39",
     "input_to_wire_p99_samples": "[0.128, 0.849209, 0.164125, 0.131, 0.844917, 0.19, 0.124708, 0.170292, 0.128708, 0.353875]",
     "input_to_wire_p99_worst_second": "0.849",
-    "measured_on": "2026-09-22; homelab@10.1.2.40 (GNOME 50.1, g-r-d 50.2, Ryzen 5 3400GE + Vega 11) from a macOS 27 M4 Pro that was also building other work; anim.py full-screen, headless mode",
+    "measured_on": "2026-09-22; homelab@10.0.2.40 (GNOME 50.1, g-r-d 50.2, Ryzen 5 3400GE + Vega 11) from a macOS 27 M4 Pro that was also building other work; anim.py full-screen, headless mode",
     "rss_total_mb": "52.1"
   },
   "exceptions": {

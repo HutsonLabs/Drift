@@ -9,7 +9,7 @@ fn full_profile() -> ConnectionProfile {
     ConnectionProfile {
         id: Uuid::from_u128(0x0123_4567_89ab_cdef_0123_4567_89ab_cdef),
         name: "Homelab login".into(),
-        host: "10.1.2.40".into(),
+        host: "10.0.2.40".into(),
         port: 3389,
         mode: ConnectMode::RemoteLogin,
         rdp_username: "rdp-system".into(),

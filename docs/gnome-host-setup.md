@@ -2,9 +2,9 @@
 
 How to set up a Linux machine with GNOME for Drift from a Mac (ADR `GNOME-only`), how to
 prepare a GNOME Remote Desktop (g-r-d) 50 host for Drift, and how the homelab test
-host (`homelab@10.1.2.40`, plan §5.2) is kept in that state. The homelab sections were verified
+host (`homelab@10.0.2.40`, plan §5.2) is kept in that state. The homelab sections were verified
 on AnduinOS 2.0.3 (Ubuntu 26.04 base, GNOME Shell 50.1, gdm3 50.1, gnome-remote-desktop 50.2).
-`host/drift-gnome-setup` was first run on 2026-10-24 against 10.1.2.5 (Ubuntu 26.04.1 server,
+`host/drift-gnome-setup` was first run on 2026-10-24 against 10.0.2.5 (Ubuntu 26.04.1 server,
 GDM 50.1), which is where the root drop-in, `--desktop` and the PipeWire step come from (ADR
 `GNOME-WIZARD-headless-setup`); its manual checks are in `docs/acceptance.md` (GNOME-only).
 
@@ -66,7 +66,7 @@ Requirements:
 | `--rdp-user NAME` | The RDP user name (default: the account name). |
 | `--keep-password` | Keep the RDP credentials already set; Drift asks for the password when connecting. |
 | `--remote-login` | Also set up Remote Login: GNOME's login screen on port 3389, for any account, with the same RDP user and password. Adds a second link (`<name> login`) with its own pin. |
-| `--allow-from NET` | Open the firewall only to one network (an address with a prefix, e.g. `10.1.0.0/21`). |
+| `--allow-from NET` | Open the firewall only to one network (an address with a prefix, e.g. `10.0.0.0/21`). |
 | `--check` | Show what would change on the machine; change nothing, set no password, open nothing. |
 | `--no-open` | Print the link instead of opening Drift. |
 | `--print-link` | Only print the `drift-connect:` link for the options and machine (no SSH; pass the fingerprint with `--pin`). |
@@ -90,11 +90,11 @@ the dev Mac:
 
 ```bash
 # 1. See what would change (changes nothing; exit 0 = already converged, 2 = changes pending).
-ssh homelab@10.1.2.40 'sudo -n bash -s -- --check --system \
+ssh homelab@10.0.2.40 'sudo -n bash -s -- --check --system \
     --headless drifttest:3391 --headless drifttest2:3392:persistent' < host/drift-host-setup.sh
 
 # 2. Apply.
-ssh homelab@10.1.2.40 'sudo -n bash -s -- --apply --system \
+ssh homelab@10.0.2.40 'sudo -n bash -s -- --apply --system \
     --headless drifttest:3391 --headless drifttest2:3392:persistent' < host/drift-host-setup.sh
 
 # 3. Verify from the Mac (read-only, over SSH).
@@ -141,7 +141,7 @@ headless session for the same account compete for that account's one GNOME sessi
 Before the users: when `polkit-agent-helper.socket` exists and is *failed* (it hits its trigger
 limit and stays down), it is reset and restarted. With it down, gnome-shell's polkit agent logs
 "polkit-agent-helper-1: needs to be setuid root" in a tight loop (over 6 million lines on
-10.1.2.5) and no authentication dialog works.
+10.0.2.5) and no authentication dialog works.
 
 1. With `persistent`: GNOME Initial Setup is marked done for USER
    (`~USER/.config/gnome-initial-setup-done` = `yes`); otherwise the session opens
@@ -173,7 +173,7 @@ limit and stays down), it is reset and restarted. With it down, gnome-shell's po
    races the old session's teardown and ends at once with "Session finished"), so the shipped
    `Restart=on-failure` left the unit dead, and the per-user `gnome-remote-desktop-headless`
    daemon, which belongs to `gnome-session.target`, stopped with it. Nothing listened on the
-   port until the next reboot (10.1.2.5, 2026-10-24). With the drop-in the session and its RDP
+   port until the next reboot (10.0.2.5, 2026-10-24). With the drop-in the session and its RDP
    daemon are back about 7 s after the session ends, and `StartLimitIntervalSec=0` keeps systemd
    retrying.
 2. The remaining steps run as USER on the user's session bus (`/run/user/UID/bus`); a
@@ -222,7 +222,7 @@ credential changes are reported without their command line.
 
 ## `cargo xtask host-setup-check`
 
-Pipes `host/drift-host-report.sh` to `ssh homelab@10.1.2.40 bash -s` (override with
+Pipes `host/drift-host-report.sh` to `ssh homelab@10.0.2.40 bash -s` (override with
 `--host` or `DRIFT_E2E_SSH`, and `--headless USER:PORT[:persistent]` for other users), parses
 the report and checks:
 
@@ -238,19 +238,19 @@ the report and checks:
 With `--no-system` (a machine set up with `drift-host-setup.sh --no-system`) the system daemon
 checks become: `gnome-remote-desktop.service` disabled and stopped, and system RDP disabled.
 
-## 10.1.2.5: a persistent headless session only (2026-10-26)
+## 10.0.2.5: a persistent headless session only (2026-10-26)
 
 The dev runner (Ubuntu 26.04.1, GDM 50.1, g-r-d 50.2) has one persistent Wayland headless session
-for `hutsonphd` on :3390 and no Remote Login. It is converged and verified with:
+for `alice` on :3390 and no Remote Login. It is converged and verified with:
 
 ```bash
-ARGS='--no-system --headless hutsonphd:3390:persistent --firewall --allow-from 10.1.0.0/21'
-ssh hutsonphd@10.1.2.5 "sudo -n bash -s -- --check $ARGS" < host/drift-host-setup.sh  # 0 pending
-cargo xtask host-setup-check --host hutsonphd@10.1.2.5 --headless hutsonphd:3390:persistent --no-system
+ARGS='--no-system --headless alice:3390:persistent --firewall --allow-from 10.0.0.0/21'
+ssh alice@10.0.2.5 "sudo -n bash -s -- --check $ARGS" < host/drift-host-setup.sh  # 0 pending
+cargo xtask host-setup-check --host alice@10.0.2.5 --headless alice:3390:persistent --no-system
 ```
 
-The RDP credentials are set with `DRIFT_HEADLESS_RDP_USER_HUTSONPHD` /
-`DRIFT_HEADLESS_RDP_PASS_HUTSONPHD` on the `--apply` run. Port 3390 is additionally allowed on
+The RDP credentials are set with `DRIFT_HEADLESS_RDP_USER_ALICE` /
+`DRIFT_HEADLESS_RDP_PASS_ALICE` on the `--apply` run. Port 3390 is additionally allowed on
 `tailscale0` (`ufw allow in on tailscale0 to any port 3390 proto tcp`), which the script does not
 manage. Ending the session (`loginctl terminate-session`) brings a new Wayland session and the
 :3390 listener back in about 7 s.

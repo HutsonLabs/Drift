@@ -172,7 +172,7 @@ impl SessionHost for FakeHost {
 }
 
 fn profile(name: &str) -> ConnectionProfile {
-    let mut p = ConnectionProfile::new(name, "10.1.2.40", ConnectMode::Headless);
+    let mut p = ConnectionProfile::new(name, "10.0.2.40", ConnectMode::Headless);
     p.rdp_username = "fake-user".into();
     p
 }
@@ -300,7 +300,7 @@ async fn certificate_answers_are_forwarded_and_pins_persisted() {
         "w1",
         0,
         SessionEvent::CertificatePrompt {
-            host: "10.1.2.40".into(),
+            host: "10.0.2.40".into(),
             port: 3392,
             fingerprint: fp,
             role: CertificateRole::Server,

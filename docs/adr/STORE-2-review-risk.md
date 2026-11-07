@@ -8,7 +8,7 @@
 
 - `xcrun altool --validate-app -t macos` on the STORE-1 package (validate only, nothing
   uploaded) stops before any check of the app: `Unable to find Apple ID for Bundle ID
-  'com.hutsonlabs.drift' on platform 'macOS App'. Either create this app in App Store Connect
+  'com.example.drift' on platform 'macOS App'. Either create this app in App Store Connect
   first … (19)`. App Store Connect validates against an app record, and there is none yet
   (STORE-1). So open question 7 is still open.
 - `cargo xtask review-risk <Drift.app>` (new; `xtask::store::review_risks`) scans the built

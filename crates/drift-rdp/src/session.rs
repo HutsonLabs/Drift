@@ -15,7 +15,7 @@
 //! # use drift_core::{ConnectionProfile, ConnectMode, SystemClock};
 //! # use drift_rdp::{spawn_session, SessionCommand, SessionEvent, SessionOptions, SessionSecrets};
 //! # async fn demo(sink: Box<dyn drift_gfx::FrameSink>) {
-//! let profile = ConnectionProfile::new("Headless", "10.1.2.40", ConnectMode::Headless);
+//! let profile = ConnectionProfile::new("Headless", "10.0.2.40", ConnectMode::Headless);
 //! let secrets = SessionSecrets::new("…password from Keychain…");
 //! let (handle, mut events) =
 //!     spawn_session(profile, secrets, sink, Arc::new(SystemClock), SessionOptions::default());
@@ -72,7 +72,7 @@ impl fmt::Debug for SessionSecrets {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionOptions {
     /// TLS server name / certificate host override. Used by e2e tests that connect to an
-    /// SSH forward on `127.0.0.1` while the certificate belongs to `10.1.2.40`.
+    /// SSH forward on `127.0.0.1` while the certificate belongs to `10.0.2.40`.
     pub tls_server_name: Option<String>,
     /// RDP client name (defaults to the Mac's host name).
     pub client_name: String,

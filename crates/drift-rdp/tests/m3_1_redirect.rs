@@ -25,14 +25,14 @@ fn redirect_after(ms: u64, pdu: ServerRedirectionPdu) -> [ServerAction; 2] {
 #[test]
 fn remote_login_leg_sequencing() {
     let cert = TestCert::generate("127.0.0.1");
-    let mut rl = RedirectLoop::new(ConnectMode::RemoteLogin, "10.1.2.40", 3389);
+    let mut rl = RedirectLoop::new(ConnectMode::RemoteLogin, "10.0.2.40", 3389);
     assert_eq!(rl.leg(), 1);
     assert_eq!(rl.on_activated(DESK, 100), None, "leg 1 of Remote Login waits for the redirect");
 
     let mut pdu = redirection_pdu(1_234_567, cert.der(), 1);
     let expected_user = pdu.username.clone().unwrap();
     let next = rl.on_redirect(&mut pdu).expect("first redirect");
-    assert_eq!((next.leg, next.host.as_str(), next.port), (2, "10.1.2.40", 3389));
+    assert_eq!((next.leg, next.host.as_str(), next.port), (2, "10.0.2.40", 3389));
     assert_eq!(next.routing_token.as_deref(), Some("Cookie: msts=1234567"));
     assert_eq!(next.target_certificate.as_deref(), Some(cert.der()));
     assert_eq!(next.credentials.username(), expected_user);
@@ -113,9 +113,9 @@ fn captured_grd_redirection_yields_the_leg2_certificate() {
     let ShareControlPdu::ServerRedirect(mut pdu) = header.share_control_pdu else {
         panic!("not a Server Redirection PDU")
     };
-    let mut rl = RedirectLoop::new(ConnectMode::RemoteLogin, "10.1.2.40", 3389);
+    let mut rl = RedirectLoop::new(ConnectMode::RemoteLogin, "10.0.2.40", 3389);
     let next = rl.on_redirect(&mut pdu).expect("captured redirect is followed");
-    assert_eq!((next.leg, next.host.as_str(), next.port), (2, "10.1.2.40", 3389), "no TargetNetAddress");
+    assert_eq!((next.leg, next.host.as_str(), next.port), (2, "10.0.2.40", 3389), "no TargetNetAddress");
     let token = next.routing_token.expect("routing token");
     assert!(token.starts_with("Cookie: msts=") && !token.ends_with('\n'), "{token:?}");
     assert_eq!(next.target_certificate.as_deref(), Some(fixtures::read(names::TLS_CERT_LEG2).as_slice()));

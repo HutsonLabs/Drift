@@ -22,7 +22,7 @@ struct TestKeychain(Keychain, Vec<Uuid>, tempfile::TempDir);
 impl TestKeychain {
     fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
-        let service = format!("com.hutsonlabs.drift.tests.{}", Uuid::new_v4());
+        let service = format!("com.example.drift.tests.{}", Uuid::new_v4());
         let kc =
             Keychain::create_file(&dir.path().join("test.keychain-db"), KEYCHAIN_PASSWORD, service).unwrap();
         Self(kc, Vec::new(), dir)
@@ -55,7 +55,7 @@ const FAKE2: &str = "another fake value";
 fn test_service_is_not_drifts_real_service() {
     let kc = TestKeychain::new();
     assert_ne!(kc.0.service(), Keychain::SERVICE);
-    assert_eq!(Keychain::new().service(), "com.hutsonlabs.drift");
+    assert_eq!(Keychain::new().service(), "com.example.drift");
 }
 
 #[test]

@@ -12,7 +12,7 @@
     `NSLocalNetworkUsageDescription` in Info.plist and a stable signing identity, not an
     entitlement (plan §1.8).
   - The Keychain (`security-framework`) works inside the sandbox for the app's own items: they
-    are filed under the access group `<team>.com.hutsonlabs.drift`, which matches the service
+    are filed under the access group `<team>.com.example.drift`, which matches the service
     name Drift stores under. No `keychain-access-groups` entitlement is needed for that, and
     adding one would only widen the reach.
   - Metal, VideoToolbox and NSPasteboard are all sandbox-safe APIs; the pasteboard is the

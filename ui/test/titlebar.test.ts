@@ -75,8 +75,8 @@ describe("identity capsule", () => {
   test("the greeter hint is the capsule's tooltip; otherwise the host", async () => {
     const { root, app } = await start();
     expect(root.querySelector(".ident")?.getAttribute("title")).toBe("gnome.local");
-    app.onIdentity(identity({ hint: "Log in as “hutson” on the GNOME login screen." }));
-    expect(root.querySelector(".ident")?.getAttribute("title")).toBe("Log in as “hutson” on the GNOME login screen.");
+    app.onIdentity(identity({ hint: "Log in as “alice” on the GNOME login screen." }));
+    expect(root.querySelector(".ident")?.getAttribute("title")).toBe("Log in as “alice” on the GNOME login screen.");
     app.dispose();
   });
 

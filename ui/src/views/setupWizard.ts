@@ -66,7 +66,7 @@ const ISSUES: Record<SetupIssue, [string, string]> = {
   "port-taken-by-remote-login": ["setup-rdp-port", "Port 3389 belongs to Remote Login; pick another."],
   "rdp-username": ["setup-rdp-user", "Enter an RDP user name."],
   "rdp-password": ["setup-rdp-password", "Use at least 8 characters, without line breaks."],
-  "allow-from": ["setup-allow-from", "Enter a network such as 10.1.0.0/21."],
+  "allow-from": ["setup-allow-from", "Enter a network such as 10.0.0.0/21."],
 };
 const SUDO_FIELD = "setup-sudo";
 
@@ -413,7 +413,7 @@ export class SetupWizard {
       group(
         checkField("setup-desktop", "Install GNOME if missing", o.install_desktop, "The smallest GNOME that runs a headless session, without NetworkManager."),
         checkField("setup-firewall", "Open the port in the firewall", o.open_firewall, null),
-        textField("setup-allow-from", "Only From", o.allow_from ?? "", { spellcheck: "false", placeholder: "Any network, or e.g. 10.1.0.0/21" }),
+        textField("setup-allow-from", "Only From", o.allow_from ?? "", { spellcheck: "false", placeholder: "Any network, or e.g. 10.0.0.0/21" }),
         checkField("setup-remote-login", "Also set up Remote Login", o.remote_login, "GNOME's login screen on port 3389, for any account."),
       ),
       this.sudo === "password"

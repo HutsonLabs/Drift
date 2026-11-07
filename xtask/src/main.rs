@@ -78,9 +78,8 @@ enum Cmd {
     },
     /// Release pipeline (ADR `RELEASE-pipeline`): preflight, gate, one build number for iOS and
     /// macOS, every artifact into `target/release-out/<yy.mm>-<build>/` with `manifest.json` and
-    /// `SHA256SUMS`, the lockstep check, notarization; publishing only with `--testflight` /
-    /// `--spaces` (spaces.hutson.cloud, never GitHub). Needs the App Store Connect key in the environment
-    /// (`set -a; . ~/code/term.hut/.env; set +a`).
+    /// `SHA256SUMS`, the lockstep check, notarization; uploading only with `--testflight`. Needs the
+    /// App Store Connect API key in the environment (`APPLE_API_KEY_PATH`, `APPLE_KEY_ID`, `APPLE_API_ISSUER`).
     Release {
         /// Build and validate everything; never notarize, upload or publish.
         #[arg(long)]
@@ -89,14 +88,6 @@ enum Cmd {
         /// "What to Test".
         #[arg(long)]
         testflight: bool,
-        /// Tag `v<yy.mm>.<build>`, push the tag to `origin` and publish the DMG as a release on
-        /// spaces.hutson.cloud (token in `~/code/.spaces-tok`).
-        #[arg(long)]
-        spaces: bool,
-        /// Publish an earlier finished build on spaces.hutson.cloud without rebuilding it
-        /// (`yy.mm-build`, a directory in `target/release-out`).
-        #[arg(long, value_name = "YY.MM-BUILD")]
-        publish: Option<String>,
         /// Continue the last run of this version and commit; finished steps with intact
         /// outputs are skipped and the build number is reused.
         #[arg(long)]
@@ -114,13 +105,13 @@ enum Cmd {
     },
     /// Build the Mac App Store package: universal, sandboxed, Apple Distribution (STORE-1).
     MasPackage {
-        /// The Mac App Store provisioning profile for `com.hutsonlabs.drift` to embed.
+        /// The Mac App Store provisioning profile for `com.example.drift` to embed.
         #[arg(long)]
         profile: Option<PathBuf>,
     },
     /// Verify the GNOME host configuration over SSH, read-only (task M0-4).
     HostSetupCheck {
-        /// SSH destination (default `$DRIFT_E2E_SSH` or `homelab@10.1.2.40`).
+        /// SSH destination (default `$DRIFT_E2E_SSH` or `homelab@10.0.2.40`).
         #[arg(long)]
         host: Option<String>,
         /// Headless daemons as USER:PORT[:persistent] (default: the homelab test users).
@@ -176,16 +167,14 @@ fn run(cmd: Cmd) -> Result<()> {
         Cmd::Bundle => not_yet("bundle", "M9-5"),
         Cmd::ReviewRisk { path } => review_risk(&path),
         Cmd::MasPackage { profile } => mas_package(&root, profile.as_deref()).map(|_| ()),
-        Cmd::Release { dry_run, testflight, spaces, publish, resume, build_number, profile, set_version } => {
-            if let Some(dir) = publish {
-                release_cmd::publish(&root, &dir)
-            } else if let Some(version) = set_version {
+        Cmd::Release { dry_run, testflight, resume, build_number, profile, set_version } => {
+            if let Some(version) = set_version {
                 release_cmd::set_version(&root, &version)
             } else {
                 release_cmd::run(
                     &root,
                     &release_cmd::Args {
-                        options: xtask::release::Options { dry_run, testflight, spaces },
+                        options: xtask::release::Options { dry_run, testflight },
                         resume,
                         build_number,
                         profile,
@@ -671,7 +660,7 @@ fn bindings(root: &Path, check_only: bool) -> Result<()> {
 
 /// Daemon ports on the GNOME host and their local forward ports (plan §5.3).
 const E2E_PORTS: &[(u16, u16)] = &[(13389, 3389), (13390, 3390), (13391, 3391), (13392, 3392)];
-const E2E_HOST: &str = "homelab@10.1.2.40";
+const E2E_HOST: &str = "homelab@10.0.2.40";
 
 /// What `cargo xtask e2e --bench` does after the suite (task M9-1).
 #[derive(Debug, Clone, Copy)]
@@ -742,7 +731,7 @@ fn e2e(root: &Path, extra: &[String], bench_opts: Option<BenchOptions>) -> Resul
         }
     }
     cmd.args(extra);
-    cmd.env("DRIFT_E2E_HOST", "127.0.0.1").env("DRIFT_E2E_TLS_NAME", "10.1.2.40");
+    cmd.env("DRIFT_E2E_HOST", "127.0.0.1").env("DRIFT_E2E_TLS_NAME", "10.0.2.40");
     for (local, remote) in E2E_PORTS {
         cmd.env(format!("DRIFT_E2E_PORT_{remote}"), local.to_string());
     }

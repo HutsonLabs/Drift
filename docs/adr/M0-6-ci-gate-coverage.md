@@ -84,7 +84,7 @@ YAML dependency would buy little. It runs as a step of `cargo xtask ci` and stan
 
 The GitHub remote is public and nothing is pushed (see `docs/team-conventions.md`), so the file
 is never executed by GitHub today. It is still written as the real thing: a `self-hosted,
-macOS, ARM64, drift-lan` runner (the suite needs SSH access to `homelab@10.1.2.40`; a hosted
+macOS, ARM64, drift-lan` runner (the suite needs SSH access to `homelab@10.0.2.40`; a hosted
 runner cannot reach it, and macOS Local Network Privacy forces the SSH-forward transport of
 plan §1.9), nightly cron at 04:17 UTC after the fuzz run, `concurrency` of one because the
 tests share a single GNOME host, `cargo xtask host-setup-check` before the suite, credentials

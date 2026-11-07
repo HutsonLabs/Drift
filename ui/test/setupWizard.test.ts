@@ -254,10 +254,10 @@ describe("Set Up a Linux Machine", () => {
     const { root } = await open(fake);
     await machine(root);
     const w = wizard(root);
-    type(field(w, "Only From"), "10.1.0.0/21");
+    type(field(w, "Only From"), "10.0.0.0/21");
     button(w, "Check").click();
     await flush();
-    expect((calls(fake, "setupRun")[0]![1] as { allow_from: string | null }).allow_from).toBe("10.1.0.0/21");
+    expect((calls(fake, "setupRun")[0]![1] as { allow_from: string | null }).allow_from).toBe("10.0.0.0/21");
   });
 
   test("Esc or Cancel closes the wizard and ends its SSH session", async () => {

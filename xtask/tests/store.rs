@@ -33,7 +33,7 @@ fn mas_entitlements_keep_the_sandbox_and_name_the_app_and_team() {
     assert_eq!(plist_value(&e, "com.apple.security.network.server"), None, "the client never listens");
     assert_eq!(
         plist_value(&e, "com.apple.application-identifier").as_deref(),
-        Some(format!("{TEAM_ID}.com.hutsonlabs.drift").as_str())
+        Some(format!("{TEAM_ID}.com.example.drift").as_str())
     );
     assert_eq!(plist_value(&e, "com.apple.developer.team-identifier").as_deref(), Some(TEAM_ID));
 }
@@ -44,7 +44,7 @@ fn mas_entitlements_keep_the_sandbox_and_name_the_app_and_team() {
 fn the_release_and_the_bundle_pin_the_same_developer_id() {
     let conf: serde_json::Value = serde_json::from_str(&read("src-tauri/tauri.conf.json")).unwrap();
     assert_eq!(conf["bundle"]["macOS"]["signingIdentity"], store::DEVELOPER_ID);
-    assert_eq!(store::DEVELOPER_ID, "DABE738AA854E6CE4FA33E69C1F0AFC5830C8646");
+    assert_eq!(store::DEVELOPER_ID, "0000000000000000000000000000000000000001");
 }
 
 #[test]

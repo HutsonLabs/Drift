@@ -5,17 +5,22 @@
 //!   `entitlements.mas.plist`, with its provisioning profile embedded, wrapped by `productbuild`
 //!   in a `.pkg` signed with the Mac installer identity.
 //!
-//! Identities are pinned by SHA-1, like the Developer ID identity in `tauri.conf.json`: the
-//! names are shared by several certificates in the signing keychain.
+//! Identities are pinned by SHA-1, like the Developer ID identity in `tauri.conf.json`: a
+//! name can be shared by several certificates in a signing keychain.
+//!
+//! The team ID, identity hashes and bundle ID (`com.example.drift`) in this repository are
+//! placeholders. To sign and ship your own builds, replace them with your Apple Developer
+//! team's values here, in `src-tauri/tauri.conf.json`, `src-tauri/tauri.mas.conf.json`, the
+//! entitlements and `src-tauri/gen/apple`.
 
 use std::path::{Path, PathBuf};
 
 /// The Apple Developer team.
-pub const TEAM_ID: &str = "M9Z3N2R97A";
+pub const TEAM_ID: &str = "TEAMID0000";
 /// The Apple Distribution signing identity (SHA-1).
-pub const APPLE_DISTRIBUTION: &str = "732EB0D94375A915CFEDA49F2650594538D75E04";
+pub const APPLE_DISTRIBUTION: &str = "0000000000000000000000000000000000000002";
 /// The "3rd Party Mac Developer Installer" identity that signs the `.pkg` (SHA-1).
-pub const MAC_INSTALLER: &str = "CB613372302DED68460709B0A9C4E562FBF2A705";
+pub const MAC_INSTALLER: &str = "0000000000000000000000000000000000000003";
 /// The universal macOS target.
 pub const UNIVERSAL: &str = "universal-apple-darwin";
 
@@ -100,4 +105,4 @@ pub fn review_risks(binary: &[u8]) -> Vec<ReviewRisk> {
 
 /// The Developer ID Application identity Drift's DMG is signed with (SHA-1; the one pinned in
 /// `tauri.conf.json`).
-pub const DEVELOPER_ID: &str = "DABE738AA854E6CE4FA33E69C1F0AFC5830C8646";
+pub const DEVELOPER_ID: &str = "0000000000000000000000000000000000000001";

@@ -44,7 +44,7 @@ function footer(root: ParentNode): string[] {
 async function fillValid(root: ParentNode) {
   type(field(root, "Name"), "Office Desktop");
   type(field(root, "Host"), "office.lan");
-  type(field(root, "RDP user"), "hutson");
+  type(field(root, "RDP user"), "alice");
   type(field(root, "RDP password"), "pw-Fake1");
   await flush();
 }

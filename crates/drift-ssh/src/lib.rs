@@ -1,5 +1,5 @@
 //! In-app SSH for setting up a Linux machine (ADR `GNOME-WIZARD-headless-setup`), the way
-//! term.hut connects on iPhone: russh in-process, one ed25519 device key in the app's own
+//! an earlier Tauri SSH client connects on iPhone: russh in-process, one ed25519 device key in the app's own
 //! directory, a known_hosts file next to it, strict host keys with an explicit "trust", and the
 //! account password used once to install the device key. Nothing calls a system tool or reads
 //! `~/.ssh`, so it works inside the App Sandbox and on iOS.

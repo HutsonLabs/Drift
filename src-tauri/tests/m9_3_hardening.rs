@@ -72,16 +72,13 @@ fn the_bundle_is_signed_with_the_entitlements_file_and_hardened_runtime() {
 #[test]
 fn the_bundle_is_signed_with_the_pinned_developer_id_identity() {
     let conf = config();
-    // Pinned by SHA-1, not by name: "Developer ID Application: Andrew Hutson (M9Z3N2R97A)" has
-    // named more than one certificate, so the name can be ambiguous and codesign refuses it.
-    // Since 26.10 build 10 this is the certificate in the iceberg-signing keychain, which
-    // unlocks without a GUI prompt (SSH, launchd); FE9B9ADD…, which signed earlier builds, went
-    // with the term-hut-signing keychain. Both are team M9Z3N2R97A, and a Developer ID app's
-    // designated requirement is by team, so updates and the Local Network permission carry over
-    // (plan §1.8).
+    // Pinned by SHA-1, not by name: a "Developer ID Application: <name> (<team>)" name can
+    // match more than one certificate, and codesign refuses an ambiguous name. The value in the
+    // repository is a placeholder; set your own identity's SHA-1 (and team, see
+    // `xtask/src/store.rs`) to sign real builds.
     assert_eq!(
         conf["bundle"]["macOS"]["signingIdentity"].as_str(),
-        Some("DABE738AA854E6CE4FA33E69C1F0AFC5830C8646"),
+        Some("0000000000000000000000000000000000000001"),
         "the .dmg must be signed with the Developer ID identity, not ad hoc"
     );
 }

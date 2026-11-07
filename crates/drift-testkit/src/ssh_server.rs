@@ -1,5 +1,5 @@
 //! An in-process SSH server for tests of `drift-ssh` and the setup wizard (GNOME-WIZARD;
-//! term.hut's `test_server`, one step closer to sshd): public keys are checked against `$HOME/.ssh/authorized_keys`, and `exec` runs the
+//! an earlier project's `test_server`, one step closer to sshd): public keys are checked against `$HOME/.ssh/authorized_keys`, and `exec` runs the
 //! command with `sh -c` under that HOME, with stdin, stdout, stderr and the exit status wired
 //! through the channel.
 

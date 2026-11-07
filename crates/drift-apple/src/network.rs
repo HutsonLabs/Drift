@@ -132,7 +132,7 @@ impl PathMonitor {
     /// and every change. Returns `None` if Network.framework cannot create a monitor.
     pub fn start(handler: impl Fn(PathStatus) + Send + Sync + 'static) -> Option<Self> {
         let handler: Arc<dyn Fn(PathStatus) + Send + Sync> = Arc::new(handler);
-        let queue = DispatchQueue::new("com.hutsonlabs.drift.path-monitor", None);
+        let queue = DispatchQueue::new("com.example.drift.path-monitor", None);
         // SAFETY: plain constructor; returns a +1 object or null.
         let monitor = NonNull::new(unsafe { nw_path_monitor_create() })?;
         let block = RcBlock::new(move |path: *mut c_void| {

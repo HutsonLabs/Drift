@@ -36,7 +36,7 @@ pub struct SetupOptions {
     pub install_desktop: bool,
     /// Open the ports in ufw or firewalld.
     pub open_firewall: bool,
-    /// Open them only to this network (`10.1.0.0/21`, `fd00::/64`).
+    /// Open them only to this network (`10.0.0.0/21`, `fd00::/64`).
     pub allow_from: Option<String>,
 }
 

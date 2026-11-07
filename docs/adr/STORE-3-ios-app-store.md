@@ -21,7 +21,7 @@
    and `activeInputModes` selectors in the release static library. Declaring a category the
    linker later strips costs nothing; missing one is a rejection.
 3. **Export options** (`gen/apple/ExportOptions.plist`): `app-store-connect`, team
-   `M9Z3N2R97A`, manual signing, and `destination = export`, so `xcodebuild` writes an `.ipa`
+   `TEAMID0000`, manual signing, and `destination = export`, so `xcodebuild` writes an `.ipa`
    and never uploads. The owner chose validate-only; nothing in the repository uploads.
 4. **No private transparency key on iOS.** Tauri's `macos-private-api` now reaches the app only
    through `drift-macos` (a macOS-only dependency), so wry's `drawsBackground` key is not in the
@@ -36,20 +36,20 @@
 ## TestFlight (2026-10-18)
 
 The owner created the App Store Connect record ("Drift - Screen sharing", SKU HL005, app id
-6824351800; bundle id `com.hutsonlabs.drift`, universal) and asked for TestFlight.
+6824351800; bundle id `com.example.drift`, universal) and asked for TestFlight.
 
 - Versions: the marketing version is `yy.mm` (`CFBundleShortVersionString`, e.g. `26.10`), set
   in the iOS `Info.plist`, `project.yml` and `src-tauri/Info.plist`; Cargo and `tauri.conf.json`
   carry the semver form `26.10.0`. The build number grows by one with every upload, across
   versions.
-- `tauri.conf.json` sets `bundle.iOS.developmentTeam` (`M9Z3N2R97A`).
+- `tauri.conf.json` sets `bundle.iOS.developmentTeam` (`TEAMID0000`).
 - iOS ships only together with macOS, through `cargo xtask release --testflight` (ADR
   `RELEASE-pipeline`): App Store Connect's highest build number on any platform + 1, passed as a
   `bundleVersion` config override (Tauri's `--build-number` would append to it: `1.2`), the same
   for both platforms. It reads the App Store Connect key from `APPLE_API_KEY_PATH`,
-  `APPLE_KEY_ID` and `APPLE_API_ISSUER` (`set -a; . ~/code/term.hut/.env; set +a`); the token
+  `APPLE_KEY_ID` and `APPLE_API_ISSUER` (from the environment); the token
   goes to `curl` on stdin and is never printed. With the key in the environment, Xcode signs automatically and created the
-  "iOS Team Store Provisioning Profile: com.hutsonlabs.drift" on the first build.
+  "iOS Team Store Provisioning Profile: com.example.drift" on the first build.
 - Testers: the internal group "Drift Internal" (all builds) holds the account holder. Internal
   testers must be App Store Connect users; external testers need Beta App Review.
 - Export compliance: `ITSAppUsesNonExemptEncryption = false` (ADR `STORE-1-mac-app-store`), so

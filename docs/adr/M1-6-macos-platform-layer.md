@@ -46,7 +46,7 @@ decisions made while turning the spike (`~/code/drift-spikes/tauri-spike`) into 
    `NSCursor` size is `bitmap / (scale / 100)` points (plan M2-5); server pointer-position
    updates do not warp the Mac pointer. A hidden pointer is a transparent 1×1 cursor (not
    `+[NSCursor hide]`, which is global).
-7. **Keychain.** Items are generic passwords: service `com.hutsonlabs.drift` (the bundle id),
+7. **Keychain.** Items are generic passwords: service `com.example.drift` (the bundle id),
    account `SecretRole::account(profile_id)` = `<uuid>/<role>`. One code path (Security's
    keychain-item API on an explicit `SecKeychain`) serves both production (the default/login
    keychain) and tests. Tests create a **throw-away keychain file** in a temp dir with a

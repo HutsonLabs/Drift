@@ -84,7 +84,7 @@ impl Default for Keychain {
 
 impl Keychain {
     /// The service name of Drift's items (the app's bundle identifier).
-    pub const SERVICE: &'static str = "com.hutsonlabs.drift";
+    pub const SERVICE: &'static str = "com.example.drift";
 
     /// The production store: Drift's service in the default keychain.
     pub fn new() -> Self {

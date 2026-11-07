@@ -36,7 +36,7 @@ ADR `GNOME-WIZARD-headless-setup`.
   install, exec with stdin and streamed output, sudo.
 - [~] **WIZ-4 Wizard.** Tauri commands and the five-step "Set Up a Linux Machine…" view.
   *Service, commands and view landed and tested (in-process SSH server, bun); the real script's
-  `--check` ran through the service on 10.1.2.5 with 0 changes. Clicking through it in the app
+  `--check` ran through the service on 10.0.2.5 with 0 changes. Clicking through it in the app
   (Local Network prompt, a fresh server, password sudo, iPad) is in `docs/acceptance.md`.*
 
 ## IOS-0 — Decision
@@ -115,8 +115,8 @@ git history at commit `ce6c578`; the ADRs are in `docs/adr/superseded/`.
 - **STORE-4 Drift Host release.** Retired by ADR `GNOME-only` (no Drift Host DMG).
 
 - [✓] **RELEASE Release pipeline.** One command from a clean `main` to every artifact, resumable,
-  with a manifest; publishing only with `--testflight` / `--spaces`. *`cargo xtask release`,
-  notes in `release/notes/`, skill `.claude/skills/release`, ADR `RELEASE-pipeline`;
+  with a manifest; publishing only with `--testflight`. *`cargo xtask release`,
+  notes in `release/notes/`, ADR `RELEASE-pipeline`;
   supersedes the M9-5 `bundle` stub.*
 - [✓] **APP-icon Icon Composer app icon.** The owner's `app.icon` is the one icon for the Mac and
   iOS apps. *`src-tauri/icons/AppIcon.icon`, bundled by Tauri into `Assets.car` and added to

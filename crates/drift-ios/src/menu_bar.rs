@@ -30,7 +30,7 @@ use objc2_ui_kit::{
 pub type OnPress = Rc<dyn Fn(u32)>;
 
 /// Prefix of the identifiers of the remote menus.
-const IDENTIFIER: &str = "com.hutsonlabs.drift.remote-menu";
+const IDENTIFIER: &str = "com.example.drift.remote-menu";
 
 /// One `UIMenu` per remote menu, left to right.
 pub fn build_menus(

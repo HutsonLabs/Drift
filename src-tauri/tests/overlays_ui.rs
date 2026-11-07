@@ -115,7 +115,7 @@ fn first_responder(window: &NSWindow) -> String {
 }
 
 fn view_for(screen: Screen) -> SessionView {
-    let mut v = SessionView::new(&ConnectionProfile::new("Homelab", "10.1.2.40", ConnectMode::Headless));
+    let mut v = SessionView::new(&ConnectionProfile::new("Homelab", "10.0.2.40", ConnectMode::Headless));
     v.state = SessionState::Connected { desktop: DesktopSize::new(1280, 800), scale: 100 };
     v.screen = screen;
     v
@@ -126,7 +126,7 @@ fn scenario(app: AppHandle) {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             open_window_for_tests(
                 &app,
-                ConnectionProfile::new("Homelab", "10.1.2.40", ConnectMode::Headless),
+                ConnectionProfile::new("Homelab", "10.0.2.40", ConnectMode::Headless),
             );
             wait_for_window(&app);
             let window = on_main(&app, |a| label(a).unwrap());

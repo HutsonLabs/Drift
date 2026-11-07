@@ -36,9 +36,9 @@ LaunchDaemon, a per-session LaunchAgent and a login-window agent.
 5. **Unix socket, not XPC.** Passing an accepted socket is one `sendmsg` with `SCM_RIGHTS`,
    testable in-process and on loopback. XPC would need a Mach service per agent and an
    Objective-C bridge for the descriptor; it adds nothing the peer-uid check does not give.
-   The socket is `/var/run/com.hutsonlabs.drift.host.sock`.
+   The socket is `/var/run/com.example.drift.host.sock`.
 6. **One shared store.** Identity, `host.toml` and `devices.toml` live in
-   `/Library/Application Support/com.hutsonlabs.drift.host`, so every agent presents the same
+   `/Library/Application Support/com.example.drift.host`, so every agent presents the same
    certificate that devices pinned. The daemon creates them and makes the directory 0750 and
    the private key 0640, group `admin`; an agent for a user outside `admin` cannot load the key
    and cannot serve (a limit, below). Agents read `devices.toml` (public keys only) and send

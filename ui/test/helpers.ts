@@ -92,7 +92,7 @@ export function profile(mode: ConnectMode, over: Partial<ConnectionProfile_Seria
   return {
     id: `00000000-0000-0000-0000-${String(counter).padStart(12, "0")}`,
     name: "Homelab",
-    host: "10.1.2.40",
+    host: "10.0.2.40",
     port: 3389,
     mode,
     rdp_username: "rdp-user",
@@ -144,7 +144,7 @@ export const GRDCTL_FINGERPRINT =
 /** A certificate prompt. */
 export function certPrompt(over: Partial<CertificatePrompt> = {}): CertificatePrompt {
   return {
-    host: "10.1.2.40",
+    host: "10.0.2.40",
     port: 3389,
     fingerprint: GRDCTL_FINGERPRINT,
     subject: "server",

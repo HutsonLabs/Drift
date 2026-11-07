@@ -228,7 +228,7 @@ fn preflight(root: &Path, args: &Args, version: &str) -> Result<()> {
     // Credentials (names only).
     for name in ["APPLE_API_KEY_PATH", "APPLE_KEY_ID", "APPLE_API_ISSUER"] {
         if std::env::var(name).map_or(true, |v| v.is_empty()) {
-            problems.push(format!("{name} is not set (set -a; . ~/code/term.hut/.env; set +a)"));
+            problems.push(format!("{name} is not set"));
         }
     }
     if let Ok(key) = std::env::var("APPLE_API_KEY_PATH")
@@ -267,7 +267,7 @@ fn preflight(root: &Path, args: &Args, version: &str) -> Result<()> {
     match Command::new("security").args(["cms", "-D", "-i"]).arg(&profile).output() {
         Ok(out) if out.status.success() => {
             let plist = String::from_utf8_lossy(&out.stdout);
-            if !plist.contains(&format!("{}.com.hutsonlabs.drift", store::TEAM_ID)) {
+            if !plist.contains(&format!("{}.com.example.drift", store::TEAM_ID)) {
                 problems.push(format!("{} is not the Drift profile", profile.display()));
             }
             match profile_expiry(&out.stdout) {
@@ -284,13 +284,7 @@ fn preflight(root: &Path, args: &Args, version: &str) -> Result<()> {
         Ok(free) => problems.push(format!("only {} GB free; the builds need 40 GB", free >> 30)),
         Err(e) => problems.push(format!("cannot read free disk: {e}")),
     }
-    let mut tools = vec!["xcrun", "hdiutil", "productbuild", "plutil", "ditto"];
-    if opts.spaces {
-        tools.push("curl");
-        if let Err(e) = spaces_token() {
-            problems.push(format!("{e:#}"));
-        }
-    }
+    let tools = ["xcrun", "hdiutil", "productbuild", "plutil", "ditto"];
     for tool in tools {
         if Command::new("which").arg(tool).output().map_or(true, |o| !o.status.success()) {
             problems.push(format!("{tool} is not installed"));
@@ -467,8 +461,7 @@ pub fn run(root: &Path, args: &Args) -> Result<()> {
     save(&out, &manifest)?;
     log(Some(&out), &format!("==> Drift {version} ({build}) into {}", out.display()));
 
-    let ctx =
-        Ctx { root, out: &out, version: &version, build, profile: profile_path(args), dry_run: opts.dry_run };
+    let ctx = Ctx { root, out: &out, version: &version, build, profile: profile_path(args) };
     for step in
         steps.iter().copied().filter(|s| !matches!(s, StepId::Preflight | StepId::Gate | StepId::BuildNumber))
     {
@@ -521,7 +514,6 @@ struct Ctx<'a> {
     version: &'a str,
     build: u32,
     profile: PathBuf,
-    dry_run: bool,
 }
 
 fn altool(args: &[String], what: &str, timeout: Duration) -> Result<()> {
@@ -717,14 +709,6 @@ fn run_step(step: StepId, ctx: &Ctx<'_>, manifest: &mut Manifest) -> Result<Vec<
             }
             Ok(Vec::new())
         }
-        StepId::Spaces => {
-            if ctx.dry_run {
-                bail!("a dry run never publishes");
-            }
-            let commit = git(ctx.root, &["rev-parse", "HEAD"])?;
-            spaces(ctx.root, ctx.out, ctx.version, ctx.build, &commit)?;
-            Ok(Vec::new())
-        }
     }
 }
 
@@ -913,155 +897,4 @@ fn set_whats_new(build_id: &str, text: &str, out: &Path) -> Result<()> {
         }
     }
     Ok(())
-}
-
-/// The spaces.hutson.cloud API token from [`release::SPACES_TOKEN_FILE`], checked against the
-/// server. Never read from the environment.
-fn spaces_token() -> Result<String> {
-    let home = std::env::var_os("HOME").context("HOME is not set")?;
-    let path = release::spaces_token_path(Path::new(&home));
-    let text = std::fs::read_to_string(&path)
-        .with_context(|| format!("reading the spaces.hutson.cloud token from {}", path.display()))?;
-    let token = release::parse_spaces_token(&text).map_err(|e| anyhow::anyhow!("{} {e}", path.display()))?;
-    let (status, _) = spaces_api(&token, "GET", "/user", None, None)?;
-    if status != 200 {
-        bail!(
-            "the token in {} is not accepted by spaces.hutson.cloud (HTTP {status}); it needs repository write access",
-            path.display()
-        );
-    }
-    Ok(token)
-}
-
-/// One call to the spaces.hutson.cloud API through `curl`: a JSON body or a file upload. The
-/// token goes in on stdin, never on the command line. Returns the HTTP status and the JSON
-/// answer (`null` when there is none).
-fn spaces_api(
-    token: &str,
-    method: &str,
-    path: &str,
-    json: Option<&serde_json::Value>,
-    file: Option<&Path>,
-) -> Result<(u16, serde_json::Value)> {
-    use std::io::Write as _;
-    let mut cmd = Command::new("curl");
-    cmd.args(["-sS", "--max-time", "1800", "-X", method, "-H", "@-", "-H", "Accept: application/json"])
-        .args(["-w", "\n%{http_code}"]);
-    if let Some(json) = json {
-        cmd.args(["-H", "Content-Type: application/json", "--data-binary", &json.to_string()]);
-    }
-    if let Some(file) = file {
-        cmd.arg("-F").arg(format!("attachment=@{}", file.display()));
-    }
-    cmd.arg(format!("{}{path}", release::SPACES_API));
-    let mut child = cmd
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .spawn()
-        .context("running curl")?;
-    child
-        .stdin
-        .take()
-        .context("curl stdin")?
-        .write_all(format!("Authorization: token {token}\n").as_bytes())?;
-    let output = child.wait_with_output()?;
-    if !output.status.success() {
-        bail!("curl {method} {path} failed ({})", output.status);
-    }
-    let text = String::from_utf8_lossy(&output.stdout);
-    let (body, status) = text.rsplit_once('\n').context("curl printed no status")?;
-    let status: u16 = status.trim().parse().context("curl printed no status")?;
-    Ok((status, serde_json::from_str(body).unwrap_or(serde_json::Value::Null)))
-}
-
-/// Tags `commit` `v<version>.<build>`, pushes the tag to `origin` (spaces.hutson.cloud), and
-/// publishes the release there with both DMGs and `SHA256SUMS`. Idempotent: an existing release
-/// is reused and only missing files are attached. Never GitHub (RELEASE-spaces).
-fn spaces(root: &Path, out: &Path, version: &str, build: u32, commit: &str) -> Result<()> {
-    let token = spaces_token()?;
-    let tag = release::tag(version, build);
-    match git(root, &["rev-list", "-n", "1", &tag]) {
-        Ok(at) if at == commit => {}
-        Ok(at) => bail!("tag {tag} exists at {at}, not {commit}"),
-        Err(_) => {
-            git(root, &["tag", "-a", &tag, commit, "-m", &format!("Drift {version} ({build})")])?;
-        }
-    }
-    with_retries(StepId::Spaces, || git(root, &["push", "origin", &tag]).map(|_| ()))?;
-    let repo = format!("/repos/{}", release::SPACES_REPO);
-    let (status, existing) = spaces_api(&token, "GET", &format!("{repo}/releases/tags/{tag}"), None, None)?;
-    let release = if status == 200 {
-        log(Some(out), &format!("    release {tag} already exists on spaces.hutson.cloud"));
-        existing
-    } else {
-        let notes = std::fs::read_to_string(release::notes_path(root, version))?;
-        let sums = std::fs::read_to_string(out.join("SHA256SUMS"))?;
-        let body = release::spaces_release(version, build, commit, &notes, &sums);
-        let (status, created) = with_retries(StepId::Spaces, || {
-            spaces_api(&token, "POST", &format!("{repo}/releases"), Some(&body), None)
-        })?;
-        if status != 201 {
-            bail!("creating release {tag} failed (HTTP {status}): {created}");
-        }
-        created
-    };
-    let id = release["id"].as_u64().context("the release has no id")?;
-    let attached: Vec<&str> = release["assets"]
-        .as_array()
-        .map(|a| a.iter().filter_map(|x| x["name"].as_str()).collect())
-        .unwrap_or_default();
-    for name in release::published_files(version, build) {
-        if attached.contains(&name.as_str()) {
-            continue;
-        }
-        let path = out.join(&name);
-        let (status, answer) = with_retries(StepId::Spaces, || {
-            spaces_api(&token, "POST", &format!("{repo}/releases/{id}/assets?name={name}"), None, Some(&path))
-        })?;
-        if status != 201 {
-            bail!("attaching {name} failed (HTTP {status}): {answer}");
-        }
-        log(Some(out), &format!("    attached {name}"));
-    }
-    log(Some(out), &format!("    https://spaces.hutson.cloud/{}/releases/tag/{tag}", release::SPACES_REPO));
-    Ok(())
-}
-
-/// Publishes an earlier, finished build (`target/release-out/<dir>`) on spaces.hutson.cloud
-/// without rebuilding it: the run must be publishable, every recorded artifact must still have
-/// its checksum, and the tag goes on the commit it was built from (which must be on
-/// `origin/main`).
-pub fn publish(root: &Path, dir: &str) -> Result<()> {
-    let out = root.join("target/release-out").join(dir);
-    let mut manifest = Manifest::from_json(&std::fs::read_to_string(out.join("manifest.json"))?)?;
-    release::publishable(&manifest)?;
-    for a in &manifest.artifacts {
-        let (hash, _) = sha256_file(&out.join(&a.file))?;
-        if hash != a.sha256 {
-            bail!("{} changed since it was built", a.file);
-        }
-    }
-    let (version, build, commit) = (manifest.version.clone(), manifest.build, manifest.git_sha.clone());
-    git(root, &["fetch", "-q", "origin"])?;
-    let on_main = Command::new("git")
-        .args(["merge-base", "--is-ancestor", &commit, "origin/main"])
-        .current_dir(root)
-        .status()?
-        .success();
-    if !on_main {
-        bail!("{commit} (the build's commit) is not on origin/main");
-    }
-    log(Some(&out), &format!("==> publishing Drift {version} ({build}) from {}", &commit[..12]));
-    let at = now();
-    match spaces(root, &out, &version, build, &commit) {
-        Ok(()) => {
-            manifest.done(StepId::Spaces, at, now(), Vec::new());
-            save(&out, &manifest)
-        }
-        Err(e) => {
-            manifest.fail(StepId::Spaces, now(), &format!("{e:#}"));
-            save(&out, &manifest)?;
-            Err(e)
-        }
-    }
 }

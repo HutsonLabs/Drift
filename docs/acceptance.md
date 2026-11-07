@@ -69,8 +69,8 @@ Rendering and intents are covered by `bun test`; these need eyes, VoiceOver or a
 - [ ] Switching Connection type between Remote Login, Headless session and Desktop Sharing
       swaps the credential fields without losing the typed name and host.
 - [ ] Certificate prompt for the homelab system daemon shows the same fingerprint as
-      `sudo grdctl --system status` (“TLS fingerprint: f3:e7:a2:…”) on 10.1.2.40.
-- [ ] Local Network Privacy screen (a freshly ad-hoc-signed build connecting to 10.1.2.40
+      `sudo grdctl --system status` (“TLS fingerprint: f3:e7:a2:…”) on 10.0.2.40.
+- [ ] Local Network Privacy screen (a freshly ad-hoc-signed build connecting to 10.0.2.40
       directly, errno 65): “Open Local Network Settings” opens System Settings › Privacy &
       Security › Local Network.
 
@@ -103,7 +103,7 @@ Automated: loopback tests against `FakeServer` and `cargo xtask e2e` (`e2e_headl
 
 - [ ] A Drift build **without** the Local Network permission (ad-hoc signed, or permission denied
       in System Settings › Privacy & Security › Local Network) connecting straight to
-      `10.1.2.40:3392` ends in `Failed { LocalNetworkDenied }` (errno 65 is mapped by
+      `10.0.2.40:3392` ends in `Failed { LocalNetworkDenied }` (errno 65 is mapped by
       `drift_rdp::connect::classify_io_error`; the loopback test injects the errno).
 - [ ] After granting the permission once, the same build connects without SSH forwards, and a
       Remote Login profile goes leg 1 → greeter (`AwaitingGreeterLogin`) → desktop after logging
@@ -151,7 +151,7 @@ These need a person, a real keyboard/IME, physical network changes or sleep
       window edges, hand over links) at the same size as local cursors, crisp at Retina/200 %;
       it disappears where GNOME hides it and becomes the arrow when leaving the window.
 - [ ] **Keychain:** saving a profile with a password creates a Keychain Access item
-      "com.hutsonlabs.drift", account `<profile uuid>/rdp-user` (or `rdp-system`); deleting the
+      "com.example.drift", account `<profile uuid>/rdp-user` (or `rdp-system`); deleting the
       profile removes it; no password prompt appears on relaunch of the same signed build.
 - [ ] **Tabs:** three sessions open as tabs of one window even with System Settings › Desktop &
       Dock › "Prefer tabs when opening documents" = "In Full Screen"; the tab strip's "+" opens
@@ -272,7 +272,7 @@ dark** appearance:
 - [ ] **VoiceOver on the gallery:** VO+arrows move card to card; each reads name, mode, host and
       state; the ⋯ menu and the sheet's fields are announced with their labels.
 - [ ] **Privacy:** after a session with the gallery open, nothing under the app container
-      (`~/Library/Containers/com.hutsonlabs.drift/`) contains a picture; `window-frames.json`
+      (`~/Library/Containers/com.example.drift/`) contains a picture; `window-frames.json`
       holds only numbers.
 
 ## M9-1 / M9-4 — Performance and polish
@@ -321,7 +321,7 @@ available to a session a human has unlocked:
 Repeatable setup for the manual run (round 1 used exactly this):
 
 ```bash
-ssh -N -L 23392:localhost:3392 -L 23389:localhost:3389 homelab@10.1.2.40 &
+ssh -N -L 23392:localhost:3392 -L 23389:localhost:3389 homelab@10.0.2.40 &
 DRIFT_CONFIG_DIR=/tmp/drift-smoke DRIFT_AUTOCONNECT="Homelab Headless" \
   cargo run -p drift-app --bin drift-app           # profiles.toml pins the daemon's fingerprint
 ```
@@ -340,7 +340,7 @@ Install the signed `Drift.app`, then confirm on that build:
 - [ ] **The sandbox is on:** `codesign -d --entitlements - /Applications/Drift.app` lists
       `com.apple.security.app-sandbox` and `com.apple.security.network.client`, and
       `codesign -dv` shows `flags=0x10000(runtime)` (Hardened Runtime). A container appears at
-      `~/Library/Containers/com.hutsonlabs.drift/`.
+      `~/Library/Containers/com.example.drift/`.
 - [ ] **Local Network prompt:** on first connect to a LAN host macOS shows the prompt with
       Drift's usage description; allowing it connects, and the permission survives relaunching.
       Deny it (System Settings › Privacy & Security › Local Network) and confirm Drift shows the
@@ -360,7 +360,7 @@ Install the signed `Drift.app`, then confirm on that build:
 - [ ] **Pasteboard:** copy text and an image in both directions (M5 acceptance) inside the
       sandboxed app; the general pasteboard is reachable without an entitlement.
 - [ ] **Config:** the profile list is written to
-      `~/Library/Containers/com.hutsonlabs.drift/Data/Library/Application Support/com.hutsonlabs.drift/`
+      `~/Library/Containers/com.example.drift/Data/Library/Application Support/com.example.drift/`
       and survives a relaunch; nothing is written outside the container.
 
 ## IOS — Drift for iPhone and iPad
@@ -370,9 +370,9 @@ Build and run in a simulator (ADR `IOS-5-ios-app-shell`):
 ```text
 cd src-tauri && cargo tauri ios build --target aarch64-sim --debug --features smoke-env
 xcrun simctl install <device> gen/apple/build/arm64-sim/Drift.app
-cargo run -p drift-testkit --example fake_host -- "$(xcrun simctl get_app_container <device> com.hutsonlabs.drift data)/Library/DriftSmoke"
+cargo run -p drift-testkit --example fake_host -- "$(xcrun simctl get_app_container <device> com.example.drift data)/Library/DriftSmoke"
 SIMCTL_CHILD_DRIFT_CONFIG_DIR=<that dir> SIMCTL_CHILD_DRIFT_AUTOCONNECT="Fake host" \
-  SIMCTL_CHILD_DRIFT_SMOKE_SECRET=<printed by fake_host> xcrun simctl launch <device> com.hutsonlabs.drift
+  SIMCTL_CHILD_DRIFT_SMOKE_SECRET=<printed by fake_host> xcrun simctl launch <device> com.example.drift
 ```
 
 Done in an iPad Pro 13-inch (M5) simulator, iOS 27, on 2026-10-18 against `fake_host`: live
@@ -389,7 +389,7 @@ app is in the background. Still to do by hand:
 - [ ] **IOS-5 first light on a device:** a real iPad (signed with a development team) connects to
       the GNOME test host in Headless mode, shows the live desktop at the iPad's native size, and
       after 5 minutes in the background (long enough for iOS to suspend it) reconnects on return.
-      The GNOME host (10.1.2.40) was down when IOS-5 landed.
+      The GNOME host (10.0.2.40) was down when IOS-5 landed.
 - [ ] **Local Network prompt on iOS:** the first LAN connection shows iOS's prompt with Drift's
       usage text; denying it shows the errno 65 screen, whose button opens Drift's page in
       Settings.
@@ -456,7 +456,7 @@ Mac").
 
 ## GNOME-WIZARD — Set Up a Linux Machine from inside Drift (ADR `GNOME-WIZARD-headless-setup`)
 
-Done on 2026-10-24 against 10.1.2.5 (Ubuntu 26.04.1 server, GDM 50.1), from the dev Mac:
+Done on 2026-10-24 against 10.0.2.5 (Ubuntu 26.04.1 server, GDM 50.1), from the dev Mac:
 `host/drift-host-setup.sh --check` by hand and through the wizard's service (`setup_live`, over
 Tailscale) reports 0 changes after the fixes; a 20 s FreeRDP session to :3390 streamed (RDPGFX)
 once PipeWire ran; `drift-ssh`'s live test passed against OpenSSH. Still to do in the app:
@@ -498,7 +498,7 @@ iPhone and iPad.
 ## STORE — Distribution (validate only; nothing is uploaded or published)
 
 Blocked on the developer account (ADRs `STORE-1`..`STORE-3`): create the
-`com.hutsonlabs.drift` App ID, a Mac App Store and an iOS App Store provisioning profile, and an
+`com.example.drift` App ID, a Mac App Store and an iOS App Store provisioning profile, and an
 App Store Connect app record; answer the export-compliance question. Then:
 
 - [ ] **Mac:** `cargo xtask mas-package --profile <profile>`, then

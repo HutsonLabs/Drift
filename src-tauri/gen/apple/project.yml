@@ -1,6 +1,6 @@
 name: drift-app
 options:
-  bundleIdPrefix: com.hutsonlabs.drift
+  bundleIdPrefix: com.example.drift
   deploymentTarget:
     iOS: 17.0
 fileGroups: [../../src]
@@ -11,7 +11,7 @@ settingGroups:
   app:
     base:
       PRODUCT_NAME: Drift
-      PRODUCT_BUNDLE_IDENTIFIER: com.hutsonlabs.drift
+      PRODUCT_BUNDLE_IDENTIFIER: com.example.drift
 targetTemplates:
   app:
     type: application
@@ -64,7 +64,7 @@ targets:
         # host/drift-gnome-setup's link (or its QR code through the Camera app) opens a
         # prefilled New Connection form (ADR GNOME-only).
         CFBundleURLTypes:
-          - CFBundleURLName: com.hutsonlabs.drift.connect
+          - CFBundleURLName: com.example.drift.connect
             CFBundleURLSchemes: [drift-connect]
         # One scene per session window on iPad (IOS-1, IOS-11); iPhone stays single-scene.
         UIApplicationSceneManifest:

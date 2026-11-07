@@ -1,7 +1,7 @@
 //! Remote-state helpers for the real-host tests (plan §5.3).
 //!
 //! Everything goes through `ssh` to the GNOME host (`DRIFT_E2E_SSH`, default
-//! `homelab@10.1.2.40`), which is also how the tests reach the RDP daemons: macOS Local
+//! `homelab@10.0.2.40`), which is also how the tests reach the RDP daemons: macOS Local
 //! Network Privacy blocks direct LAN connections from freshly built binaries (plan §1.8), so
 //! each test connects to a **local forward** ([`SshForward`]).
 //!
@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 /// The SSH target of the GNOME host.
 pub fn ssh_target() -> String {
-    crate::var("DRIFT_E2E_SSH").unwrap_or_else(|| "homelab@10.1.2.40".into())
+    crate::var("DRIFT_E2E_SSH").unwrap_or_else(|| "homelab@10.0.2.40".into())
 }
 
 /// Runs `command` on the host and returns its standard output.

@@ -40,19 +40,18 @@ missing any of the three (`xtask/tests/release.rs`,
 
 1. **One command**, `cargo xtask release`, with named steps in a fixed order: preflight, gate,
    build number, clean, iOS, Mac App Store, Drift DMG, notarize, checksums,
-   sync check, then the publish steps TestFlight (both platforms), What to Test, Spaces. The
+   sync check, then the publish steps TestFlight (both platforms) and What to Test. The
    order and the rules are data in
    `xtask::release` and tested in `xtask/tests/release.rs`; `xtask/src/release_cmd.rs` runs them.
-2. **Publishing is opt-in.** `--testflight` and `--spaces` add the publish steps; without them
+2. **Publishing is opt-in.** `--testflight` adds the publish steps; without it
    nothing leaves the Mac except the read-only App Store Connect query, `altool` validation
    and notarization. `--dry-run` also skips notarization and cannot be combined with a
-   publish flag. The `release` skill (`.claude/skills/release/SKILL.md`) requires the user's
-   explicit go-ahead for each publish flag and for version bumps.
+   publish flag.
 3. **Preflight collects every problem** before anything is built: branch `main` and pushed
    (warnings in a dry run), clean tree, pinned toolchain, `Cargo.lock` current, App Store
    Connect key names, the Developer ID, Apple Distribution and Mac Installer identities, an
    unlocked keychain (a throw-away `codesign`), the Mac App Store profile present for
-   `com.hutsonlabs.drift` and valid for 14 more days, 40 GB free, the tools, and filled-in
+   `com.example.drift` and valid for 14 more days, 40 GB free, the tools, and filled-in
    release notes.
 4. **Versions.** `yy.mm` marketing version, `yy.mm.0` where three parts are required; the seven
    files are listed in `release::VERSION_FILES` and must agree. `--set-version yy.mm` rewrites
@@ -77,26 +76,14 @@ missing any of the three (`xtask/tests/release.rs`,
    `src-tauri/gen/apple` (Tauri writes the build number into the iOS `Info.plist`, xcodegen
    re-quotes `project.pbxproj`) and fails the step on any other changed or new file. The first
    dry run found exactly this: the iOS build dirtied `Info.plist`, so the resume refused to start.
-8. **Reliability.** Network steps (build number, notarization, uploads, What to Test, Spaces)
+8. **Reliability.** Network steps (build number, notarization, uploads, What to Test)
    retry three times with 10/30/90 s backoff; every long step has a timeout. Uploads check App
-   Store Connect for the build first, notarization checks `stapler validate` first, and the
-   Spaces step reuses an existing tag on the build's commit and an existing release (attaching
-   only missing files), so reruns do not duplicate anything.
-9. **Tags** are `v<yy.mm>.<build>` (three parts, like the earlier `v0.2.0`), annotated, pushed
-   to `origin`; the release on spaces.hutson.cloud carries the DMG and `SHA256SUMS`, with the
-   notes file plus the checksums as its notes.
+   Store Connect for the build first, and notarization checks `stapler validate` first, so
+   reruns do not duplicate anything.
+9. **Tags** are `v<yy.mm>.<build>` (three parts, like the earlier `v0.2.0`). Publishing the DMG
+   and `SHA256SUMS` (with the notes file plus the checksums as release notes) is left to the
+   maintainer; the pipeline does not publish anywhere.
 
-**Releases live on spaces.hutson.cloud, never GitHub** (RELEASE-spaces, 2026-10-19). The
-`--github` flag, the `github` remote push and `gh release create` are gone. `--spaces` creates
-the release through the Forgejo API (`https://spaces.hutson.cloud/api/v1`, repository
-`HutsonLabs/drift`, token read from `~/code/.spaces-tok` — one fixed file holding only the
-token, never an environment variable (RELEASE-spaces-token, 2026-10-22) — and sent to `curl` on
-stdin). `--publish
-<yy.mm>-<build>` publishes a finished build without rebuilding it: the run must not be a dry
-run, notarization, checksums and the sync check must have finished, every artifact must still
-match its recorded SHA-256, and the build's commit must be on `origin/main`; the tag is placed on
-that commit. A new commit (a fix to the pipeline itself, say) therefore does not force a new
-build of an already notarized release.
 10. **Determinism.** Every build step inherits `SOURCE_DATE_EPOCH` (HEAD's commit time),
     `CARGO_INCREMENTAL=0` and `RUSTFLAGS` remapping the checkout to `.` and cargo home to
     `/cargo`; builds use `--locked` and `bun install --frozen-lockfile`; bundle outputs are

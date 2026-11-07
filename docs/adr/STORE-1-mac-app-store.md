@@ -11,8 +11,8 @@
    Distribution (pinned by SHA-1, like the Developer ID identity), and
    `entitlements.mas.plist`. The Developer ID build and DMG are unchanged.
 2. **Entitlements.** The same sandbox as M9-3 (`app-sandbox`, `network.client`, nothing else)
-   plus `com.apple.application-identifier` (`M9Z3N2R97A.com.hutsonlabs.drift`) and
-   `com.apple.developer.team-identifier` (`M9Z3N2R97A`), which the App Store needs and which must
+   plus `com.apple.application-identifier` (`TEAMID0000.com.example.drift`) and
+   `com.apple.developer.team-identifier` (`TEAMID0000`), which the App Store needs and which must
    match the embedded provisioning profile.
 3. **Universal.** `x86_64-apple-darwin` joins `rust-toolchain.toml`; the build target is
    `universal-apple-darwin`. The whole app builds for Intel unchanged.
@@ -27,7 +27,7 @@
 ## Account and TestFlight (2026-10-18)
 
 - The owner created the App Store Connect record (app id 6824351800, universal bundle id
-  `com.hutsonlabs.drift`). The Mac App Store profile "Drift Mac App Store" was created through
+  `com.example.drift`). The Mac App Store profile "Drift Mac App Store" was created through
   the App Store Connect API for both Apple Distribution certificates; a copy lives in
   `~/Library/MobileDevice/Provisioning Profiles/Drift_Mac_App_Store.provisionprofile`
   (re-download it from the developer portal on another Mac).

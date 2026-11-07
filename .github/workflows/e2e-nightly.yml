@@ -3,7 +3,7 @@
 # This cannot run on a GitHub-hosted runner: the tests reach the GNOME host through SSH local
 # forwards (`ssh -N -L 1339x:localhost:339x`, required by macOS Local Network Privacy, plan
 # §1.9), so the runner must be a macOS machine on the same network with an SSH key for
-# `homelab@10.1.2.40`. Register it with the labels `self-hosted`, `macOS`, `ARM64`, `drift-lan`.
+# `homelab@10.0.2.40`. Register it with the labels `self-hosted`, `macOS`, `ARM64`, `drift-lan`.
 #
 # Credentials never appear in the repository: they come from repository secrets and are mapped
 # onto the `DRIFT_E2E_*` variables the suite reads (plan §5.3). `cargo xtask e2e` also pipes the
@@ -33,7 +33,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
   RUST_BACKTRACE: "1"
-  DRIFT_E2E_SSH: ${{ vars.DRIFT_E2E_SSH || 'homelab@10.1.2.40' }}
+  DRIFT_E2E_SSH: ${{ vars.DRIFT_E2E_SSH || 'homelab@10.0.2.40' }}
 
 jobs:
   e2e:

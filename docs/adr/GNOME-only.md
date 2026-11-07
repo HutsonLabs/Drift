@@ -79,5 +79,5 @@ resize, CLIPRDR, sound. What it lacks is an easy way to set up a Linux machine.
 5. `host/drift-gnome-setup` (Mac side) and the `--install`/`--firewall`/fingerprint steps in
    `host/drift-host-setup.sh`; shellcheck and xtask tests.
 6. Docs: this ADR, superseded ADRs moved, `TASKS.md`, `docs/acceptance.md`,
-   `docs/gnome-host-setup.md`, team conventions, the release skill, notes for the release.
-7. `cargo xtask ci`, then `cargo xtask release` and publish on spaces.hutson.cloud.
+   `docs/gnome-host-setup.md`, team conventions, notes for the release.
+7. `cargo xtask ci`, then `cargo xtask release`.

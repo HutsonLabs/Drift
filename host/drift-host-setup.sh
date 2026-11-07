@@ -46,7 +46,7 @@
 #
 # host/drift-gnome-setup runs it from a Mac for one machine and adds the connection to Drift.
 # Run it as root on the host, e.g. from the dev Mac:
-#   ssh homelab@10.1.2.40 'sudo -n bash -s -- --check --system \
+#   ssh homelab@10.0.2.40 'sudo -n bash -s -- --check --system \
 #       --headless drifttest:3391 --headless drifttest2:3392:persistent' < host/drift-host-setup.sh
 set -euo pipefail
 
@@ -419,7 +419,7 @@ ensure_dropin() {
 
 # GNOME 50's polkit agent runs polkit-agent-helper-1 through a socket unit. Once that socket hits
 # its trigger limit it stays failed, and gnome-shell then logs "polkit-agent-helper-1: needs to be
-# setuid root" in a tight loop (millions of lines on 10.1.2.5) and no authentication dialog works.
+# setuid root" in a tight loop (millions of lines on 10.0.2.5) and no authentication dialog works.
 ensure_polkit_agent_helper() {
   local unit=polkit-agent-helper.socket
   systemctl cat "$unit" >/dev/null 2>&1 || return 0
@@ -593,7 +593,7 @@ main() {
     --firewall) FIREWALL=1 ;;
     --allow-from)
       if [[ $# -lt 2 ]] || ! valid_cidr "$2"; then
-        echo "bad --allow-from '${2:-}' (want a network such as 10.1.0.0/21 or fd00::/64)" >&2
+        echo "bad --allow-from '${2:-}' (want a network such as 10.0.0.0/21 or fd00::/64)" >&2
         exit 1
       fi
       ALLOW_FROM=$2

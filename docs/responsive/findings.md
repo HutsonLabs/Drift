@@ -76,7 +76,7 @@ are kept in your Keychain" to 4.
 
 **F4 · P2 · B1–B4.** The sheet header collides.
 The title cuts off ("Build b…") and the Show Window button overlaps the meta line
-("10.1.2.41:3389 · Trusted") because the head row is `nowrap` with a spacer.
+("10.0.2.41:3389 · Trusted") because the head row is `nowrap` with a spacer.
 
 **F5 · P2 · B1–B6.** The trusted-certificate row is a three-column grid (label, fingerprint,
 Forget button). At 402 the fingerprint column is **one character wide and renders vertically**;

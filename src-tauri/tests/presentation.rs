@@ -19,7 +19,7 @@ use drift_macos::CursorShape;
 use drift_rdp::{CursorBitmap, CursorUpdate, SessionEvent};
 
 fn view_in(mode: ConnectMode, state: SessionState) -> SessionView {
-    let mut p = ConnectionProfile::new("Homelab", "10.1.2.40", mode);
+    let mut p = ConnectionProfile::new("Homelab", "10.0.2.40", mode);
     p.linux_username = Some("drifttest".into());
     let mut v = SessionView::new(&p);
     v.apply(&SessionEvent::State(state));
@@ -167,7 +167,7 @@ fn status_and_identity_follow_the_screen() {
     for (screen, status) in table {
         assert_eq!(status_for(&on_screen(screen)), status, "{screen:?}");
     }
-    let mut profile = ConnectionProfile::new("Homelab", "10.1.2.40", ConnectMode::RemoteLogin);
+    let mut profile = ConnectionProfile::new("Homelab", "10.0.2.40", ConnectMode::RemoteLogin);
     profile.linux_username = Some("drifttest".into());
     let mut greeter = SessionView::new(&profile);
     greeter.apply(&SessionEvent::State(SessionState::AwaitingGreeterLogin));
@@ -176,7 +176,7 @@ fn status_and_identity_follow_the_screen() {
     assert_eq!(id.profile_id, profile.id);
     assert_eq!(
         (id.name.as_str(), id.host.as_str(), id.mode),
-        ("Homelab", "10.1.2.40", ConnectMode::RemoteLogin)
+        ("Homelab", "10.0.2.40", ConnectMode::RemoteLogin)
     );
     assert_eq!(id.status, ConnectionStatus::Live);
     assert_eq!(id.hint.as_deref(), Some("Log in as “drifttest” to start your session"), "tooltip");

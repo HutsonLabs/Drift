@@ -87,7 +87,7 @@ Everything else Drift needs is inside the default sandbox, and the test asserts 
 
 | Capability | Why no entitlement is needed |
 |---|---|
-| Keychain | A sandboxed app reaches its own generic-password items through the access group `<team>.<bundle id>`. Drift stores under the service `com.hutsonlabs.drift`, which the test pins to `tauri.conf.json`'s `identifier`; `keychain-access-groups` would only widen the reach. M3-2 uses the legacy `SecKeychain` API, which sandboxed apps may use for their own items — if the signed build ever disagrees, the answer is the data-protection keychain (`kSecUseDataProtectionKeychain`), not a wider entitlement (acceptance § M9-3). |
+| Keychain | A sandboxed app reaches its own generic-password items through the access group `<team>.<bundle id>`. Drift stores under the service `com.example.drift`, which the test pins to `tauri.conf.json`'s `identifier`; `keychain-access-groups` would only widen the reach. M3-2 uses the legacy `SecKeychain` API, which sandboxed apps may use for their own items — if the signed build ever disagrees, the answer is the data-protection keychain (`kSecUseDataProtectionKeychain`), not a wider entitlement (acceptance § M9-3). |
 | Metal | `CAMetalLayer`, `MTLDevice` and `IOSurface`-backed textures are sandbox-safe. |
 | VideoToolbox | Decode and encode sessions run in-process; no helper, no XPC of ours. |
 | Pasteboard | `NSPasteboard.general` is the user's own pasteboard. |
@@ -110,6 +110,6 @@ pasteboard, config location, the Local Network prompt) is a manual checklist ite
   must be a deliberate, separately-built binary — not a `RUST_LOG` away in a shipped app.
 - The vendored fork carries one more patch to upstream.
 - Turning the sandbox on changes where the app writes: an existing unsandboxed dev install's
-  `~/Library/Application Support/com.hutsonlabs.drift` is not migrated into the container, and
+  `~/Library/Application Support/com.example.drift` is not migrated into the container, and
   Keychain items written by a differently-signed build stay unreadable (the M6/M9 acceptance
   note about the `apple-tool:` partition already covers that class of surprise).

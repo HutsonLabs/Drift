@@ -163,9 +163,6 @@ pub struct Options {
     pub dry_run: bool,
     /// Upload the iOS and Mac App Store builds to TestFlight and set "What to Test".
     pub testflight: bool,
-    /// Tag the commit and publish the two DMGs as a release on spaces.hutson.cloud (never
-    /// GitHub, RELEASE-spaces).
-    pub spaces: bool,
 }
 
 /// One named step of the pipeline, in order.
@@ -197,15 +194,12 @@ pub enum StepId {
     Testflight,
     /// "What to Test" on both TestFlight builds.
     WhatsNew,
-    /// Tag, push the tag to `origin`, create the release on spaces.hutson.cloud with the DMG
-    /// and `SHA256SUMS`.
-    Spaces,
 }
 
 impl StepId {
     /// Whether the step talks to the network and is retried with backoff.
     pub fn retries(self) -> bool {
-        matches!(self, Self::BuildNumber | Self::Notarize | Self::Testflight | Self::WhatsNew | Self::Spaces)
+        matches!(self, Self::BuildNumber | Self::Notarize | Self::Testflight | Self::WhatsNew)
     }
 
     /// How long one attempt may take before it is stopped.
@@ -222,8 +216,8 @@ impl StepId {
 
 /// The steps for `options`, in order. A dry run cannot publish.
 pub fn steps(options: Options) -> Result<Vec<StepId>> {
-    if options.dry_run && (options.testflight || options.spaces) {
-        bail!("--dry-run cannot be combined with --testflight or --spaces");
+    if options.dry_run && options.testflight {
+        bail!("--dry-run cannot be combined with --testflight");
     }
     let mut steps = vec![
         StepId::Preflight,
@@ -241,9 +235,6 @@ pub fn steps(options: Options) -> Result<Vec<StepId>> {
     steps.push(StepId::SyncCheck);
     if options.testflight {
         steps.extend([StepId::Testflight, StepId::WhatsNew]);
-    }
-    if options.spaces {
-        steps.push(StepId::Spaces);
     }
     Ok(steps)
 }
@@ -699,70 +690,4 @@ pub fn sha256sums(files: &[(String, String)]) -> String {
 /// Release notes: the notes plus the checksums.
 pub fn release_notes(notes: &str, sums: &str) -> String {
     format!("{}\n\n## SHA-256\n\n```text\n{sums}```\n", notes.trim_end())
-}
-
-// ---- publishing on spaces.hutson.cloud (RELEASE-spaces) -------------------------------------
-
-/// The Forgejo API releases are published through. Never GitHub.
-pub const SPACES_API: &str = "https://spaces.hutson.cloud/api/v1";
-/// The repository on spaces.hutson.cloud.
-pub const SPACES_REPO: &str = "HutsonLabs/drift";
-/// The file holding the spaces.hutson.cloud API token, relative to `$HOME`. One fixed place, never
-/// an environment variable, so a release publishes the same way from any shell.
-pub const SPACES_TOKEN_FILE: &str = "code/.spaces-tok";
-
-/// Where the spaces.hutson.cloud token is for the user whose home is `home`.
-pub fn spaces_token_path(home: &Path) -> PathBuf {
-    home.join(SPACES_TOKEN_FILE)
-}
-
-/// The token in the text of [`SPACES_TOKEN_FILE`]: exactly one non-empty line without spaces
-/// (a trailing newline is fine). Anything else is an error rather than a guess.
-pub fn parse_spaces_token(text: &str) -> Result<String, String> {
-    let lines: Vec<&str> = text.lines().collect();
-    match lines.as_slice() {
-        [token] if !token.trim().is_empty() && !token.contains(char::is_whitespace) => {
-            Ok((*token).to_owned())
-        }
-        [] | [_] => Err("is empty or not a single token".to_owned()),
-        _ => Err(format!("has {} lines; it must hold only the token", lines.len())),
-    }
-}
-
-/// The body of `POST /repos/{SPACES_REPO}/releases` for release `version` (`build`) of commit
-/// `commit`.
-pub fn spaces_release(version: &str, build: u32, commit: &str, notes: &str, sums: &str) -> serde_json::Value {
-    serde_json::json!({
-        "tag_name": tag(version, build),
-        "target_commitish": commit,
-        "name": format!("Drift {version} ({build})"),
-        "body": release_notes(notes, sums),
-        "draft": false,
-        "prerelease": false,
-    })
-}
-
-/// The files attached to a published release: the DMG and the checksums.
-pub fn published_files(version: &str, build: u32) -> Vec<String> {
-    vec![artifact_name(ArtifactKind::MacDmg, version, build), "SHA256SUMS".to_owned()]
-}
-
-/// Whether a finished run can be published later without rebuilding (`--publish`): not a dry
-/// run, and notarization, the checksums and the lockstep check all ended done (their latest
-/// records).
-pub fn publishable(manifest: &Manifest) -> Result<()> {
-    if manifest.dry_run {
-        bail!("{} ({}) was a dry run; only a real build can be published", manifest.version, manifest.build);
-    }
-    for step in [StepId::Notarize, StepId::Checksums, StepId::SyncCheck] {
-        let last = manifest.steps.iter().rev().find(|r| r.step == step).map(|r| r.status);
-        if !matches!(last, Some(StepStatus::Done | StepStatus::Skipped)) {
-            bail!(
-                "{step:?} did not finish for {} ({}); resume the release first",
-                manifest.version,
-                manifest.build
-            );
-        }
-    }
-    Ok(())
 }

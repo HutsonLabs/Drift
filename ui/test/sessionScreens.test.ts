@@ -24,7 +24,7 @@ describe("certificate prompt", () => {
     expect(text(fp)).toBe(GRDCTL_FINGERPRINT);
     expect(text(r)).toContain("sudo grdctl --system status");
     expect(text(r)).toContain("TLS fingerprint");
-    expect(text(r)).toContain("10.1.2.40:3389");
+    expect(text(r)).toContain("10.0.2.40:3389");
   });
 
   test("is an accessible alert dialog", () => {
@@ -33,7 +33,7 @@ describe("certificate prompt", () => {
     const dialog = r.querySelector("[role=alertdialog]");
     expect(dialog).not.toBeNull();
     const title = r.querySelector(`[id="${dialog?.getAttribute("aria-labelledby")}"]`);
-    expect(text(title)).toContain("10.1.2.40");
+    expect(text(title)).toContain("10.0.2.40");
     expect(dialog?.getAttribute("aria-describedby")).toBeTruthy();
   });
 

@@ -10,12 +10,8 @@ Read `plan.md` §0–§5 first; it is the source of truth. This page summarises 
      `test(<ID>): …`;
   2. implement until green, commit `feat(<ID>): …`;
   3. refactor, commit `refactor(<ID>): …`; `cargo xtask ci` must pass.
-- **Push only to `origin` on spaces.hutson.cloud**
-  (`ssh://git@spaces.hutson.cloud:2222/HutsonLabs/drift.git`): push each task branch with
-  `git push -u origin task/<ID>-<slug>` before finishing. **Never push to GitHub** (it is public):
-  no GitHub PRs, no forks, no upstream IronRDP PRs. Check `git remote -v` first; if `origin` is
-  anything else, leave the branch local. A "PR" is a task branch that the integrator merges into
-  `main` with `--no-ff`; the merge commit message records the Red tests and their failing output.
+- Open a pull request from your task branch. The merge commit message records the Red tests
+  and their failing output.
 - Do not tick `plan.md` checkboxes; the integrator does that.
 
 ## ADRs
@@ -84,7 +80,7 @@ another JS package manager.
 | `cargo xtask host-setup-check` | read-only check of the GNOME host over SSH (M0-4, `docs/gnome-host-setup.md`) |
 | `host/drift-gnome-setup [user@]machine` | set up a Linux machine with GNOME for Drift from the Mac: install, headless session, firewall, opens the prefilled connection in Drift; see `docs/gnome-host-setup.md` |
 | `cargo xtask bundle` | M9-5 (stub; superseded by `cargo xtask release`) |
-| `cargo xtask release [--dry-run] [--testflight] [--spaces] [--resume]` | the release pipeline (ADR `RELEASE-pipeline`, skill `.claude/skills/release`); iOS and macOS always together, one build number: preflight, gate receipt, one build number, three artifacts (iOS `.ipa`, Mac App Store `.pkg`, Drift DMG), notarization, `SHA256SUMS`, `manifest.json` in `target/release-out/<yy.mm>-<build>/`; publishes only with a flag |
+| `cargo xtask release [--dry-run] [--testflight] [--resume]` | the release pipeline (ADR `RELEASE-pipeline`); iOS and macOS always together, one build number: preflight, gate receipt, one build number, three artifacts (iOS `.ipa`, Mac App Store `.pkg`, Drift DMG), notarization, `SHA256SUMS`, `manifest.json` in `target/release-out/<yy.mm>-<build>/`; publishes only with a flag |
 | `cargo xtask release --set-version YY.MM` | rewrite every version file (+ `Cargo.lock`, notes from `release/notes/TEMPLATE.md`) |
 | `cargo xtask review-risk <app>` | private-API strings App Review may flag in a built Mac or iOS app (STORE-2) |
 | `cargo xtask mas-package [--profile F]` | the Mac App Store `.pkg`: universal, sandboxed, Apple Distribution + installer signature (STORE-1) |
@@ -92,11 +88,10 @@ another JS package manager.
 
 `cargo tauri build` signs with the Developer ID identity pinned in `tauri.conf.json`
 (`bundle.macOS.signingIdentity`, by SHA-1 — the name has been shared by two certificates;
-`xtask::store::DEVELOPER_ID` must match). Since 26.10 build 10 it lives in
-`~/Library/Keychains/iceberg-signing.keychain-db` (no auto-lock), so builds over SSH work too; the
-earlier `term-hut-signing` keychain and its `signing-unlock` helper are gone. If codesign fails
-with `errSecInternalComponent`, that keychain is locked: unlock it with
-`security unlock-keychain ~/Library/Keychains/iceberg-signing.keychain-db`. Check a
+`xtask::store::DEVELOPER_ID` must match). The values in the repository are placeholders; set
+your own (see `xtask/src/store.rs`). Keeping the identity in a dedicated keychain without
+auto-lock lets builds over SSH work too. If codesign fails with `errSecInternalComponent`, that
+keychain is locked: unlock it with `security unlock-keychain <keychain>`. Check a
 build with `codesign -dv --verbose=2 target/release/bundle/macos/Drift.app`.
 Notarize and staple the .dmg with `xcrun notarytool submit … --wait` (App Store Connect API key)
 and `xcrun stapler staple`; `cargo xtask bundle` does not wire this up yet (M9-5).
@@ -134,9 +129,9 @@ formats are in `fixtures/README.md`. The host scripts in `host/` are tested with
 - Real credentials live only in `~/code/drift-spikes/secrets/*.txt` (mode 600) on the dev Mac.
   Never print them, commit them, or put them in fixtures, logs, snapshots or test source.
   Tests use obviously fake values.
-- `cargo xtask e2e` opens `ssh -N -L 1339x:localhost:339x homelab@10.1.2.40` (required by macOS
+- `cargo xtask e2e` opens `ssh -N -L 1339x:localhost:339x homelab@10.0.2.40` (required by macOS
   Local Network Privacy) and runs `cargo nextest run -p drift-e2e --run-ignored only` with:
-  `DRIFT_E2E_HOST=127.0.0.1`, `DRIFT_E2E_TLS_NAME=10.1.2.40`, `DRIFT_E2E_PORT_<3389..3392>`
+  `DRIFT_E2E_HOST=127.0.0.1`, `DRIFT_E2E_TLS_NAME=10.0.2.40`, `DRIFT_E2E_PORT_<3389..3392>`
   (local forward ports), and credentials mapped from the secrets directory unless already set:
   `DRIFT_E2E_SYS_USER/PASS` (system.txt), `DRIFT_E2E_LOGIN_USER/PASS` (testuser.txt),
   `DRIFT_E2E_HL_USER/PASS` + `DRIFT_E2E_HL_PORT` (headless2.txt), `DRIFT_E2E_HL1_*`

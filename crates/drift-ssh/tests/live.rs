@@ -1,7 +1,7 @@
 //! WIZ-3 live check against a real OpenSSH server (ignored by default):
 //!
 //! ```text
-//! DRIFT_SSH_LIVE=hutsonphd@10.1.2.5 DRIFT_SSH_LIVE_STORE=/path/to/store \
+//! DRIFT_SSH_LIVE=alice@10.0.2.5 DRIFT_SSH_LIVE_STORE=/path/to/store \
 //!     cargo nextest run -p drift-ssh --test live --run-ignored only
 //! ```
 //!

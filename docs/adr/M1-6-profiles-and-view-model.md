@@ -8,7 +8,7 @@
 ## Decisions
 
 1. **`profiles.toml`** in the Tauri app config directory
-   (`~/Library/Application Support/com.hutsonlabs.drift/`): `version = 1` plus a
+   (`~/Library/Application Support/com.example.drift/`): `version = 1` plus a
    `[[profiles]]` array of `ConnectionProfile`s. The pure document model (`ProfileStore`) lives in
    `drift-core`; file I/O (atomic temp-file + rename) in `drift-app::profiles::ProfileFile`.
    Structurally broken files are errors; profiles that merely fail validation still load so the

@@ -111,7 +111,7 @@ fn the_detector_sees_a_secret_that_nobody_zeroizes() {
 fn one_time_credentials_are_gone_from_the_heap_after_use() {
     let (leaked, scanned) = watching(|| {
         let mut pdu = canary_pdu();
-        let next = RedirectLoop::new(ConnectMode::RemoteLogin, "10.1.2.40", 3389)
+        let next = RedirectLoop::new(ConnectMode::RemoteLogin, "10.0.2.40", 3389)
             .on_redirect(&mut pdu)
             .expect("the redirect is followed");
         // The PDU's own copies are cleared as soon as the credentials are extracted.

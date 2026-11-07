@@ -13,12 +13,12 @@ Users of Drift for Mac, iPhone and iPad have no terminal step: the app is sandbo
 `network.client` only, enforced by `src-tauri/tests/m9_3_hardening.rs`), so it can neither run
 `/usr/bin/ssh` nor read `~/.ssh`, and iOS cannot start processes at all.
 
-term.hut already connects to machines over SSH from a Tauri app. Its iOS path is sandbox-safe:
+An earlier Tauri app already connects to machines over SSH from a Tauri app. Its iOS path is sandbox-safe:
 russh in-process, an ed25519 device key generated in the app, a known_hosts file in the app's
 own directory, a strict host-key policy with an explicit "Trust and connect", a one-time
 password used only to install the device key, and a "Copy public key" fallback.
 
-Setting up 10.1.2.5 (Ubuntu 26.04.1, GDM 50.1, a server install) by hand on 2026-10-24 also
+Setting up 10.0.2.5 (Ubuntu 26.04.1, GDM 50.1, a server install) by hand on 2026-10-24 also
 showed four gaps in `host/drift-host-setup.sh`:
 
 - With the drop-in's `User=gdm`, `gdm-new-session` is refused by polkit ("Not authorized for
@@ -33,7 +33,7 @@ showed four gaps in `host/drift-host-setup.sh`:
 
 ## Decisions
 
-1. **SSH runs inside the app, the term.hut way.** A new crate `drift-ssh` wraps russh 0.64
+1. **SSH runs inside the app, as in an earlier Tauri SSH client.** A new crate `drift-ssh` wraps russh 0.64
    (`default-features = false`, `ring`, like the RDP TLS in M1-1; no `rsa`: the `rsa` crate's
    advisory, and ed25519/ECDSA host keys cover current servers). Nothing calls a system tool or
    reads `~/.ssh`, on macOS as on iOS. The M9-3 entitlements do not change. russh needs the
@@ -43,7 +43,7 @@ showed four gaps in `host/drift-host-setup.sh`:
    (M9-3): an unpermitted process gets "No route to host".
 2. **One device key.** `drift-ssh` generates an ed25519 key in-process on first use and keeps it
    in the app's data directory (`ssh/id_ed25519`, mode 0600, written to a temp file and renamed),
-   unencrypted: the app sandbox is its lock, as in term.hut. Keychain or Secure Enclave storage
+   unencrypted: the app sandbox is its lock, as in that earlier client. Keychain or Secure Enclave storage
    is a later ADR.
 3. **Host keys are strict.** known_hosts lives in the app's data directory. An unknown key stops
    the connection and the wizard shows its `SHA256:` fingerprint with "Trust and connect"; a
@@ -94,7 +94,7 @@ showed four gaps in `host/drift-host-setup.sh`:
 
 ## Addendum (2026-10-26): keeping the persistent session alive
 
-Two days after the first run on 10.1.2.5 the headless session was gone and nothing listened on
+Two days after the first run on 10.0.2.5 the headless session was gone and nothing listened on
 :3390. `gdm-new-session` exits 0 whenever the session ends, so `gnome-headless-session@.service`'s
 `Restart=on-failure` never brought it back, and the per-user g-r-d daemon stopped with
 `gnome-session.target`. The same session was also stuck in `gnome-initial-setup --existing-user`,

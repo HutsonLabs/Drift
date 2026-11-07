@@ -123,7 +123,7 @@ pub struct LegRequest {
     pub host: String,
     /// Port to dial.
     pub port: u16,
-    /// TLS server name / host shown in prompts (e.g. `10.1.2.40` behind an SSH forward).
+    /// TLS server name / host shown in prompts (e.g. `10.0.2.40` behind an SSH forward).
     pub tls_server_name: String,
     /// Authentication.
     pub auth: LegAuth,

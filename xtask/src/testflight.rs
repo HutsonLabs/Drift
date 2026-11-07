@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result};
 
-/// Drift's App Store Connect app id ("Drift - Screen sharing", `com.hutsonlabs.drift`).
+/// Drift's App Store Connect app id ("Drift - Screen sharing", `com.example.drift`).
 pub const APP_ID: &str = "6824351800";
 
 /// The highest build number in `existing`, plus one (1 when there is none). A dotted build

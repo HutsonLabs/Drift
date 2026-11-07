@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Drift",
   "version": "26.10.0",
-  "identifier": "com.hutsonlabs.drift",
+  "identifier": "com.example.drift",
   "build": {
     "frontendDist": "../ui/dist",
     "beforeDevCommand": { "script": "bun run build", "cwd": "../ui" },
@@ -64,11 +64,11 @@
       "minimumSystemVersion": "27.0",
       "entitlements": "entitlements.plist",
       "hardenedRuntime": true,
-      "signingIdentity": "DABE738AA854E6CE4FA33E69C1F0AFC5830C8646"
+      "signingIdentity": "0000000000000000000000000000000000000001"
     },
     "iOS": {
       "minimumSystemVersion": "17.0",
-      "developmentTeam": "M9Z3N2R97A",
+      "developmentTeam": "TEAMID0000",
       "bundleVersion": "1"
     }
   }

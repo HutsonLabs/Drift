@@ -8,7 +8,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.hutsonlabs.drift.connect</string>
+			<string>com.example.drift.connect</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>drift-connect</string>

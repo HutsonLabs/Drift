@@ -10,7 +10,7 @@ use uuid::Uuid;
 #[test]
 fn keychain_secret_store_round_trip() {
     let dir = tempfile::tempdir().unwrap();
-    let service = format!("com.hutsonlabs.drift.tests.{}", Uuid::new_v4());
+    let service = format!("com.example.drift.tests.{}", Uuid::new_v4());
     let kc =
         Keychain::create_file(&dir.path().join("t.keychain-db"), "drift-test-keychain", service).unwrap();
     let store = KeychainSecretStore::new(kc);
@@ -28,7 +28,7 @@ fn keychain_secret_store_round_trip() {
 fn keychain_errors_become_secret_errors_without_the_secret() {
     let dir = tempfile::tempdir().unwrap();
     // A keychain file that does not exist: every operation fails cleanly.
-    let kc = Keychain::open_file(&dir.path().join("missing.keychain-db"), "x", "com.hutsonlabs.drift.tests");
+    let kc = Keychain::open_file(&dir.path().join("missing.keychain-db"), "x", "com.example.drift.tests");
     let store = KeychainSecretStore::new(kc);
     let err = store.set(Uuid::new_v4(), SecretRole::RdpSystem, "fake-secret-value").unwrap_err();
     assert!(!err.to_string().contains("fake-secret-value"), "{err}");

@@ -464,7 +464,7 @@ impl SessionHost for FakeHost {
 }
 
 fn profile(name: &str, clipboard: ClipboardPrefs) -> ConnectionProfile {
-    let mut p = ConnectionProfile::new(name, "10.1.2.40", ConnectMode::Headless);
+    let mut p = ConnectionProfile::new(name, "10.0.2.40", ConnectMode::Headless);
     p.rdp_username = "fake-user".into();
     p.clipboard = clipboard;
     p

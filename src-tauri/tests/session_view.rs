@@ -10,7 +10,7 @@ use drift_core::{
 use drift_rdp::{CertificateRole, SessionEvent, SessionStats};
 
 fn view(mode: ConnectMode) -> SessionView {
-    let mut p = ConnectionProfile::new("Homelab", "10.1.2.40", mode);
+    let mut p = ConnectionProfile::new("Homelab", "10.0.2.40", mode);
     if mode == ConnectMode::RemoteLogin {
         p.linux_username = Some("drifttest".into());
     }
@@ -31,7 +31,7 @@ fn connected() -> SessionEvent {
 
 fn prompt(role: CertificateRole) -> SessionEvent {
     SessionEvent::CertificatePrompt {
-        host: "10.1.2.40".into(),
+        host: "10.0.2.40".into(),
         port: 3389,
         fingerprint: CertFingerprint::from_bytes([0xf3; 32]),
         role,
@@ -80,7 +80,7 @@ fn certificate_prompt_overrides_the_state_until_the_next_state() {
     assert_eq!(v.screen, Screen::Certificate);
     let c = v.certificate.clone().unwrap();
     assert_eq!(c.fingerprint.to_string(), ["f3"; 32].join(":"));
-    assert_eq!((c.host.as_str(), c.port, c.subject), ("10.1.2.40", 3389, CertificateSubject::Server));
+    assert_eq!((c.host.as_str(), c.port, c.subject), ("10.0.2.40", 3389, CertificateSubject::Server));
     assert_eq!(c.grdctl_command, "sudo grdctl --system status");
 
     v.apply(&state(SessionState::Connecting { leg: 1, stage: ConnectStage::Nla }));

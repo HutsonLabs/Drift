@@ -1,13 +1,13 @@
 //! # drift-e2e
 //!
 //! Real-host tests (plan §5.3). Every test is `#[ignore]` and is run by
-//! `cargo xtask e2e`, which opens `ssh -N -L 1339x:localhost:339x homelab@10.1.2.40`
+//! `cargo xtask e2e`, which opens `ssh -N -L 1339x:localhost:339x homelab@10.0.2.40`
 //! and exports:
 //!
 //! | Variable | Meaning |
 //! |---|---|
 //! | `DRIFT_E2E_HOST` | `127.0.0.1` (the SSH forward) |
-//! | `DRIFT_E2E_TLS_NAME` | `10.1.2.40` (certificate host) |
+//! | `DRIFT_E2E_TLS_NAME` | `10.0.2.40` (certificate host) |
 //! | `DRIFT_E2E_PORT_<remote>` | local forward port for remote port 3389..3392 |
 //! | `DRIFT_E2E_SYS_USER/PASS` | Remote Login system RDP credentials |
 //! | `DRIFT_E2E_LOGIN_USER/PASS` | Linux login `drifttest` |
